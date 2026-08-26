@@ -1,0 +1,9 @@
+# Python 3.13 compatible versions
+numpy>=2.1.0
+pandas>=2.2.3
+nltk>=3.8.1
+scikit-learn>=1.5.2
+seaborn>=0.13.0
+matplotlib>=3.9.0
+jupyter>=1.1.0
+ipykernel>=6.29.0

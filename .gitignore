@@ -1,0 +1,99 @@
+# ── Environments ────────────────────────────────────────────────────────
+venv/
+.venv/
+env/
+ENV/
+
+# ── Python ──────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# ── Testing / tooling caches ────────────────────────────────────────────
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+.tox/
+.nox/
+
+# ── Jupyter ─────────────────────────────────────────────────────────────
+.ipynb_checkpoints/
+*/.ipynb_checkpoints/*
+profile_default/
+ipython_config.py
+
+# ── Data ────────────────────────────────────────────────────────────────
+# The IMDB CSV is 64 MB and is not redistributed here. See README.md for how
+# to fetch it. Committing it would make every clone permanently larger.
+Data/*.csv
+Data/*.tsv
+Data/*.json
+Data/*.parquet
+Data/raw/
+Data/interim/
+Data/processed/
+!Data/.gitkeep
+
+# ── Model + build artifacts ─────────────────────────────────────────────
+# Artifacts are content-hashed and hosted on HF Hub, never committed.
+artifacts/
+*.pkl
+*.joblib
+*.pt
+*.pth
+*.onnx
+*.bin
+*.safetensors
+*.index
+*.npy
+*.npz
+
+# ── Secrets ─────────────────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets.json
+credentials.json
+
+# ── Node / frontend (Phase D onward) ────────────────────────────────────
+node_modules/
+.next/
+out/
+.vercel/
+*.tsbuildinfo
+
+# ── OS / editor ─────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+!.vscode/extensions.json
+.idea/
+*.swp
+*~
+
+# ── Local scratch ───────────────────────────────────────────────────────
+scratch/
+tmp/
+*.log
+*.bak
+
+# ── Known junk from shell-redirect accidents on this machine ────────────
+# See docs/CONSTRAINTS.md — unquoted parens/braces in bash drop zero-byte
+# files into the repo root. Run `git status --short` after every commit.
+[0-9].[0-9]
+bool
+str
+dict
