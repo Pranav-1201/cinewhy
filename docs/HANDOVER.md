@@ -26,7 +26,8 @@
 
 | | |
 |---|---|
-| ✅ | Full audit — Phases 0–4 — in [`AUDIT-2026-08-26.md`](AUDIT-2026-08-26.md) |
+| ✅ | Full audit — Phases 0–4 — in [`AUDIT-2026-08-26.md`](AUDIT-2026-08-26.md), also published as a [web page](https://claude.ai/code/artifact/fe9f3518-15c7-400f-9cfc-ecbc5da0786f) |
+| ✅ | Repo live at **https://github.com/Pranav-1201/cinewhy** (public, 4 commits) |
 | ✅ | Field Guide document set: `ARCHITECTURE` `FLOW` `DECISIONS` `CONSTRAINTS` `TEST_CHECKLIST` `ROLLBACK` `HANDOVER` + bug/feature templates |
 | ✅ | `CLAUDE.md` at repo root — the review habits (#10–15) as session rules |
 | ✅ | Git repo initialised, `.gitignore` written, `README.md` corrected, pushed to GitHub |
