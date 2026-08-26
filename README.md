@@ -1,72 +1,133 @@
-# Movie Sentiment Analysis - NLP Project
+# CineWhy
 
-## Project Structure
+**A movie recommender that shows you *why* — with evidence from what real reviewers actually said.**
 
-```
-NLPPROJECT/
-├── Data/
-│   └── IMDB Dataset.csv        ← Place your dataset here
-├── venv/                        ← Auto-created by setup script
-├── Copy_of_Movie_sentimental_analysis.ipynb
-├── requirements.txt
-├── setup.bat                    ← Run this on Windows
-├── setup.sh                     ← Run this on Mac/Linux
-└── README.md
-```
-
-## Setup Instructions
-
-### Step 1 — Add the Dataset
-Place `IMDB Dataset.csv` inside the `Data/` folder.
-
-### Step 2 — Run Setup Script
-
-**Windows:**
-```
-setup.bat
-```
-
-**Mac / Linux:**
-```bash
-chmod +x setup.sh
-./setup.sh
-```
-
-This will:
-- Create a Python virtual environment (`venv/`)
-- Install all required packages
-- Download NLTK stopwords data
-
-### Step 3 — Launch Jupyter
-
-**Windows:**
-```
-venv\Scripts\activate
-jupyter notebook
-```
-
-**Mac / Linux:**
-```bash
-source venv/bin/activate
-jupyter notebook
-```
-
-Then open `Copy_of_Movie_sentimental_analysis.ipynb` in the browser.
+> Netflix says *"Because you watched Inception."*
+> CineWhy says *"Because you consistently praise **pacing** and **endings** — and across 1,240
+> reviews, this film's pacing scores +0.71. Here are the three sentences that say so."*
 
 ---
 
-## Required Packages
-- numpy
-- pandas
-- nltk
-- scikit-learn
-- seaborn
-- matplotlib
-- jupyter
+## Status: prototype — early, and honest about it
 
-## Notes
-- The notebook reads the dataset with `pd.read_csv('IMDB Dataset.csv')`.
-  Make sure the CSV is in `Data/` and update that path in the notebook's
-  second cell to `pd.read_csv('Data/IMDB Dataset.csv')`.
-- The notebook was originally written for Google Colab — all Colab-specific
-  rendering will be ignored when running locally in Jupyter; this is normal.
+This repository currently contains **one Jupyter notebook** that trains a Naive Bayes sentiment
+classifier on IMDB reviews. There is no API, no frontend, and no deployed service yet.
+
+A full staff-level audit was completed on 2026-08-26 and graded the project **3.4/10 (prototype)**.
+The audit, the roadmap, and every measured number live in **[`docs/AUDIT-2026-08-26.md`](docs/AUDIT-2026-08-26.md)**.
+
+**Known defects in the current notebook — all measured, none yet fixed:**
+
+| | Defect | Effect |
+|---|---|---|
+| C-1 | Vectorizer is fit before the train/test split | headline accuracy inflated by **1.65 points** |
+| C-2 | "Best model" chosen on a 0.0020 gap inside a ±0.011 spread | under proper CV the ranking **reverses** |
+| C-3 | `not`/`no`/`nor` removed as stopwords | `"not good"` and `"good"` produce **identical vectors** |
+
+The honest leak-free accuracy is **~0.82**, not the 0.835 quoted in the older report. Fixing these
+is Phase C of the roadmap.
+
+> ⚠️ `Movie_Sentiment_Analysis_Report.md` predates the audit and contains claims the code
+> contradicts (it asserts leakage was prevented; it was not). It is kept for history. Where the
+> report and the audit disagree, **the audit is correct** — it was measured.
+
+---
+
+## Quick start
+
+**Requirements:** Python 3.13, ~1 GB free disk.
+
+```bash
+# 1. Clone
+git clone https://github.com/Pranav-1201/cinewhy.git
+cd cinewhy
+
+# 2. Set up the environment
+setup.bat                      # Windows
+#   creates venv/, installs requirements.txt, downloads the NLTK stopword corpus
+
+# 3. Get the dataset  ← required; it is NOT in this repo
+#    "IMDB Dataset of 50K Movie Reviews" (Lakshmipathi N, Kaggle)
+#    Download and place it at exactly:
+#        Data/IMDB Dataset.csv
+#    Expected: 50,000 rows, columns [review, sentiment], ~64 MB
+
+# 4. Verify
+venv\Scripts\activate
+python check_env.py
+
+# 5. Run
+jupyter notebook Movie_Sentiment_Analysis.ipynb
+```
+
+Then **Kernel → Restart & Run All**. Do not run cells piecemeal — cells 13–18 mutate the dataframe
+in place, so re-running one alone silently corrupts the data (e.g. double-stemming).
+
+> `check_env.py` only checks that packages *import*. It declares minimum versions but never compares
+> them, so it prints ✓ for an out-of-date package. Treat its green as "importable", not "correct".
+
+---
+
+## Repository layout
+
+```
+.
+├── Movie_Sentiment_Analysis.ipynb   the current prototype (38 cells)
+├── Movie_Sentiment_Analysis_Report.md   original report — see warning above
+├── check_env.py                     import-presence check
+├── requirements.txt                 ⚠ unpinned; pinning is Phase A
+├── setup.bat                        Windows environment setup
+├── CLAUDE.md                        session rules for AI-assisted work
+├── Data/                            dataset goes here (gitignored)
+└── docs/
+    ├── AUDIT-2026-08-26.md          ★ the audit + full roadmap
+    ├── ARCHITECTURE.md              system map (target + today)
+    ├── FLOW.md                      execution trace, and where it breaks
+    ├── DECISIONS.md                 why, not just what
+    ├── CONSTRAINTS.md               what an AI session may not do
+    ├── TEST_CHECKLIST.md            commands + expected observables
+    ├── ROLLBACK.md                  the way back out
+    ├── HANDOVER.md                  ★ where things stand right now
+    └── templates/                   bug + feature trace templates
+```
+
+New here? Read `docs/HANDOVER.md` first, then the audit.
+
+---
+
+## Where this is going
+
+| Phase | Work | Sessions |
+|---|---|---|
+| A | Correct false claims, pin dependencies | 1 |
+| B | CI foundation — *before* any code change | 1 |
+| C | Methodology repair (C-1, C-2, C-3) | 2 |
+| D | Data acquisition + recommender core | 3 |
+| E | FastAPI service | 2 |
+| F | Next.js frontend + the "Why this?" panel | 3 |
+| G | Deploy, monitor, drill the rollback | 1 |
+
+Target stack, all free tier: **FastAPI on Hugging Face Spaces** · artifacts on **HF Hub** ·
+**Next.js on Vercel**. Rationale and rejected alternatives are in the audit.
+
+> The current dataset has two columns — `review` and `sentiment`. No movie IDs, no user IDs. It
+> **cannot** power a recommender, which is why Phase D starts with data acquisition
+> (MovieLens 32M + TMDB + an item-keyed review corpus). See `docs/DECISIONS.md` D-002.
+
+---
+
+## Documentation approach
+
+This project follows the *AI Collaboration Field Guide* — nine documents that keep AI-assisted work
+traceable: handover, decisions, flow, architecture, constraints, test checklist, rollback, and
+bug/feature traces. The point is that no session, human or AI, has to re-derive context that was
+already established, and no claim survives without evidence attached.
+
+## Data & attribution
+
+IMDB 50K Movie Reviews dataset — Lakshmipathi N, via Kaggle. Not redistributed here.
+Planned: MovieLens 32M (GroupLens, non-commercial), TMDB API (attribution required).
+
+## License
+
+MIT — see [`LICENSE`](LICENSE).
