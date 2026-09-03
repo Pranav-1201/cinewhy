@@ -46,7 +46,12 @@ Data/processed/
 
 # ── Model + build artifacts ─────────────────────────────────────────────
 # Artifacts are content-hashed and hosted on HF Hub, never committed.
-artifacts/
+#
+# Leading slash is load-bearing: an unanchored `artifacts/` also matched the
+# `cinewhy/artifacts/` PACKAGE, so its source was silently never committed.
+# Local checkouts still had the files, so every gate passed here and the CI
+# install failed with "package directory 'cinewhy/artifacts' does not exist".
+/artifacts/
 *.pkl
 *.joblib
 *.pt
