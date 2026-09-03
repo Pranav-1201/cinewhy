@@ -121,3 +121,49 @@ redistributable only under its source's terms, which a public repo would not sat
 
 **What this rules out.** `git clone` alone producing a runnable project — hence the explicit data
 step in `README.md` and `TEST_CHECKLIST.md`.
+
+---
+
+## D-007 · 2026-09-03 · Claude Opus 5
+### The legacy notebook keeps its outputs; the strip gate applies to new notebooks only
+
+**Decision.** `nbstripout --verify` runs in CI over every tracked notebook *except*
+`Movie_Sentiment_Analysis.ipynb`.
+
+**Why.** The gate exists for two reasons: committed outputs can leak secrets, and they make
+diffs unreadable. Neither applies to this file, and one real cost does.
+
+The committed outputs are the primary evidence for the figures the audit analysed — 0.8350,
+0.8330, 0.8255, 0.7820. Those numbers were reproduced by re-running the pipeline, but the
+notebook's own outputs are what a reader checks the audit against. Stripping them deletes the
+record. The file is also write-once: Phase C replaces it with real modules rather than editing
+it, so it will never produce a noisy diff. And the secret-leak risk is already covered by the
+`gitleaks` job, which scans notebook outputs along with everything else and passes.
+
+**What this rules out.** Silently exempting future notebooks. The CI step enumerates what it
+checked and says so when there is nothing to check, so a carve-out cannot quietly widen into
+"we don't check notebooks".
+
+---
+
+## D-008 · 2026-09-03 · Claude Opus 5
+### Unimplemented functions raise `NotImplementedError`; their tests are `xfail(strict=True)`
+
+**Decision.** The scaffold ships real signatures with `NotImplementedError` bodies, and every
+test covering them is marked `xfail(strict=True)` rather than skipped or omitted.
+
+**Why.** Pranav proposed scaffolding the project with pseudocode so both contributors would have
+something to build against. The goal is right; prose is the wrong medium. A `# TODO: compute the
+aspect scores` comment is an unverified claim that rots silently the moment the design shifts —
+structurally the same failure that put this project at 3.4/10, where documents asserted things
+the code did not do.
+
+Failing tests carry the same information and cannot rot, because CI reports the moment they stop
+being true. `strict=True` closes the loop: implementing the function makes the test XPASS, which
+*fails* the suite and forces the marker's removal in the same PR. A stale marker cannot survive.
+
+Stub bodies raise rather than returning plausible placeholder values, because a stub that returns
+fake data becomes a mock-data landmine the instant real code is layered on top (CONSTRAINTS.md #9).
+
+**What this rules out.** Pseudocode bodies, `pytest.mark.skip` (which hides work rather than
+queueing it), and stubs returning synthetic data.

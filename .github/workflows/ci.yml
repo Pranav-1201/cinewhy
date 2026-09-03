@@ -65,9 +65,26 @@ jobs:
           fi
 
       # ── Repo hygiene ───────────────────────────────────────────────────
-      # Notebook outputs can carry secrets and make diffs unreadable.
+      # Notebook outputs are stripped for every notebook EXCEPT the frozen
+      # legacy one.
+      #
+      # Movie_Sentiment_Analysis.ipynb is exempt on purpose: its committed
+      # outputs are the primary evidence for the numbers the 2026-08-26 audit
+      # analysed (0.8350 / 0.8330 / 0.8255 / 0.7820). Stripping them would
+      # delete the record the audit's findings are checked against, and the
+      # file is write-once — Phase C replaces it with real modules rather than
+      # editing it, so the unreadable-diff argument does not apply.
+      # The secret-leak argument is covered by the gitleaks job below, which
+      # scans notebook outputs along with everything else.
       - name: Notebook outputs stripped
-        run: nbstripout --verify Movie_Sentiment_Analysis.ipynb
+        run: |
+          mapfile -t nbs < <(git ls-files '*.ipynb' | grep -v '^Movie_Sentiment_Analysis\.ipynb$' || true)
+          if [ ${#nbs[@]} -eq 0 ]; then
+            echo "No non-legacy notebooks tracked — nothing to verify."
+            exit 0
+          fi
+          echo "Verifying ${#nbs[@]} notebook(s): ${nbs[*]}"
+          nbstripout --verify "${nbs[@]}"
 
       - name: No large files staged
         run: |
