@@ -1,0 +1,89 @@
+name: CI
+
+# Runs on every push and PR. This is what makes model choice irrelevant: the formatter
+# normalises style, the linter and type checker reject drift, and the suite proves the
+# contract still holds — regardless of which editor or assistant produced the code.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      # ── Lint and format ────────────────────────────────────────────────
+      # `format --check` never writes; it fails if anyone committed unformatted code.
+      - name: Format check
+        run: ruff format --check .
+
+      - name: Lint
+        run: ruff check --output-format=github .
+
+      # ── Types ──────────────────────────────────────────────────────────
+      # A mypy run over ZERO files exits 0 and proves nothing. Assert the file count
+      # before trusting the green. This exact false-green cost a previous project
+      # several sessions of misplaced confidence.
+      - name: Typecheck
+        run: |
+          set -o pipefail
+          mypy 2>&1 | tee mypy.out
+          if ! grep -qE 'Success: no issues found in [1-9][0-9]* source file' mypy.out; then
+            echo "::error::mypy did not report a non-zero source-file count — refusing to pass"
+            exit 1
+          fi
+
+      # ── Tests ──────────────────────────────────────────────────────────
+      # Same reasoning: a suite that collects 0 tests exits 0. Require a real count.
+      - name: Tests
+        run: |
+          set -o pipefail
+          pytest --cov --cov-report=term-missing --junitxml=junit.xml | tee pytest.out
+          if ! grep -qE '[1-9][0-9]* passed' pytest.out; then
+            echo "::error::pytest reported no passing tests — refusing to pass"
+            exit 1
+          fi
+
+      # ── Repo hygiene ───────────────────────────────────────────────────
+      # Notebook outputs can carry secrets and make diffs unreadable.
+      - name: Notebook outputs stripped
+        run: nbstripout --verify Movie_Sentiment_Analysis.ipynb
+
+      - name: No large files staged
+        run: |
+          big=$(git ls-files | xargs -I{} du -k "{}" 2>/dev/null | awk '$1 > 5120 {print $2}')
+          if [ -n "$big" ]; then
+            echo "::error::files over 5 MB are tracked: $big"
+            exit 1
+          fi
+
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Scan for secrets
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

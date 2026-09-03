@@ -1,0 +1,94 @@
+[project]
+name = "cinewhy"
+version = "0.1.0"
+description = "A movie recommender that explains itself with aspect-level evidence from real reviews."
+requires-python = ">=3.13"
+readme = "README.md"
+license = { file = "LICENSE" }
+
+# Runtime deps are pinned in requirements.txt (Phase A). This list exists so the
+# package is installable with `pip install -e .`; keep the two in sync.
+dependencies = [
+    "pydantic>=2.9,<3",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3",
+    "pytest-cov>=5.0",
+    "ruff>=0.7",
+    "mypy>=1.13",
+    "nbstripout>=0.7",
+]
+
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["cinewhy", "cinewhy.text", "cinewhy.absa", "cinewhy.data",
+            "cinewhy.recsys", "cinewhy.artifacts", "api"]
+
+# ── ruff ────────────────────────────────────────────────────────────────
+# The formatter is the whole answer to "our code will look different".
+# It rewrites every contributor's output into identical style regardless of
+# which editor or model produced it. Do not add per-file style exceptions.
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+extend-exclude = ["venv", ".venv", "Movie_Sentiment_Analysis.ipynb"]
+
+[tool.ruff.lint]
+select = [
+    "E", "W",    # pycodestyle
+    "F",         # pyflakes
+    "I",         # import sorting
+    "N",         # pep8-naming
+    "UP",        # pyupgrade
+    "B",         # bugbear
+    "SIM",       # simplify
+    "RUF",       # ruff-specific
+    "ANN",       # require type annotations — the contract is the point
+    "D",         # docstrings
+]
+ignore = [
+    "D203",   # conflicts with D211
+    "D213",   # conflicts with D212
+    "ANN401", # allow Any where it is genuinely the type
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests may omit docstrings on individual cases; the module docstring and the class
+# docstring already explain what the file guards, and a test name that needs prose
+# to be understood should be renamed instead.
+"tests/*" = ["D101", "D102", "D103"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+# ── mypy ────────────────────────────────────────────────────────────────
+# NOTE: a run that checks zero files exits 0 and proves nothing. CI asserts a
+# non-zero source-file count; see .github/workflows/ci.yml.
+[tool.mypy]
+python_version = "3.13"
+files = ["cinewhy", "api", "tests"]
+strict = true
+warn_unreachable = true
+show_error_codes = true
+
+[[tool.mypy.overrides]]
+module = ["sklearn.*", "nltk.*", "hnswlib.*", "pandas.*"]
+ignore_missing_imports = true
+
+# ── pytest ──────────────────────────────────────────────────────────────
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q --strict-markers --strict-config"
+markers = [
+    "methodology: guards against the three defects found in the 2026-08-26 audit",
+    "contract: asserts a cross-module boundary that both halves of the team depend on",
+]
+
+[tool.coverage.run]
+source = ["cinewhy", "api"]
+omit = ["*/__init__.py"]

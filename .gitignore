@@ -90,10 +90,21 @@ tmp/
 *.log
 *.bak
 
+# ── CI scratch output ───────────────────────────────────────────────────
+junit.xml
+mypy.out
+pytest.out
+
 # ── Known junk from shell-redirect accidents on this machine ────────────
 # See docs/CONSTRAINTS.md — unquoted parens/braces in bash drop zero-byte
-# files into the repo root. Run `git status --short` after every commit.
+# files into the repo root. Three appeared during the audit and scaffold
+# sessions alone (STREAM, reviews, int). Run `git status --short` after
+# every commit and delete whatever shows up; do NOT rely on this list
+# being complete — it only covers names already seen.
 [0-9].[0-9]
 bool
 str
 dict
+int
+reviews
+STREAM
