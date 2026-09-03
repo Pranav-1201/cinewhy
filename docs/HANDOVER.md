@@ -38,7 +38,11 @@
 | | |
 |---|---|
 | ❌ | Any code fix. Every defect below is still live in the notebook. |
-| ❌ | Test suite, linter, typechecker, CI — none exist |
+| ✅ | **Phase B done (2026-09-03):** ruff + mypy + pytest + GitHub Actions CI, all green |
+| ✅ | **Scaffold done (2026-09-03):** `cinewhy/` package, `api/`, `tests/` — 23 passed, 20 xfailed |
+| ✅ | `cinewhy/schemas.py` — the shared contract, fully implemented and tested |
+| ✅ | `CONTRIBUTING.md` + `AGENTS.md` — two-person split, module ownership, PR flow |
+| ✅ | `check_env.py` now actually enforces its version floors (was a no-op) |
 | ❌ | Data acquisition (MovieLens / TMDB / item-keyed reviews) |
 | ❌ | API, frontend, deployment — nothing beyond the notebook |
 | ❌ | Rollback drill (`ROLLBACK.md` §7 is blank) |
@@ -124,6 +128,16 @@ Cheap to check; do it before quoting any accuracy as clean.
 ## Five-line handoff ritual (fill in each session)
 
 ```
+Session date:      2026-09-03
+Model:             Claude Opus 5
+What we did:       Phase B tooling + CI; package scaffold; schemas as the shared
+                   contract; 43-test suite (23 pass, 20 xfail); CONTRIBUTING +
+                   AGENTS for the Pranav/Lakshay split; fixed check_env.py.
+What's left:       Phase A (pin deps, correct report claims), then C and D in
+                   parallel. Every xfail marker is one unit of work.
+Watch out for:     H-1 still unverified — data/ and recsys/ are empty shells on
+                   purpose. Do not design them until the ASIN join is tested.
+
 Session date:      2026-08-26
 Model:             Claude Opus 5
 What we did:       Full audit; wrote Field Guide doc set; created + pushed GitHub repo.
