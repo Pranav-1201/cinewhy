@@ -3,8 +3,8 @@
 > Where things stand *right now*. Field Guide habits #1 and #13.
 > Read this first, every session. Update it last, every session.
 
-**Last updated:** 2026-08-26 · Claude Opus 5 · audit + documentation session
-**Next session should start with:** Phase A, task A1 (see `AUDIT-2026-08-26.md` §Phase 4)
+**Last updated:** 2026-09-29 · Claude Sonnet 5.5 · Phase A + start of Phase C
+**Next session should start with:** the "Phase C so far" rows below, then the decisions listed in the ritual at the bottom
 
 ---
 
@@ -44,6 +44,9 @@
 | ✅ | `cinewhy/schemas.py` — the shared contract, fully implemented and tested |
 | ✅ | `CONTRIBUTING.md` + `AGENTS.md` — two-person split, module ownership, PR flow |
 | ✅ | `check_env.py` now actually enforces its version floors (was a no-op) |
+| ✅ | **Phase A done in-repo (2026-09-29):** B11 `requirements.txt` pinned to the 105-package closure; M4 `unique_review_indices` + a real guard test; S4 report corrected in place with an errata block; S5 `MODEL_CARD.md`; S1 already true in-repo (README, D-001) |
+| ⚠️ | **Phase A leftovers:** `pip-audit` in CI (B11) needs a new tool, so it is waiting on Pranav; the **E: drive summary** (SVC claim, "SentimentStream") is outside the repo and this machine has no E: drive, so it is untouched |
+| ✅ | **D-009 (2026-09-29):** re-measuring showed the "1.65 points of leakage" claim does not reproduce; every document that quoted it was corrected |
 | ❌ | Data acquisition (MovieLens / TMDB / item-keyed reviews) |
 | ❌ | API, frontend, deployment — nothing beyond the notebook |
 | ❌ | Rollback drill (`ROLLBACK.md` §7 is blank) |

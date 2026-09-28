@@ -84,6 +84,7 @@ in place, so re-running one alone silently corrupts the data (e.g. double-stemmi
     ├── ARCHITECTURE.md              system map (target + today)
     ├── FLOW.md                      execution trace, and where it breaks
     ├── DECISIONS.md                 why, not just what
+    ├── MODEL_CARD.md                what the sentiment model does, fails at, and was measured on
     ├── CONSTRAINTS.md               what an AI session may not do
     ├── TEST_CHECKLIST.md            commands + expected observables
     ├── ROLLBACK.md                  the way back out
