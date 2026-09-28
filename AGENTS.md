@@ -30,13 +30,13 @@ known, measured bug.
 
 1. **Split before you fit.** Never fit a vectoriser, scaler, encoder or selector on data that
    includes the test split. Split first, fit on train, `transform` everything else.
-   *Measured cost of the original bug: 1.65 accuracy points of inflation.*
+   *The original bug's measured accuracy cost is not distinguishable from zero (DECISIONS.md D-009); the rule stands on correctness, not on the size of the inflation.*
 2. **Never select a model, threshold or hyperparameter on the test set.** Cross-validate on
    train. Touch test exactly once, at the end.
 3. **Never report a difference without its spread.** A mean with no ± beside it is not a
    result. If the margin is smaller than the standard deviation, say so in the same sentence.
-   *The original "best model" won by 0.0020 against a ±0.011 spread, and its ranking reversed
-   under cross-validation.*
+   *The original "best model" won by 0.0020 on the test set; under 5-fold CV the models differ
+   by less than one fold-to-fold std (DECISIONS.md D-009).*
 4. **Never remove `not`, `no`, `nor`, `never` or `n't` from sentiment-bearing text.**
    *In the original pipeline, "This movie was not good at all." and "This movie was good."
    produced byte-identical feature vectors.*

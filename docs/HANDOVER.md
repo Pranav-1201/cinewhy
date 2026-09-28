@@ -15,8 +15,9 @@
    explanations** (`DECISIONS.md` D-001). The Netflix-recommender assignment is the real target.
 3. **The existing dataset cannot power a recommender** — 2 columns, no movie/user IDs (D-002).
    Acquiring item-keyed data is the first real blocker.
-4. Three measured methodology defects: vocabulary leakage (−1.65 pts), negation deleted before the
-   model, and a "best model" chosen on noise whose ranking *reverses* under CV.
+4. Three methodology defects: the vectorizer is fit before the split (accuracy cost **not
+   distinguishable from zero** when re-measured, D-009), negation is deleted before the model
+   (reproduced), and a "best model" is chosen on a 0.0020 test-set gap that sits inside the CV spread.
 5. Nothing was implemented. **Zero lines of notebook/model code were changed.** Only docs, `.gitignore`,
    `README.md`, and the git repo itself were created.
 
@@ -49,31 +50,31 @@
 
 ---
 
-## Measurements taken this session — trust these, they are fresh
+## Measurements — trust the dates shown, not the section title
 
-All from `D:\NLPPROJECT\venv\Scripts\python.exe`, 2026-08-26, seed 42, 10k sample.
+All from `D:\NLPPROJECT\venv\Scripts\python.exe`, seed 42, 10k sample. Figures marked
+*re-measured* are from 2026-09-29 on the pinned environment; the rest are from 2026-08-26 and
+have not been re-run.
 
 **Notebook reproduced exactly.** As-written numbers match the committed notebook outputs
 (0.8350 / 0.8330 / 0.8255 / 0.7820), so the notebook's numbers are *real* — just compromised.
 
-**Leakage cost** (move vectorizer fit after the split, change nothing else):
+**Leakage cost: the 2026-08-26 figures did not reproduce (re-measured).** Moving the vectorizer
+fit after the split and changing nothing else gives 0.7830 / 0.8255 / 0.8355 / 0.8310
+(GaussianNB BoW / MultinomialNB BoW / BernoulliNB BoW / MultinomialNB TF-IDF) against
+0.7820 / 0.8255 / 0.8350 / 0.8330 as written. Over ten split seeds the difference stays within
+±0.0055 with a spread of 0.0013 to 0.0031: not distinguishable from zero. Tables in D-009.
 
-| Model | as written | leak-free | delta |
-|---|---|---|---|
-| BernoulliNB (BoW) | 0.8350 | 0.8185 | **−0.0165** |
-| MultinomialNB (TF-IDF) | 0.8330 | 0.8220 | −0.0110 |
-| MultinomialNB (BoW) | 0.8255 | 0.8200 | −0.0055 |
-| GaussianNB (BoW) | 0.7820 | 0.7805 | −0.0015 |
-
-**5-fold CV on train only — the winner reverses:**
+**5-fold CV on train only (re-measured, vectorizer refit inside every fold):**
 
 | Model | CV mean ± std |
 |---|---|
-| MultinomialNB (TF-IDF) | **0.8383 ± 0.0091** |
-| MultinomialNB (BoW) | 0.8293 ± 0.0126 |
-| BernoulliNB (BoW) | 0.8285 ± 0.0117 |
+| MultinomialNB (TF-IDF) | 0.8345 ± 0.0063 |
+| MultinomialNB (BoW) | 0.8297 ± 0.0095 |
+| BernoulliNB (BoW) | 0.8294 ± 0.0065 |
 
-The notebook's declared winner comes **last**. Its 0.0020 margin sits inside a ±0.011 spread.
+TF-IDF leads by about 0.005, inside each model's own spread; the other two are tied to 0.0003.
+The notebook's declared winner cannot be distinguished from the rest.
 
 **Negation witness (end to end):** `"This movie was not good at all."` and `"This movie was good."`
 → both preprocess to `'movi good'` → `np.array_equal` on their TF-IDF vectors is `True` → both
@@ -92,9 +93,10 @@ map cleanly to MovieLens/TMDB IDs is **unknown and unverified**. Do not assume. 
 200 random ASINs, attempting a title match, and hand-checking 30 of them before designing around it.
 *Hypotheses not yet falsified — this is unexplored, not dead-ended.*
 
-**H-2 · Whether the 418 duplicate reviews actually straddle the train/test split.**
-Known: the duplicates exist. Not measured: how many land on both sides under `random_state=42`.
-Cheap to check; do it before quoting any accuracy as clean.
+**H-2 · RESOLVED 2026-09-29.** The 418 duplicates are real (824 rows belong to a duplicated text).
+Inside the notebook's 10k sample there are 22 duplicate rows, and **5 of the 2,000 test rows have
+a twin in train**, all with agreeing labels: an upper bound of 0.25 points on accuracy. Guarded
+permanently by `unique_review_indices` and `test_no_review_text_appears_in_both_splits`.
 
 ---
 

@@ -20,11 +20,11 @@ The audit, the roadmap, and every measured number live in **[`docs/AUDIT-2026-08
 
 | | Defect | Effect |
 |---|---|---|
-| C-1 | Vectorizer is fit before the train/test split | headline accuracy inflated by **1.65 points** |
-| C-2 | "Best model" chosen on a 0.0020 gap inside a ±0.011 spread | under proper CV the ranking **reverses** |
+| C-1 | Vectorizer is fit before the train/test split | test rows shape the vocabulary; measured accuracy cost is **not distinguishable from zero** (D-009) |
+| C-2 | "Best model" chosen on a 0.0020 gap on the test set | under CV the models differ by less than **one fold-to-fold std** (D-009) |
 | C-3 | `not`/`no`/`nor` removed as stopwords | `"not good"` and `"good"` produce **identical vectors** |
 
-The honest leak-free accuracy is **~0.82**, not the 0.835 quoted in the older report. Fixing these
+The measured leak-free accuracy is **~0.83** (`docs/DECISIONS.md` D-009): the older report's 0.835 was not inflated by leakage on this sample, but it cannot separate the models. Fixing these
 is Phase C of the roadmap.
 
 > ⚠️ `Movie_Sentiment_Analysis_Report.md` predates the audit and contains claims the code

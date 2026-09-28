@@ -57,8 +57,9 @@ def test_negation_token_is_present_in_output(negation_pair: tuple[str, str]) -> 
 
 
 # ── C-1 · the vectoriser must never see the test split ──────────────────
-# Measured: fitting on all 10,000 rows before the split inflated BernoulliNB accuracy
-# from a true 0.8185 to a reported 0.8350 (+0.0165). See DECISIONS.md D-004, FLOW.md F-1.
+# The notebook fits on all 10,000 rows before the split. The earlier claim that this cost
+# 1.65 points did not reproduce (ten seeds: -0.0010 to +0.0000, spread 0.0013 to 0.0031),
+# so this guard rests on correctness, not on a measured inflation. DECISIONS.md D-009.
 
 
 @pytest.mark.xfail(strict=True, reason="Phase C: training pipeline not implemented")
@@ -86,9 +87,10 @@ def test_model_selection_never_receives_test_data() -> None:
 
 
 # ── C-2 · a difference smaller than its spread is not a result ──────────
-# Measured 5-fold CV on train: MultinomialNB TF-IDF 0.8383 ± 0.0091, MultinomialNB BoW
-# 0.8293 ± 0.0126, BernoulliNB BoW 0.8285 ± 0.0117. The notebook's declared winner
-# (BernoulliNB, chosen on a 0.0020 test-set margin) finishes last.
+# Re-measured 2026-09-29, 5-fold CV on train: MultinomialNB TF-IDF 0.8345 ± 0.0063,
+# MultinomialNB BoW 0.8297 ± 0.0095, BernoulliNB BoW 0.8294 ± 0.0065. The notebook's
+# declared winner (BernoulliNB, chosen on a 0.0020 test-set margin) is indistinguishable
+# from the rest: every gap is inside a fold std. See DECISIONS.md D-009.
 
 
 @pytest.mark.xfail(strict=True, reason="Phase C: evaluation harness not implemented")

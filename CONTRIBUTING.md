@@ -180,11 +180,11 @@ Full list in [`docs/CONSTRAINTS.md`](docs/CONSTRAINTS.md). The ones that cost th
 grade of 3.4/10:
 
 1. **Split before you fit.** Never fit a vectoriser, scaler or encoder on data containing the
-   test split. This inflated the original accuracy by 1.65 points.
+   test split. The audit claimed this cost 1.65 points; that did not reproduce (DECISIONS.md D-009), but the rule stands.
 2. **Never select a model or threshold on the test set.** Cross-validate on train; touch test
    once, at the end.
 3. **Never report a difference without its spread.** The original "best model" won by 0.0020
-   against a ±0.011 fold spread — and lost under proper evaluation.
+   on the test set; under CV the models differ by less than one fold-to-fold std (D-009).
 4. **Never delete negation** from sentiment text.
 5. **Never train or embed inside a request handler.** Artifacts are built offline, loaded at
    boot. This is what keeps the free tier viable.

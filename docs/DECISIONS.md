@@ -167,3 +167,56 @@ fake data becomes a mock-data landmine the instant real code is layered on top (
 
 **What this rules out.** Pseudocode bodies, `pytest.mark.skip` (which hides work rather than
 queueing it), and stubs returning synthetic data.
+
+---
+
+## D-009 · 2026-09-29 · Claude Sonnet 5.5
+### The "1.65 points of leakage" figure did not reproduce; the rule stands, the magnitude does not
+
+**Decision.** No document may quote the 2026-08-26 leak-free numbers (0.8185 / 0.8220 / 0.8200 /
+0.7805) or "inflated by 1.65 points" as a measurement. Fit-on-train-only (CONSTRAINTS #1) stays a
+hard rule. What changes is the claim about how much it cost on this data. This entry supersedes
+the leakage figures and the CV table in D-004, `FLOW.md` F-1 and `AUDIT-2026-08-26.md` C-1/C-2.
+
+**Why.** Phase A required re-measuring inherited numbers before building on them
+(CONSTRAINTS #19). On the pinned environment (sklearn 1.8.0, numpy 2.4.4, pandas 3.0.2), same
+pipeline, sample of 10,000 rows at seed 42, split at seed 42:
+
+| Model | as written | leak-free, same split | leak-free minus as written |
+|---|---|---|---|
+| GaussianNB (BoW) | 0.7820 | 0.7830 | +0.0010 |
+| MultinomialNB (BoW) | 0.8255 | 0.8255 | +0.0000 |
+| BernoulliNB (BoW) | 0.8350 | 0.8355 | +0.0005 |
+| MultinomialNB (TF-IDF) | 0.8330 | 0.8310 | -0.0020 |
+
+The as-written column reproduces the notebook's committed outputs exactly, so the pipeline
+under test is the right one. The leak-free column does not reproduce the earlier −0.0165.
+Repeated over ten split seeds, as-written minus leak-free has mean and spread:
+
+| Model | mean | std | range |
+|---|---|---|---|
+| GaussianNB (BoW) | -0.0010 | 0.0031 | -0.0045 to +0.0035 |
+| MultinomialNB (BoW) | -0.0010 | 0.0013 | -0.0030 to +0.0015 |
+| BernoulliNB (BoW) | +0.0000 | 0.0013 | -0.0025 to +0.0015 |
+| MultinomialNB (TF-IDF) | -0.0009 | 0.0031 | -0.0050 to +0.0055 |
+
+The effect is not distinguishable from zero on any model. The script that produced the earlier
+figures is not in the repository, so the discrepancy cannot be traced and no cause is claimed.
+
+Five-fold CV on the train split (vectorizer refit inside every fold, shuffled KFold, seed 42):
+MultinomialNB TF-IDF 0.8345 ± 0.0063, MultinomialNB BoW 0.8297 ± 0.0095, BernoulliNB BoW
+0.8294 ± 0.0065 (sample std over folds). TF-IDF leads by 0.0048 to 0.0051, which is **inside**
+each model's own fold spread. The direction of D-004 survives; its "order of magnitude" wording
+and its ±0.011 spread do not. Two of the three are tied to 0.0003.
+
+**What still holds.** The leakage is real in structure (test rows shaped the vocabulary and IDF
+weights) and is still forbidden. The negation defect (D-003) reproduced today: both witness
+sentences clean to `movi good`, produce identical vectors and are both predicted 0. Duplicates
+(H-2): 5 of 2,000 test rows have a twin in train, all with agreeing labels.
+
+**Honest baseline.** About 0.83 leak-free on this sample, not the ~0.82 the audit projected. The
+Phase C story is therefore not "the headline was inflated"; it is "the headline cannot
+distinguish the models, and the model cannot read negation".
+
+**What this rules out.** Quoting a leakage cost as a measurement, or telling a reader the
+original 0.835 was inflated. Both were true only of the earlier, unreproducible run.

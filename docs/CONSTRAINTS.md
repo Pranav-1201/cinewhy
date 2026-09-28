@@ -10,8 +10,9 @@
 ## Hard rules — no exceptions without Pranav saying so in the session
 
 1. **Never fit a vectorizer, scaler, encoder, or selector on data that includes the test split.**
-   Split first. Fit on train. `transform` everything else. This project's headline number was
-   inflated 1.65 points by exactly this bug (`DECISIONS.md` D-004, `FLOW.md` F-1).
+   Split first. Fit on train. `transform` everything else. The notebook does this
+   wrong. The rule stands whatever it cost: the 2026-08-26 claim of 1.65 points of inflation did
+   not reproduce (`DECISIONS.md` D-009).
 
 2. **Never select a model, threshold, or hyperparameter using the test set.** Cross-validate on
    train. The test set is evaluated once, at the end.

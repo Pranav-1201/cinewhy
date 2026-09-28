@@ -59,14 +59,10 @@ cell 21   train_test_split  →  8,000 train  |  2,000 test
 The 2,000 test reviews contributed to `max_features=1000` selection and (for TF-IDF) to the IDF
 statistics. The test set is therefore not held out.
 
-**Measured cost, this machine, 2026-08-26** — same seed, only the fit moved after the split:
-
-| Model | as written | leak-free | delta |
-|---|---|---|---|
-| BernoulliNB (BoW) | 0.8350 | 0.8185 | **−0.0165** |
-| MultinomialNB (TF-IDF) | 0.8330 | 0.8220 | −0.0110 |
-| MultinomialNB (BoW) | 0.8255 | 0.8200 | −0.0055 |
-| GaussianNB (BoW) | 0.7820 | 0.7805 | −0.0015 |
+**Measured cost.** The 2026-08-26 figures (−0.0165 on BernoulliNB) did not reproduce. Re-measured
+on 2026-09-29 over ten split seeds, as-written minus leak-free is between −0.0010 and +0.0000 on
+every model, with a spread (std) of 0.0013 to 0.0031: not distinguishable from zero. The rule
+stands regardless. Full tables: `DECISIONS.md` D-009.
 
 ### F-2 · Negation is deleted before the model ever sees it (cell 16)
 
