@@ -1,5 +1,22 @@
 # Movie Sentiment Analysis
 
+> **CORRECTIONS, added 2026-09-29 (audit item S4).** This report was written before the project
+> audit and is kept for history. The statements listed here are false or unsupported. Each is
+> corrected in place below and marked *[corrected]*. Figures were re-measured on 2026-09-29; see
+> `docs/DECISIONS.md` D-009.
+>
+> - §12 says the split "prevents spatial data leakage" and calls it stratified. The vectorizer was
+>   fit on all 10,000 rows *before* a plain random split. The measured accuracy effect is not
+>   distinguishable from zero, but the test set was not held out.
+> - §14 heads its columns "Validation". There is no validation set; they are test-set numbers.
+> - §15 figures 3 and 4 were never inserted, and the "~170" misclassification count beside them
+>   was hand-written. It is removed.
+> - §18 says `not` reaches the model as a unigram. It does not: `not`, `no` and `nor` are NLTK
+>   stopwords and are deleted before vectorising.
+> - §14, §16, §20 and §21 say BernoulliNB "dominates", that bigrams would fix negation, and that
+>   90%+ is reachable. Under 5-fold CV the models differ by less than one fold std, bigrams cannot
+>   help while negation is deleted, and no 90% figure was ever measured.
+
 ## 1. Cover Page
 
 **Title:** Movie Sentiment Analysis  
@@ -50,7 +67,7 @@ Despite the advent of large language models, foundational probabilistic approach
 - Compare and contrast discrete token counting paradigms against inverse-document-frequency discounting architectures.
 
 **Performance Goals:**
-- Achieve an accuracy threshold exceeding 80% on a completely unobserved validation holdout set without relying on heavy deep neural architectures.
+- Achieve an accuracy threshold exceeding 80% on a held-out test set *[corrected: not "unobserved", see §12]* without relying on heavy deep neural architectures.
 
 ---
 
@@ -70,7 +87,7 @@ Despite the advent of large language models, foundational probabilistic approach
 
 **Observations:** The dataset exhibits an exceptionally well-balanced class alignment. No minority class over-sampling (e.g., SMOTE) or stratified sampling schemes are strictly necessitated. 
 
-[INSERT FIGURE 1: Sentiment Distribution Bar Chart]
+[PLACEHOLDER: Figure 1, the sentiment distribution bar chart, was never inserted; see notebook cell 6.]
 
 ---
 
@@ -188,15 +205,15 @@ Given algorithmic sparsity issues correlated to dense vocabulary, three configur
 Extracted configurations from the code framework heavily dictate the learning landscape:
 
 - **Vector Space Truncation (`max_features=1000`):** By clipping the feature matrix size to the 1,000 most heavily featured unigrams, the dimensionality curse is averted, memory latency falls drastically, and overfitting driven by exceedingly rare vocabulary noise is naturally regularized.
-- **Train/Test Splitting (`test_size=0.20`, `random_state=42`):** Ensures exactly 8,000 examples are learned iteratively, reserving a pure 2,000 test vector isolated entirely from optimization fitting calculations.
+- **Train/Test Splitting (`test_size=0.20`, `random_state=42`):** Ensures exactly 8,000 examples are learned iteratively, reserving a 2,000-row test set. *[Corrected: it was not isolated. The vectorizer's vocabulary was fit on all 10,000 rows first; see §12.]*
 - **Multinomial/Bernoulli $\alpha$ Smoothing (`alpha=1.0` implicit):** Laplace prior guarantees that out-of-vocabulary mathematical distributions won't cause hard zero probability multiplications.
 
 ---
 
 ## 12. Training Process
 
-The experimental procedure was cleanly bifurcated to prevent spatial data leakage:
-1. **Stratification Split:** $X$ inputs and $y$ vectors segregated via an 80/20 train-test split rule.
+*[Corrected 2026-09-29.]* The vectorizer was fit on all 10,000 rows before the split, so test rows shaped the vocabulary (and the IDF weights for TF-IDF). The measured accuracy effect on this data is not distinguishable from zero, but the test set was not held out.
+1. **Random Split (not stratified):** $X$ inputs and $y$ vectors segregated via a plain random 80/20 train-test split.
 2. **Deterministic Control:** The parameter `random_state=42` ensures pseudo-random deterministic weight extraction, allowing for 1:1 algorithmic replication.
 3. **Training Execution:** The classifier models execute deterministic fitting algorithms (`.fit()`). Because Naive Bayes resolves probabilistically rather than iteratively, model divergence does not occur, and no computational epochs are required.
 
@@ -224,7 +241,7 @@ A comprehensive run comparing different statistical distributions against text e
 
 *Table 3: Model Performance Comparison (Global Metrics)*
 
-| Model Architecture       | Encoding Method | Validation Accuracy | Validation Precision |
+| Model Architecture       | Encoding Method | Test Accuracy       | Test Precision       |
 |--------------------------|-----------------|---------------------|----------------------|
 | **BernoulliNB**          | Bag-of-Words    | **0.8350**          | 0.8273               |
 | **MultinomialNB**        | TF-IDF          | 0.8330              | 0.8254               |
@@ -240,17 +257,16 @@ A comprehensive run comparing different statistical distributions against text e
 | **Macro Average**  | **0.83**  | **0.83**| **0.83**| **2000**|
 
 **Vital Interpretative Insights:**
-- BernoulliNB dominating the environment reflects a key NLP reality: the raw *presence* of polarizing tokens ("horrible", "amazing") is vastly more statistically relevant than the *cumulative frequency* of how often they are repeated in an essay. 
+- *[Corrected 2026-09-29.]* BernoulliNB's 0.0020 lead over TF-IDF MultinomialNB on the test set is smaller than the fold-to-fold spread (5-fold CV: TF-IDF 0.8345 ± 0.0063, MultinomialNB BoW 0.8297 ± 0.0095, BernoulliNB 0.8294 ± 0.0065). The data cannot separate these models, so no explanation of a "dominance" is warranted. 
 - GaussianNB under-performed explicitly due to its rigid hypothesis concerning numerical continuous bell curves that poorly mapped against the rigid linear integers outputted by Bag-of-Words vectorization.
 
 ---
 
 ## 15. Visualizations
 
-[INSERT FIGURE 3: Confusion Matrix — MultinomialNB (BoW) Heatmap Placeholder]
-*(Note: Represents strong diagonal True Positive/True Negative identification with roughly balanced ~170 element misclassification lobes).*
+[PLACEHOLDER: Figure 3, the confusion matrix for MultinomialNB (BoW), was never inserted; see notebook cell 27.]
 
-[INSERT FIGURE 4: Confusion Matrix — MultinomialNB (TF-IDF) Heatmap Placeholder]
+[PLACEHOLDER: Figure 4, the confusion matrix for MultinomialNB (TF-IDF), was never inserted; see notebook cell 33.]
 
 ---
 
@@ -279,7 +295,7 @@ A distinct algorithmic path operates outside the fitting structure designed excl
 
 Given the static `Accuracy = ~83.5%` boundary, error variance (the remaining 16.5% failures) originates from deterministic architecture limits:
 - **Sarcasm and Subtext:** Stemming strips irony. "Yeah right, like this movie was the best thing ever" converts completely to "best movie ever", triggering heavy positive activation logic when the user is explicitly negative.
-- **Context Negation Failure:** Unigrams (single tokens) lack memory. "Not exactly terrible" generates independent unigram vectors (`not`, `exact`, `terribl`). The model weights `terribl` negatively rather than detecting it as inverted positively through `not`.
+- **Context Negation Failure:** *[Corrected 2026-09-29.]* `not`, `no` and `nor` are in NLTK's English stoplist and are deleted before vectorising, so the model never sees them. "Not exactly terrible" reaches it without its `not`, and "This movie was not good at all." and "This movie was good." both clean to `movi good`, produce identical vectors, and are both predicted negative.
 - **Lexical Dilution ('Okay'):** Indifferent sentiment text heavily relies on un-weighted adverbs that do not correlate linearly, often tricking the classifier into forcing a generalized prediction weighted slightly to the training distribution.
 
 ---
@@ -294,8 +310,8 @@ Given the static `Accuracy = ~83.5%` boundary, error variance (the remaining 16.
 
 ## 20. Future Work
 
-To breach the mid-80s ceiling constraints and force convergence over 90%+ classification:
-- **N-Grams Introduction:** Adjusting the Vectorizers to accept `ngram_range=(1,2)` allows parsing of bigrams ("not good", "very bad"), inherently solving basic local context negation failures.
+Ideas to try. *[Corrected 2026-09-29: no accuracy target is claimed, and none of these has been measured.]*
+- **N-Grams Introduction:** Adjusting the Vectorizers to accept `ngram_range=(1,2)` allows parsing of bigrams ("not good", "very bad"), but only once negation words are kept in the text: while `not` is removed as a stopword, no bigram can contain it. *[Corrected: the original said this "inherently" solves negation.]*
 - **Deep Learning Architectures:** Transitioning the prediction heuristic structure away from independent probability mappings to embedding-based neural mappings (e.g., LSTMs caching text sequence geometry, or fine-tuned Transformer BERT weights focusing explicitly on context matrices).
 - **Expanded Feature Mapping:** Iteratively testing limits beyond $Max\_Features=1000$ to locate optimal feature-saturation equilibrium curves.
 
@@ -303,7 +319,7 @@ To breach the mid-80s ceiling constraints and force convergence over 90%+ classi
 
 ## 21. Conclusion
 
-This project successfully encapsulates the total machine learning end-to-end framework required to classify sentiment from chaotic raw human text. It empirically demonstrates that mathematical text sanitization is identical in importance to algorithmic model selection. The extraction of an 83.50% prediction accuracy utilizing only base BoW/TF-IDF and Naive Bayes configurations strictly highlights the profound operational strength of traditional machine learning implementations—proving that complex categorization tasks can be solved cleanly, scalably, and deterministically without large-scale neural networks.
+This project successfully encapsulates the total machine learning end-to-end framework required to classify sentiment from chaotic raw human text. *[Corrected 2026-09-29: the original claimed this "empirically demonstrates" that sanitization matters as much as model selection. No experiment here compares the two, and the sanitization used deleted negation.]* The extraction of an 83.50% prediction accuracy utilizing only base BoW/TF-IDF and Naive Bayes configurations strictly highlights the profound operational strength of traditional machine learning implementations—proving that complex categorization tasks can be solved cleanly, scalably, and deterministically without large-scale neural networks. *[Corrected: 83.50% is one test-set figure from one split; the models tested cannot be told apart by it.]*
 
 ---
 
