@@ -15,9 +15,13 @@ guard test that was never observed failing proves nothing.
 
 from __future__ import annotations
 
+import random
+from collections.abc import Sequence
+
 import pytest
 
 from cinewhy.text import NEGATION_TOKENS, build_stoplist, normalise
+from cinewhy.text.dedupe import unique_review_indices
 
 pytestmark = pytest.mark.methodology
 
@@ -100,11 +104,39 @@ def test_declared_winner_margin_exceeds_fold_spread() -> None:
 
 # ── Data hygiene: the 418 duplicates ────────────────────────────────────
 # Measured: the raw IMDB file holds 418 exact duplicate review texts (0 with conflicting
-# labels). Under a random split a duplicate can land on both sides. HANDOVER.md H-2 asks
-# whether they actually do; this guard makes the answer permanently moot.
+# labels). Under a random split a duplicate can land on both sides. H-2 measured it on
+# the notebook's own split: 5 of 2,000 test rows had a twin in train. This guard makes
+# the question permanently moot for anything that goes through `unique_review_indices`.
 
 
-@pytest.mark.xfail(strict=True, reason="Phase C: split helper not implemented")
+def _split_is_disjoint(reviews: Sequence[str], rows: Sequence[int], seed: int) -> bool:
+    """Randomly split `rows` 80/20; True when no review text lands on both sides."""
+    order = list(rows)
+    random.Random(seed).shuffle(order)
+    cut = int(len(order) * 0.8)
+    train = {reviews[i] for i in order[:cut]}
+    test = {reviews[i] for i in order[cut:]}
+    return train.isdisjoint(test)
+
+
 def test_no_review_text_appears_in_both_splits() -> None:
-    """Train and test review texts must be disjoint."""
-    pytest.fail("implement alongside the dataset split helper")
+    """Train and test review texts must be disjoint once duplicates are removed."""
+    # 300 distinct reviews; every fifth one is repeated twice more at scattered rows,
+    # mirroring the corpus (824 rows belong to 418 duplicated texts) at a higher rate so
+    # a handful of seeds is enough to exercise the hazard.
+    distinct = [f"review number {n}" for n in range(300)]
+    reviews = list(distinct)
+    for n in range(0, 300, 5):
+        reviews.insert((n * 7) % len(reviews), distinct[n])
+        reviews.insert((n * 13 + 3) % len(reviews), distinct[n])
+    labels = [int(text.rsplit(" ", 1)[1]) % 2 for text in reviews]
+    everything = range(len(reviews))
+    kept = unique_review_indices(reviews, labels)
+    seeds = range(25)
+
+    # Control: without dedupe the same splits DO straddle. If this ever stops holding the
+    # fixture no longer contains the hazard and the assertion below proves nothing.
+    assert any(not _split_is_disjoint(reviews, everything, seed) for seed in seeds)
+
+    for seed in seeds:
+        assert _split_is_disjoint(reviews, kept, seed), f"seed {seed} straddles the split"
