@@ -35,12 +35,10 @@ class TestTextBoundary:
 
         assert serving_path is training_path.normalise
 
-    @pytest.mark.xfail(strict=True, reason="Phase C: strip_html() not implemented")
     def test_strip_html_removes_br_tags(self) -> None:
         """29,200 of the 50,000 source rows contain a literal '<br'."""
         assert strip_html("Great film.<br /><br />Loved it.") == "Great film.Loved it."
 
-    @pytest.mark.xfail(strict=True, reason="Phase C: normalise() not implemented")
     def test_normalise_is_pure(self) -> None:
         """Calling twice on the same input returns the same output.
 
@@ -50,7 +48,6 @@ class TestTextBoundary:
         text = "A perfectly ordinary sentence."
         assert normalise(text) == normalise(text)
 
-    @pytest.mark.xfail(strict=True, reason="Phase C: normalise() not implemented")
     def test_normalise_returns_a_string_not_a_token_list(self) -> None:
         """Vectorisers take strings. The boundary type is `str`, not `list[str]`."""
         assert isinstance(normalise("Some review text."), str)

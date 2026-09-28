@@ -32,7 +32,6 @@ pytestmark = pytest.mark.methodology
 # predicted negative. See DECISIONS.md D-003.
 
 
-@pytest.mark.xfail(strict=True, reason="Phase C: build_stoplist() not implemented")
 def test_negation_tokens_are_never_in_the_stoplist() -> None:
     """The stoplist builder must strip every negation carrier.
 
@@ -42,14 +41,12 @@ def test_negation_tokens_are_never_in_the_stoplist() -> None:
     assert build_stoplist() & NEGATION_TOKENS == frozenset()
 
 
-@pytest.mark.xfail(strict=True, reason="Phase C: normalise() not implemented")
 def test_negation_survives_preprocessing(negation_pair: tuple[str, str]) -> None:
     """Two documents differing only by a negation must not normalise identically."""
     negated, plain = negation_pair
     assert normalise(negated) != normalise(plain)
 
 
-@pytest.mark.xfail(strict=True, reason="Phase C: normalise() not implemented")
 def test_negation_token_is_present_in_output(negation_pair: tuple[str, str]) -> None:
     """Stronger form: the negation carrier itself must reach the vectoriser."""
     negated, _ = negation_pair

@@ -220,3 +220,40 @@ distinguish the models, and the model cannot read negation".
 
 **What this rules out.** Quoting a leakage cost as a measurement, or telling a reader the
 original 0.835 was inflated. Both were true only of the earlier, unreproducible run.
+
+---
+
+## D-010 · 2026-09-29 · Claude Sonnet 5.5
+### `cinewhy.text.normalise` keeps negation, embeds its stoplist, and does not stem
+
+**Decision.** `normalise` is standard library only. It strips HTML, lowercases, expands
+`n't` contractions to `not`, replaces non-alphanumerics with spaces, and drops stopwords from
+an embedded copy of NLTK's English list (198 words, nltk 3.9.4) minus the negation carriers.
+It does not stem.
+
+**Why.**
+- *Embedded list, no stemming:* CI and the request path install neither nltk nor its downloadable
+  corpus, and adding a dependency needs approval (CONSTRAINTS #14). Porter stemming lives in nltk.
+- *Contraction expansion:* splitting `didn't` on punctuation gives `didn` + `t`, both stopwords,
+  so the negation vanished even with `not` protected.
+- *Not stemming costs nothing measurable.* Same 10,000-row sample, split and 5-fold CV as D-009,
+  vectorizer refit per fold (CV mean ± sample std; A is the notebook's cleaning, B is `normalise`,
+  C is `normalise` plus Porter):
+
+| Model | A notebook | B normalise | C normalise + stem |
+|---|---|---|---|
+| MultinomialNB TF-IDF | 0.8345 ± 0.0063 | 0.8367 ± 0.0088 | 0.8347 ± 0.0076 |
+| MultinomialNB BoW | 0.8297 ± 0.0095 | 0.8296 ± 0.0106 | 0.8285 ± 0.0096 |
+| BernoulliNB BoW | 0.8294 ± 0.0065 | 0.8266 ± 0.0031 | 0.8291 ± 0.0051 |
+
+Every difference between pipelines (largest 0.0028) is inside the fold spread. Column A
+reproduces the D-009 figures exactly, so the harness is the same.
+
+**What it does and does not buy.** "This movie was not good at all." and "This movie was good."
+now clean to `movie not good` and `movie good` and produce different vectors. Both are still
+predicted negative by a MultinomialNB TF-IDF model, and accuracy did not measurably move. A
+unigram bag of words can carry the word `not`, but cannot combine it with `good`. Reading
+negation properly is a modelling problem for later in Phase C, not something this step solves.
+
+**What this rules out.** Claiming the negation fix improved accuracy, and importing nltk into
+`cinewhy.text` without a new decision.
