@@ -133,6 +133,20 @@ permanently by `unique_review_indices` and `test_no_review_text_appears_in_both_
 ## Five-line handoff ritual (fill in each session)
 
 ```
+Session date:      2026-09-29
+Model:             Claude Sonnet 5.5
+What we did:       Phase A (pinned requirements, dedupe helper, report errata, model
+                   card); found the 1.65-pt leakage claim does not reproduce (D-009,
+                   BUG-001); Phase C text pipeline: strip_html/build_stoplist/normalise,
+                   stdlib only, no stemming (D-010, FEATURE-002). 62 pass, 13 xfail.
+What's left:       Phase C training/eval (needs scikit-learn+numpy in CI: ASK before
+                   adding), pip-audit in CI (ASK), E: drive summary corrections, H-1,
+                   Phase D onward. All work is committed locally; NOTHING is pushed.
+Watch out for:     Do not quote the old leakage numbers. venv/pyvenv.cfg was repointed to
+                   this machine's Python 3.13.15 (venv is gitignored). NLTK stopwords
+                   corpus was downloaded to ~/nltk_data for scratch measurement only.
+                   Measurement scripts were not committed, so re-derive from D-009/D-010.
+
 Session date:      2026-09-03
 Model:             Claude Opus 5
 What we did:       Phase B tooling + CI; package scaffold; schemas as the shared
