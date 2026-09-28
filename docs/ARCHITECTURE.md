@@ -33,7 +33,7 @@ D:\NLPPROJECT\
 ├── Movie_Sentiment_Analysis.ipynb   38 cells, linear, no persistence
 ├── Movie_Sentiment_Analysis_Report.md
 ├── check_env.py                 import-presence check
-├── requirements.txt             unpinned (>=)
+├── requirements.txt             fully pinned closure (105 packages)
 └── setup.bat
 ```
 

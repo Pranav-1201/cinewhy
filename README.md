@@ -75,7 +75,7 @@ in place, so re-running one alone silently corrupts the data (e.g. double-stemmi
 ├── Movie_Sentiment_Analysis.ipynb   the current prototype (38 cells)
 ├── Movie_Sentiment_Analysis_Report.md   original report — see warning above
 ├── check_env.py                     import-presence check
-├── requirements.txt                 ⚠ unpinned; pinning is Phase A
+├── requirements.txt                 fully pinned closure (105 packages)
 ├── setup.bat                        Windows environment setup
 ├── CLAUDE.md                        session rules for AI-assisted work
 ├── Data/                            dataset goes here (gitignored)
