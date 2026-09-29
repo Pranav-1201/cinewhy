@@ -10,6 +10,10 @@ license = { file = "LICENSE" }
 # package is installable with `pip install -e .`; keep the two in sync.
 dependencies = [
     "pydantic>=2.9,<3",
+    # Added 2026-09-29 with Pranav's approval so Phase C training and evaluation can be
+    # tested in CI. Ranges bracket the versions pinned in requirements.txt.
+    "numpy>=2.4,<3",
+    "scikit-learn>=1.8,<2",
 ]
 
 [project.optional-dependencies]

@@ -32,6 +32,21 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
 
+      # ── Known vulnerabilities (audit item B11) ─────────────────────────
+      # Blocking: the environment CI just installed, i.e. what a deployed service ships.
+      # Informational: the full notebook stack in requirements.txt. On 2026-09-29 it had
+      # 14 of 105 pinned packages with known advisories, all with fixed releases, mostly
+      # the Jupyter stack. Bumping them is its own change (it invalidates prior results),
+      # so it is reported here without failing the build until that change is made.
+      - name: Vulnerability audit (installed environment)
+        run: |
+          pip install pip-audit
+          pip-audit --skip-editable
+
+      - name: Vulnerability audit (requirements.txt, informational)
+        continue-on-error: true
+        run: pip-audit -r requirements.txt --no-deps --disable-pip
+
       # ── Lint and format ────────────────────────────────────────────────
       # `format --check` never writes; it fails if anyone committed unformatted code.
       - name: Format check
