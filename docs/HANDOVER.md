@@ -139,9 +139,14 @@ What we did:       Phase A (pinned requirements, dedupe helper, report errata, m
                    card); found the 1.65-pt leakage claim does not reproduce (D-009,
                    BUG-001); Phase C text pipeline: strip_html/build_stoplist/normalise,
                    stdlib only, no stemming (D-010, FEATURE-002). 62 pass, 13 xfail.
-What's left:       Phase C training/eval (needs scikit-learn+numpy in CI: ASK before
-                   adding), pip-audit in CI (ASK), E: drive summary corrections, H-1,
-                   Phase D onward. All work is committed locally; NOTHING is pushed.
+What's left:       Phase C training + evaluation harness (numpy and scikit-learn are now
+                   CI dependencies), score_polarity, a hand-labelled sample so aspect
+                   detection can be measured, bumping the 14 vulnerable pins (169
+                   advisories; the requirements.txt audit is informational until then),
+                   E: drive summary corrections, H-1, Phase D onward.
+Also done later:   split_sentences + detect_aspects (lexicon baseline, accuracy NOT
+                   measured); pip-audit and ML deps added to CI; main pushed to GitHub.
+                   98 passed, 10 xfailed.
 Watch out for:     Do not quote the old leakage numbers. venv/pyvenv.cfg was repointed to
                    this machine's Python 3.13.15 (venv is gitignored). NLTK stopwords
                    corpus was downloaded to ~/nltk_data for scratch measurement only.
