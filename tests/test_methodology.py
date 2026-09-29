@@ -20,8 +20,17 @@ from collections.abc import Sequence
 
 import pytest
 
+from cinewhy.absa.train import (
+    DEFAULT_CANDIDATES,
+    FoldSummary,
+    cross_validate,
+    fit_vectorizer_on_train,
+    pick_winner,
+    split_indices,
+)
 from cinewhy.text import NEGATION_TOKENS, build_stoplist, normalise
 from cinewhy.text.dedupe import unique_review_indices
+from tests.test_train import RecordingSequence, make_corpus
 
 pytestmark = pytest.mark.methodology
 
@@ -59,7 +68,6 @@ def test_negation_token_is_present_in_output(negation_pair: tuple[str, str]) -> 
 # so this guard rests on correctness, not on a measured inflation. DECISIONS.md D-009.
 
 
-@pytest.mark.xfail(strict=True, reason="Phase C: training pipeline not implemented")
 def test_vectorizer_vocabulary_is_a_subset_of_train_tokens() -> None:
     """Every term in the fitted vocabulary must occur in the training split.
 
@@ -70,17 +78,35 @@ def test_vectorizer_vocabulary_is_a_subset_of_train_tokens() -> None:
     Implementation note for whoever takes Phase C: split first, fit on train, transform
     test. Then compare `vectorizer.vocabulary_` against the token set of the train rows.
     """
-    pytest.fail("implement alongside cinewhy.absa training pipeline")
+    train = ["great acting superb", "awful boring plot"]
+    train_tokens = {token for document in train for token in document.split()}
+    leaked = "zzunique"
+    test = [f"great {leaked}"]
+
+    for candidate in DEFAULT_CANDIDATES:
+        # Control: fitting on train plus test does put the test-only token in the
+        # vocabulary, so the assertion below can fail.
+        assert leaked in candidate.make_vectorizer().fit(train + test).vocabulary_
+        vocabulary = set(fit_vectorizer_on_train(candidate, train).vocabulary_)
+        assert vocabulary <= train_tokens
+        assert leaked not in vocabulary
 
 
-@pytest.mark.xfail(strict=True, reason="Phase C: training pipeline not implemented")
 def test_model_selection_never_receives_test_data() -> None:
     """Selection runs on cross-validation over train only; test is touched once.
 
     The original notebook chose its winner by comparing test accuracies, which makes the
     reported number an optimistic estimate rather than a generalisation estimate.
     """
-    pytest.fail("implement alongside cinewhy.absa training pipeline")
+    reviews, labels = make_corpus()
+    train, test = split_indices(reviews, labels)
+    texts, ys = RecordingSequence(reviews), RecordingSequence(labels)
+
+    cross_validate(DEFAULT_CANDIDATES, texts, ys, train, folds=3)
+
+    assert texts.reads, "the recorder saw nothing, so this guard proves nothing"
+    assert texts.reads.isdisjoint(test)
+    assert ys.reads.isdisjoint(test)
 
 
 # ── C-2 · a difference smaller than its spread is not a result ──────────
@@ -90,7 +116,6 @@ def test_model_selection_never_receives_test_data() -> None:
 # from the rest: every gap is inside a fold std. See DECISIONS.md D-009.
 
 
-@pytest.mark.xfail(strict=True, reason="Phase C: evaluation harness not implemented")
 def test_declared_winner_margin_exceeds_fold_spread() -> None:
     """Refuse to declare a winner whose lead is inside the noise.
 
@@ -98,7 +123,18 @@ def test_declared_winner_margin_exceeds_fold_spread() -> None:
     helper must decline to name a winner when the margin over second place is smaller
     than one standard deviation — returning "no significant difference" instead.
     """
-    pytest.fail("implement alongside the evaluation harness")
+    # The re-measured D-009 numbers: a 0.0048 lead against fold stds of 0.0063 and 0.0095.
+    noisy = {
+        "tfidf": FoldSummary(mean=0.8345, std=0.0063, folds=()),
+        "bow": FoldSummary(mean=0.8297, std=0.0095, folds=()),
+    }
+    assert pick_winner(noisy) is None
+
+    clear = {
+        "tfidf": FoldSummary(mean=0.90, std=0.005, folds=()),
+        "bow": FoldSummary(mean=0.80, std=0.005, folds=()),
+    }
+    assert pick_winner(clear) == "tfidf"
 
 
 # ── Data hygiene: the 418 duplicates ────────────────────────────────────
