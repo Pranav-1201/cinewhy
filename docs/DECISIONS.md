@@ -257,3 +257,42 @@ negation properly is a modelling problem for later in Phase C, not something thi
 
 **What this rules out.** Claiming the negation fix improved accuracy, and importing nltk into
 `cinewhy.text` without a new decision.
+
+---
+
+## D-011 · 2026-09-30 · Claude Sonnet 5.5
+### Model comparisons come from `cinewhy.absa.train.run_experiment`, and it names no winner inside the noise
+
+**Decision.** Any model comparison reported from this project is produced by `run_experiment`.
+It deduplicates, splits, cross-validates on the training rows only (vectorizer refit in every
+fold), and names a winner only when the lead over second place is at least the larger of the two
+fold standard deviations. Test accuracy is computed once, after selection, for every candidate,
+and is reported but never used to choose.
+
+**Why.** The three methodology rules were promises in prose until now (CONSTRAINTS #1-#3). The
+harness makes them structural, and each is guarded by a test that was watched to fail: a control
+proving a test-only token does reach a vocabulary fitted on train plus test, a sequence that
+records every row selection reads, a spy vectorizer that logs every document it is fitted on, and
+ten planted bugs, all killed.
+
+**First real-data result** (`python -m cinewhy.absa.train --sample 10000`, seed 42, negation kept,
+no stemming, 5-fold CV):
+
+| Model | CV mean ± sample std | Test (one evaluation) |
+|---|---|---|
+| MultinomialNB TF-IDF | 0.8375 ± 0.0129 | 0.8362 |
+| MultinomialNB BoW | 0.8306 ± 0.0115 | 0.8267 |
+| BernoulliNB BoW | 0.8323 ± 0.0116 | 0.8367 |
+
+9,982 unique of 10,000 rows (18 duplicates removed); 7,986 train, 1,996 test. Winner by CV:
+**none**, since the 0.005 lead is well inside a fold std of about 0.012. The test column spans
+0.010, which is the same size as the spread, so it cannot rank them either.
+
+**Caveat, read before comparing with D-009.** This CLI draws its sample with Python's `random`,
+not pandas' `sample(random_state=42)`, so it is a different set of 10,000 rows, a different
+split, and a different duplicate count (18 here, 22 there). It is not a like-for-like rerun. The
+fold std is also larger (about 0.012 against 0.006 to 0.010). What carries over is the
+conclusion, not the digits: about 0.83 to 0.84, and the three candidates are not separable.
+
+**What this rules out.** Naming a best model from test accuracy, quoting any accuracy without its
+spread, and treating this table and D-009's as one series.
