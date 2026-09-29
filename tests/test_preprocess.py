@@ -80,6 +80,11 @@ def test_strip_html_keeps_inner_text_and_leaves_plain_text_alone() -> None:
     assert strip_html("no tags here") == "no tags here"
 
 
+def test_strip_html_replacement_keeps_a_boundary_between_neighbours() -> None:
+    assert strip_html("end.<br />Next", replacement=" ") == "end. Next"
+    assert strip_html("end.<br />Next") == "end.Next"
+
+
 def test_build_stoplist_subtracts_negation_from_any_base() -> None:
     base = frozenset({"not", "the", "zebra", "nor"})
     assert build_stoplist(base) == frozenset({"the", "zebra"})

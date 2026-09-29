@@ -56,16 +56,13 @@ class TestTextBoundary:
 class TestAbsaBoundary:
     """`cinewhy.absa` produces what `cinewhy.recsys` and `api` consume."""
 
-    @pytest.mark.xfail(strict=True, reason="Phase C: split_sentences() not implemented")
     def test_split_sentences_never_returns_empty_for_real_input(self) -> None:
         assert split_sentences("The pacing dragged. The ending saved it.")
 
-    @pytest.mark.xfail(strict=True, reason="Phase C: detect_aspects() not implemented")
     def test_detect_aspects_may_return_nothing(self) -> None:
         """Most sentences belong to no aspect; that is the correct answer, not a bug."""
         assert detect_aspects("I watched this on a Tuesday.") == frozenset()
 
-    @pytest.mark.xfail(strict=True, reason="Phase C: detect_aspects() not implemented")
     def test_detect_aspects_returns_known_members_only(self) -> None:
         result = detect_aspects("The soundtrack was extraordinary.")
         assert result <= frozenset(Aspect)

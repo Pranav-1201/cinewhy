@@ -79,16 +79,20 @@ _REGULAR_NEGATIVE: Final[re.Pattern[str]] = re.compile(r"n't\b")
 _NON_ALNUM: Final[re.Pattern[str]] = re.compile(r"[\W_]+")
 
 
-def strip_html(text: str) -> str:
+def strip_html(text: str, *, replacement: str = "") -> str:
     """Remove HTML tags, leaving their inner text.
 
     Args:
         text: Raw review text as scraped.
+        replacement: What each tag becomes. The default deletes it, which keeps
+            "Great film.<br /><br />Loved it." as "Great film.Loved it.". Sentence
+            splitting passes " " instead, because that same deletion removes the
+            whitespace that marks the boundary and fuses two sentences into one.
 
     Returns:
         The same text with tags removed.
     """
-    return _HTML_TAG.sub("", text)
+    return _HTML_TAG.sub(replacement, text)
 
 
 def build_stoplist(base: frozenset[str] | None = None) -> frozenset[str]:
