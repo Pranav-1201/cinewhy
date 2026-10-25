@@ -14,12 +14,19 @@ dependencies = [
     # tested in CI. Ranges bracket the versions pinned in requirements.txt.
     "numpy>=2.4,<3",
     "scikit-learn>=1.8,<2",
+    # Added 2026-10-22 with Pranav's approval for the recommender and its web API.
+    "scipy>=1.17,<2",
+    "pandas>=3,<4",
+    "joblib>=1.5,<2",
+    "fastapi>=0.159,<1",
+    "uvicorn>=0.54,<1",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest>=8.3",
     "pytest-cov>=5.0",
+    "httpx>=0.28,<1",  # fastapi.testclient needs it; it was never declared before
     "ruff>=0.7",
     "mypy>=1.13",
     "nbstripout>=0.7",
@@ -81,7 +88,7 @@ warn_unreachable = true
 show_error_codes = true
 
 [[tool.mypy.overrides]]
-module = ["sklearn.*", "nltk.*", "hnswlib.*", "pandas.*"]
+module = ["sklearn.*", "nltk.*", "hnswlib.*", "pandas.*", "scipy.*", "joblib.*"]
 ignore_missing_imports = true
 
 # ── pytest ──────────────────────────────────────────────────────────────

@@ -97,5 +97,11 @@ def test_most_sentences_belong_to_no_aspect(sentence: str) -> None:
     assert detect_aspects(sentence) == frozenset()
 
 
+def test_a_score_board_is_not_a_soundtrack() -> None:
+    """Found by reading real evidence quotes: 'win High Points on the Score Board'."""
+    assert detect_aspects("Win High Points on the Score Board!") == frozenset()
+    assert Aspect.SOUNDTRACK in detect_aspects("The score is gorgeous.")
+
+
 def test_detect_aspects_returns_a_frozenset() -> None:
     assert isinstance(detect_aspects("The acting was good."), frozenset)

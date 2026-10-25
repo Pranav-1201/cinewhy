@@ -11,11 +11,16 @@ cannot go unnoticed.
 
 from __future__ import annotations
 
+import hashlib
+from pathlib import Path
+
 import pytest
 
 from cinewhy.absa import build_profile, detect_aspects, split_sentences
+from cinewhy.artifacts.manifest import ManifestMismatchError, build, hash_file, verify
 from cinewhy.schemas import Aspect, MovieAspectProfile, RecommendRequest, TasteProfile
 from cinewhy.text import normalise, strip_html
+from tests.conftest import KeywordScorer
 
 pytestmark = pytest.mark.contract
 
@@ -67,16 +72,20 @@ class TestAbsaBoundary:
         result = detect_aspects("The soundtrack was extraordinary.")
         assert result <= frozenset(Aspect)
 
-    @pytest.mark.xfail(strict=True, reason="Phase D: build_profile() not implemented")
-    def test_build_profile_returns_the_contract_type(self) -> None:
-        profile, evidence = build_profile("cw-1", [("rv-1", "The pacing is superb.")])
+    def test_build_profile_returns_the_contract_type(self, keyword_scorer: KeywordScorer) -> None:
+        profile, evidence = build_profile(
+            "cw-1", [("rv-1", "The pacing is superb.")], model=keyword_scorer
+        )
         assert isinstance(profile, MovieAspectProfile)
         assert all(e.aspect in Aspect for e in evidence)
 
-    @pytest.mark.xfail(strict=True, reason="Phase D: build_profile() not implemented")
-    def test_build_profile_drops_aspects_below_min_support(self) -> None:
+    def test_build_profile_drops_aspects_below_min_support(
+        self, keyword_scorer: KeywordScorer
+    ) -> None:
         """A score from one sentence must not render identically to one from four hundred."""
-        profile, _ = build_profile("cw-1", [("rv-1", "Nice pacing.")], min_support=10)
+        profile, _ = build_profile(
+            "cw-1", [("rv-1", "Nice pacing.")], min_support=10, model=keyword_scorer
+        )
         assert profile.scores == ()
 
 
@@ -99,7 +108,7 @@ class TestApiBoundary:
         with pytest.raises(ValidationError):
             RecommendRequest(profile=cold_profile, offset=10)  # type: ignore[call-arg]
 
-    @pytest.mark.xfail(strict=True, reason="Phase E: recommend() not implemented")
+    @pytest.mark.usefixtures("loaded_api")
     def test_cold_start_returns_fallback_items_not_an_error(
         self, cold_profile: TasteProfile
     ) -> None:
@@ -110,7 +119,7 @@ class TestApiBoundary:
         assert response.cold_start is True
         assert all(item.is_fallback for item in response.items)
 
-    @pytest.mark.xfail(strict=True, reason="Phase E: recommend() not implemented")
+    @pytest.mark.usefixtures("loaded_api")
     def test_recommendations_are_deterministic(self, warm_profile: TasteProfile) -> None:
         """The same profile returns the same ordering; a reshuffling list loses trust."""
         from api.main import recommend
@@ -120,7 +129,7 @@ class TestApiBoundary:
         second = [item.movie.movie_id for item in recommend(req).items]
         assert first == second
 
-    @pytest.mark.xfail(strict=True, reason="Phase E: health() not implemented")
+    @pytest.mark.usefixtures("loaded_api")
     def test_health_reports_the_manifest_hash(self) -> None:
         """'ok' alone cannot distinguish a good server from one on stale artifacts."""
         from api.main import health
@@ -131,16 +140,37 @@ class TestApiBoundary:
 class TestArtifactBoundary:
     """Artifacts are immutable and verified; the API refuses to boot on a mismatch."""
 
-    @pytest.mark.xfail(strict=True, reason="Phase D: verify() not implemented")
-    def test_verify_raises_on_hash_mismatch(self, tmp_path: object) -> None:
+    def test_verify_raises_on_hash_mismatch(self, tmp_path: Path) -> None:
         """Corrupting one byte must stop the boot, not degrade the results."""
-        pytest.fail("implement alongside cinewhy.artifacts.manifest")
+        (tmp_path / "scores.json").write_bytes(b'{"a": 1}')
+        manifest = build(tmp_path)
+        verify(tmp_path, manifest)  # untouched artifacts verify cleanly
+        (tmp_path / "scores.json").write_bytes(b'{"a": 2}')
+        with pytest.raises(ManifestMismatchError):
+            verify(tmp_path, manifest)
 
-    @pytest.mark.xfail(strict=True, reason="Phase D: hash_file() not implemented")
-    def test_hash_is_stable_across_line_endings(self) -> None:
+    def test_verify_raises_on_missing_file(self, tmp_path: Path) -> None:
+        (tmp_path / "scores.json").write_bytes(b"{}")
+        manifest = build(tmp_path)
+        (tmp_path / "scores.json").unlink()
+        with pytest.raises(ManifestMismatchError):
+            verify(tmp_path, manifest)
+
+    def test_verify_raises_when_manifest_itself_was_edited(self, tmp_path: Path) -> None:
+        """Editing a file hash inside the manifest must not let a swapped file through."""
+        (tmp_path / "scores.json").write_bytes(b"{}")
+        manifest = build(tmp_path)
+        forged = manifest.model_copy(update={"files": {"scores.json": "0" * 64}})
+        with pytest.raises(ManifestMismatchError):
+            verify(tmp_path, forged)
+
+    def test_hash_is_stable_across_line_endings(self, tmp_path: Path) -> None:
         """Hash bytes, never text.
 
-        Pranav is on Windows with core.autocrlf active; a text-mode hash would differ
-        between his checkout and CI's, and the API would refuse to boot on one of them.
+        A text-mode read on Windows rewrites CRLF to LF, so the same file would hash
+        differently here and on a Linux CI runner. The hash of a CRLF file must equal the
+        digest of its exact bytes.
         """
-        pytest.fail("implement alongside cinewhy.artifacts.manifest")
+        path = tmp_path / "crlf.txt"
+        path.write_bytes(b"a\r\nb\r\n")
+        assert hash_file(path) == hashlib.sha256(b"a\r\nb\r\n").hexdigest()

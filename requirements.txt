@@ -114,3 +114,10 @@ wcwidth==0.6.0
 webencodings==0.5.1
 websocket-client==1.9.0
 widgetsnbextension==4.0.15
+# ---- Added 2026-10-22 with Pranav's approval: the web API (fastapi + uvicorn) and what
+# they pulled in, taken from a pip-freeze diff before/after the install. ----
+annotated-doc==0.0.5
+fastapi==0.159.1
+opentelemetry-api==1.45.1
+starlette==1.9.0
+uvicorn==0.54.0
