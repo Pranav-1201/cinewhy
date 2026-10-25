@@ -124,6 +124,23 @@ class TestBuildProfile:
         )
         assert evidence and all(e.source_url == "https://x.test/" for e in evidence)
 
+    def test_source_url_can_depend_on_which_review_a_sentence_came_from(
+        self, keyword_scorer: KeywordScorer
+    ) -> None:
+        # Evidence for one film now comes from several dumps, each with its own page to check.
+        text = "The pacing was superb and the pacing never dragged at all."
+        reviews = [("rt/a", text), ("ebd/b", text), ("acl/c", text)]
+        links = {"rt": "https://rt.test/film", "ebd": "https://imdb.test/film"}
+        _, evidence = build_profile(
+            "m", reviews, model=keyword_scorer, source_url=lambda rid: links.get(rid.split("/")[0])
+        )
+        got = {e.source_review_id: e.source_url for e in evidence}
+        assert got == {
+            "rt/a": "https://rt.test/film",
+            "ebd/b": "https://imdb.test/film",
+            "acl/c": None,
+        }
+
     def test_no_reviews_is_an_empty_profile_not_an_error(
         self, keyword_scorer: KeywordScorer
     ) -> None:

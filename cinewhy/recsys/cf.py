@@ -56,20 +56,34 @@ def build_item_similarity(
     per_user = np.bincount(user_index, minlength=n_users)
     centred = ratings - (sums / np.maximum(per_user, 1))[user_index]
 
-    shape = (n_users, n_items)
-    r = sparse.csr_matrix((centred, (user_index, items)), shape=shape, dtype=np.float64)
+    # Work only on films that kept a rating. A film nobody rated has a zero row and column
+    # whatever we do, and the catalogue is mostly dense in ratings only for English films: on
+    # about 10,000 films, dense float64 temporaries over ALL of them need several GB.
+    rated = np.unique(items)
+    column = np.full(n_items, -1, dtype=np.int64)
+    column[rated] = np.arange(rated.size)
+    shape = (n_users, rated.size)
+    r = sparse.csr_matrix((centred, (user_index, column[items])), shape=shape, dtype=np.float64)
     b = sparse.csr_matrix(
-        (np.ones_like(centred), (user_index, items)), shape=shape, dtype=np.float64
+        (np.ones_like(centred), (user_index, column[items])), shape=shape, dtype=np.float64
     )
     dot = (r.T @ r).toarray()
     co = (b.T @ b).toarray()
     norms = np.sqrt(np.diag(dot))
-    with np.errstate(divide="ignore", invalid="ignore"):
-        cosine = dot / np.outer(norms, norms)
-    cosine = np.nan_to_num(cosine, nan=0.0, posinf=0.0, neginf=0.0)
-    sim = cosine * (co / (co + shrink))
-    np.fill_diagonal(sim, 0.0)
-    return np.asarray(sim, dtype=np.float32)
+    inverse = np.divide(1.0, norms, out=np.zeros_like(norms), where=norms > 0)
+    # In place, so the peak is three dense float64 matrices (dot, co, the shrink denominator)
+    # and not the five the straightforward expression allocates.
+    dot *= inverse[:, None]
+    dot *= inverse[None, :]
+    denominator = co + shrink
+    np.divide(co, denominator, out=co)
+    del denominator
+    dot *= co
+    del co
+    np.fill_diagonal(dot, 0.0)
+    sim = np.zeros((n_items, n_items), dtype=np.float32)
+    sim[np.ix_(rated, rated)] = dot
+    return sim
 
 
 def bayesian_popularity(

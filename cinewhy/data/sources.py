@@ -144,25 +144,49 @@ def iter_reviews(archive: Path, keep_films: frozenset[int] | None = None) -> Ite
             )
 
 
-def load_films(archive: Path) -> dict[int, MovieLensFilm]:
+def load_movielens_links(
+    archive: Path, prefix: str = "ml-25m"
+) -> dict[int, tuple[int, int | None]]:
+    """Map each IMDb number to its MovieLens id and, when listed, its TMDB id.
+
+    The TMDB id is returned so a caller can check the join against a second, independent id.
+
+    Args:
+        archive: Path to a MovieLens zip.
+        prefix: Folder name inside the zip, which MovieLens names after the release
+            (`ml-25m`, `ml-32m`).
+
+    Returns:
+        `{imdb_id: (movielens_id, tmdb_id_or_None)}`. Films with no IMDb number are omitted.
+    """
+    with zipfile.ZipFile(archive) as z, z.open(f"{prefix}/links.csv") as raw:
+        return {
+            int(r["imdbId"]): (int(r["movieId"]), int(r["tmdbId"]) if r["tmdbId"] else None)
+            for r in csv.DictReader(io.TextIOWrapper(raw, encoding="utf-8"))
+            if r["imdbId"]
+        }
+
+
+def load_films(archive: Path, prefix: str = "ml-25m") -> dict[int, MovieLensFilm]:
     """Read MovieLens films that carry an IMDb number.
 
     Args:
-        archive: Path to `ml-25m.zip`.
+        archive: Path to a MovieLens zip.
+        prefix: Folder name inside the zip (`ml-25m`, `ml-32m`).
 
     Returns:
         `{imdb_id: film}`. Films with no IMDb link cannot be joined to a review and are
         omitted.
     """
     with zipfile.ZipFile(archive) as z:
-        with z.open("ml-25m/links.csv") as raw:
+        with z.open(f"{prefix}/links.csv") as raw:
             imdb_of = {
                 int(r["movieId"]): int(r["imdbId"])
                 for r in csv.DictReader(io.TextIOWrapper(raw, encoding="utf-8"))
                 if r["imdbId"]
             }
         films: dict[int, MovieLensFilm] = {}
-        with z.open("ml-25m/movies.csv") as raw:
+        with z.open(f"{prefix}/movies.csv") as raw:
             for row in csv.DictReader(io.TextIOWrapper(raw, encoding="utf-8")):
                 movielens_id = int(row["movieId"])
                 imdb_id = imdb_of.get(movielens_id)
@@ -176,16 +200,17 @@ def load_films(archive: Path) -> dict[int, MovieLensFilm]:
 
 
 def load_ratings(
-    archive: Path, movielens_ids: frozenset[int]
+    archive: Path, movielens_ids: frozenset[int], prefix: str = "ml-25m"
 ) -> tuple[npt.NDArray[np.int32], npt.NDArray[np.int32], npt.NDArray[np.float32]]:
     """Read ratings for the given films only.
 
-    The full file is 25 million rows; the catalogue is a few thousand films, so filtering
+    The full file is 25 to 32 million rows; the catalogue is a few thousand films, so filtering
     while reading keeps peak memory in the low hundreds of MB.
 
     Args:
-        archive: Path to `ml-25m.zip`.
+        archive: Path to a MovieLens zip.
         movielens_ids: MovieLens film ids to keep.
+        prefix: Folder name inside the zip (`ml-25m`, `ml-32m`).
 
     Returns:
         Parallel arrays `(user_ids, movie_ids, ratings)`.
@@ -196,7 +221,7 @@ def load_ratings(
     users: list[npt.NDArray[np.int32]] = []
     movies: list[npt.NDArray[np.int32]] = []
     stars: list[npt.NDArray[np.float32]] = []
-    with zipfile.ZipFile(archive) as z, z.open("ml-25m/ratings.csv") as raw:
+    with zipfile.ZipFile(archive) as z, z.open(f"{prefix}/ratings.csv") as raw:
         for chunk in pd.read_csv(
             raw,
             usecols=["userId", "movieId", "rating"],

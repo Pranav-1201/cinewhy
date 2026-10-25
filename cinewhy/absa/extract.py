@@ -16,7 +16,7 @@ from __future__ import annotations
 import os
 import re
 from collections import defaultdict
-from collections.abc import Iterable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Final, Protocol
@@ -386,7 +386,7 @@ def build_profile(
     min_support: int = 3,
     model: PolarityScorer | None = None,
     evidence_per_aspect: int = 3,
-    source_url: str | None = None,
+    source_url: str | Callable[[str], str | None] | None = None,
 ) -> tuple[MovieAspectProfile, Sequence[EvidenceSentence]]:
     """Aggregate per-clause judgements into one film's aspect profile.
 
@@ -407,7 +407,8 @@ def build_profile(
         model: Polarity scorer. Defaults to the production model.
         evidence_per_aspect: Maximum evidence sentences kept per aspect.
         source_url: Where a sceptical reader can find the reviews, attached to each
-            evidence sentence.
+            evidence sentence. A function maps a review id to its own link, for films whose
+            reviews come from several dumps; a string is used for every sentence.
 
     Returns:
         The profile, and the evidence sentences selected to justify it.
@@ -451,7 +452,10 @@ def build_profile(
 
 
 def _pick_evidence(
-    items: Sequence[_Mention], mean: float, limit: int, source_url: str | None
+    items: Sequence[_Mention],
+    mean: float,
+    limit: int,
+    source_url: str | Callable[[str], str | None] | None,
 ) -> list[EvidenceSentence]:
     """Choose quotable clauses that agree with the aspect's overall direction."""
     sign = 1.0 if mean >= 0 else -1.0
@@ -475,7 +479,7 @@ def _pick_evidence(
                 aspect=m.aspect,
                 polarity=max(-1.0, min(1.0, m.polarity)),
                 source_review_id=m.review_id,
-                source_url=source_url,
+                source_url=source_url(m.review_id) if callable(source_url) else source_url,
             )
         )
         if len(chosen) == limit:

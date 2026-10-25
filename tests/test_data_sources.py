@@ -13,7 +13,13 @@ import tarfile
 import zipfile
 from pathlib import Path
 
-from cinewhy.data.sources import iter_reviews, load_films, load_ratings, parse_title
+from cinewhy.data.sources import (
+    iter_reviews,
+    load_films,
+    load_movielens_links,
+    load_ratings,
+    parse_title,
+)
 
 _URL = "http://www.imdb.com/title/tt{:07d}/usercomments\n"
 
@@ -112,3 +118,36 @@ class TestMovieLens:
             (10, 1, 4.5),
             (11, 1, 2.0),
         ]
+
+
+def _make_ml_release(path: Path, release: str) -> None:
+    """The same tiny MovieLens, filed under another release's folder name."""
+    with zipfile.ZipFile(path, "w") as z:
+        z.writestr(f"{release}/links.csv", "movieId,imdbId,tmdbId\n1,0000100,5\n2,0000200,\n3,,7\n")
+        z.writestr(f"{release}/movies.csv", "movieId,title,genres\n1,Heat (1995),Action\n")
+        z.writestr(
+            f"{release}/ratings.csv", "userId,movieId,rating,timestamp\n10,1,4.5,0\n11,1,2.0,0\n"
+        )
+
+
+class TestMovieLensReleases:
+    def test_links_give_the_movielens_and_tmdb_id_for_each_imdb_number(
+        self, tmp_path: Path
+    ) -> None:
+        archive = tmp_path / "ml.zip"
+        _make_ml(archive)
+        assert load_movielens_links(archive) == {100: (1, 5), 200: (2, 6)}
+
+    def test_a_missing_tmdb_id_is_none_and_a_missing_imdb_id_is_omitted(
+        self, tmp_path: Path
+    ) -> None:
+        archive = tmp_path / "ml32.zip"
+        _make_ml_release(archive, "ml-32m")
+        assert load_movielens_links(archive, "ml-32m") == {100: (1, 5), 200: (2, None)}
+
+    def test_ratings_read_from_the_named_release(self, tmp_path: Path) -> None:
+        archive = tmp_path / "ml32.zip"
+        _make_ml_release(archive, "ml-32m")
+        users, movies, _ = load_ratings(archive, frozenset({1}), "ml-32m")
+        assert sorted(users.tolist()) == [10, 11]
+        assert set(movies.tolist()) == {1}
