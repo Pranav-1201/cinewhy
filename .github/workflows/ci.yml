@@ -109,6 +109,37 @@ jobs:
             exit 1
           fi
 
+  # Builds the deployable image (fetch datasets, train, build artifacts, ~15 min), boots it,
+  # and checks that the verified manifest is served and a recommendation comes back. The
+  # Dockerfile could not be built on the development machine, so this job is what verifies
+  # it. Pushes to main only: it downloads about 350 MB per run.
+  docker:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build image
+        run: docker build -t cinewhy .
+
+      - name: Boot and probe
+        run: |
+          docker run -d --name cinewhy -p 7860:7860 cinewhy
+          for i in $(seq 1 60); do
+            if curl -fsS http://localhost:7860/health > health.json; then break; fi
+            sleep 2
+          done
+          cat health.json
+          grep -q '"manifest":"[0-9a-f]\{64\}"' health.json
+          curl -fsS -X POST http://localhost:7860/recommend \
+            -H 'content-type: application/json' -d '{"profile":{}}' | grep -q '"cold_start":true'
+          curl -fsS http://localhost:7860/ | grep -q "CineWhy"
+
+      - name: Container logs on failure
+        if: failure()
+        run: docker logs cinewhy
+
   secrets:
     runs-on: ubuntu-latest
     steps:

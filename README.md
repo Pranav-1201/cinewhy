@@ -1,134 +1,169 @@
 # CineWhy
 
-**A movie recommender that shows you *why* — with evidence from what real reviewers actually said.**
+**A movie recommender that shows you *why*, with the real review sentences behind every pick.**
 
 > Netflix says *"Because you watched Inception."*
-> CineWhy says *"Because you consistently praise **pacing** and **endings** — and across 1,240
-> reviews, this film's pacing scores +0.71. Here are the three sentences that say so."*
+> CineWhy says *"Because you care about **pacing**: reviewers score this film's pacing +0.77,
+> and here are the sentences that say so."*
 
 ---
 
-## Status: prototype — early, and honest about it
+## Status: working demo
 
-This repository currently contains **one Jupyter notebook** that trains a Naive Bayes sentiment
-classifier on IMDB reviews. There is no API, no frontend, and no deployed service yet.
+Everything below runs on a laptop with `start.bat`. Nothing is deployed to the internet.
 
-A full staff-level audit was completed on 2026-08-26 and graded the project **3.4/10 (prototype)**.
-The audit, the roadmap, and every measured number live in **[`docs/AUDIT-2026-08-26.md`](docs/AUDIT-2026-08-26.md)**.
+| Part | What it does |
+|---|---|
+| **Data** | Joins 100,000 IMDb reviews (aclImdb) to MovieLens 25M on the exact IMDb title number, giving 2,355 films with enough reviews. |
+| **Polarity model** | Logistic regression on 1-2 word TF-IDF, trained through a harness that makes the leakage / test-reuse / spread rules structural. |
+| **Aspect analysis** | Splits reviews into clauses, finds which of 7 aspects (acting, plot, pacing, visuals, ending, soundtrack, rewatchability) each is about, scores it, and keeps the strongest sentences as verbatim evidence. |
+| **Recommender** | Item-item collaborative filtering on 3.4 M ratings, blended with aspect fit, evaluated on held-out users against a popularity baseline. |
+| **API** | FastAPI. Verifies SHA-256 hashes of every artifact at boot and refuses to start on a mismatch. |
+| **Web UI** | Three tabs: *Discover*, *Try a review*, *How well does it work?* No build step. |
 
-**Known defects in the current notebook — all measured, none yet fixed:**
+## Run it
 
-| | Defect | Effect |
-|---|---|---|
-| C-1 | Vectorizer is fit before the train/test split | test rows shape the vocabulary; measured accuracy cost is **not distinguishable from zero** (D-009) |
-| C-2 | "Best model" chosen on a 0.0020 gap on the test set | under CV the models differ by less than **one fold-to-fold std** (D-009) |
-| C-3 | `not`/`no`/`nor` removed as stopwords | `"not good"` and `"good"` produce **identical vectors** |
+**Requirements:** Windows, Python 3.13, ~2 GB free disk, internet for the first run.
 
-The measured leak-free accuracy is **~0.83** (`docs/DECISIONS.md` D-009): the older report's 0.835 was not inflated by leakage on this sample, but it cannot separate the models. Fixing these
-is Phase C of the roadmap.
-
-> ⚠️ `Movie_Sentiment_Analysis_Report.md` predates the audit and contains claims the code
-> contradicts (it asserts leakage was prevented; it was not). It is kept for history. Where the
-> report and the audit disagree, **the audit is correct** — it was measured.
-
----
-
-## Quick start
-
-**Requirements:** Python 3.13, ~1 GB free disk.
-
-```bash
-# 1. Clone
-git clone https://github.com/Pranav-1201/cinewhy.git
-cd cinewhy
-
-# 2. Set up the environment
-setup.bat                      # Windows
-#   creates venv/, installs requirements.txt, downloads the NLTK stopword corpus
-
-# 3. Get the dataset  ← required; it is NOT in this repo
-#    "IMDB Dataset of 50K Movie Reviews" (Lakshmipathi N, Kaggle)
-#    Download and place it at exactly:
-#        Data/IMDB Dataset.csv
-#    Expected: 50,000 rows, columns [review, sentiment], ~64 MB
-
-# 4. Verify
-venv\Scripts\activate
-python check_env.py
-
-# 5. Run
-jupyter notebook Movie_Sentiment_Analysis.ipynb
+```bat
+setup.bat      rem once: creates venv\ and installs requirements.txt
+start.bat      rem first run builds the data artifacts (~10 min); later runs start in seconds
 ```
 
-Then **Kernel → Restart & Run All**. Do not run cells piecemeal — cells 13–18 mutate the dataframe
-in place, so re-running one alone silently corrupts the data (e.g. double-stemming).
+`start.bat` opens <http://localhost:8000/>. To do the steps by hand:
 
-> `check_env.py` only checks that packages *import*. It declares minimum versions but never compares
-> them, so it prints ✓ for an out-of-date package. Treat its green as "importable", not "correct".
+```bat
+venv\Scripts\python.exe -m cinewhy.data.fetch      rem downloads + hash-checks both datasets (~350 MB)
+venv\Scripts\python.exe -m cinewhy.absa.polarity   rem trains the polarity model, prints its report
+venv\Scripts\python.exe -m cinewhy.build           rem builds artifacts\ and artifacts\manifest.json
+venv\Scripts\python.exe -m uvicorn api.main:app --port 8000
+```
 
----
+## Test it yourself
+
+### 1. Automated checks (about 10 seconds)
+
+```bat
+venv\Scripts\python.exe -m pytest tests -p no:cacheprovider
+venv\Scripts\python.exe -m ruff check cinewhy api tests
+venv\Scripts\python.exe -m mypy
+```
+
+Expected: every test passes (no `xfail`s remain), ruff says `All checks passed!`, and mypy says
+`Success: no issues found in N source files` with N greater than zero.
+
+### 2. Click through the demo
+
+Open <http://localhost:8000/>.
+
+1. **Discover.** Move the *Pacing* slider to ~90%. Within a second the list changes to films with
+   a "Because you care about Pacing" reason, a blue/red bar, and quoted review sentences.
+   Each quote names its source review and links to that film's reviews on IMDb.
+2. **Find films.** Type `matrix`, press *Like* on a result. Your list shows it, and the
+   recommendations now lean on films similar viewers also liked. Press *Skip* on another to see
+   it vanish from results. Click a film title to open its page with every aspect and quotes.
+3. **Cold start.** Press *Reset everything*. You get the most-liked films, labelled as a popular
+   pick with *no* invented reason. That honesty is deliberate.
+4. **Try a review.** Press *Use an example* then *Analyze*. Clauses are underlined blue or red,
+   each tagged with its aspect and score, and a per-aspect summary appears. Paste your own text
+   and check whether you agree with each call: that is the real test of the aspect analysis.
+5. **How well does it work?** Every number on this tab is read from `artifacts/eval.json`,
+   including the limits.
+
+### 3. Poke the API
+
+```bat
+curl http://localhost:8000/health
+curl "http://localhost:8000/search?q=matrix"
+curl http://localhost:8000/movie/cw-0234215
+curl -X POST http://localhost:8000/recommend -H "content-type: application/json" -d "{\"profile\":{\"aspect_weights\":{\"pacing\":0.9}}}"
+curl -X POST http://localhost:8000/analyze   -H "content-type: application/json" -d "{\"text\":\"Great acting but the pacing dragged.\"}"
+curl http://localhost:8000/movie/nope          rem 404 with no detail
+```
+
+Interactive docs: <http://localhost:8000/docs>.
+
+### 4. Try to break it
+
+* **Tamper test.** Stop the server, open `artifacts\profiles.json`, change one character, start
+  the server again. It must refuse to boot with `ManifestMismatchError`. Restore the file (or
+  re-run `python -m cinewhy.build`) to recover.
+* **Abuse test.** Send a body over 64 KB (413), more than 120 POSTs in a minute (429), or text
+  over 5,000 characters to `/analyze` (422). A forced server error returns only an opaque
+  `error_id`, never a stack trace.
+
+### 5. Re-derive the numbers
+
+`python -m cinewhy.build` recomputes everything in `eval.json` from the raw data; the same seed
+gives the same numbers. `python -m cinewhy.absa.polarity` reproduces the polarity report exactly
+(it did, run twice). Datasets are checked against pinned SHA-256 hashes before use.
+
+## What was measured
+
+All numbers come from `artifacts/eval.json`. Intervals are 95%.
+
+| Question | Result |
+|---|---|
+| Is the review-to-film join right? | 39.8% of reviews name their own film, against 0.14% when each film's reviews are paired with a different film (n = 44,768). |
+| Polarity of whole reviews (official aclImdb test split, evaluated once) | 89.27% +/- 0.38 (n = 25,000). 5-fold CV: 88.80 +/- 0.89 (C=1) vs 89.72 +/- 0.56 (C=10). |
+| Aspect detector precision (hand-labelled held-out clauses) | 86.7% [78.6, 92.1], n = 98. |
+| Clause polarity sign (same sample) | 82.6% [72.0, 89.8], n = 69; 86.4% [75.5, 93.0] on clauses strong enough to be quoted, n = 59. |
+| Recommender hit-rate@20 (2,000 held-out users) | Popularity 15.0% [13.4, 16.6]; **collaborative filtering 39.8% [37.6, 41.9]**; aspect fit alone 11.9% [10.4, 13.4]; hybrid shown in the UI 38.5% [36.4, 40.5]. |
+
+**Read the last row honestly.** Collaborative filtering does the heavy lifting. Aspect fit alone is
+*worse* than the popularity baseline at predicting what someone liked, and blending it in costs
+1.3 points of hit-rate@20 against pure CF (paired interval [-2.1, -0.4]). What it buys is that every
+pick can be explained with real sentences. The blend weight was chosen on separate validation
+users, not the test users.
+
+## Limits you should know about
+
+* The gold labels for aspect/polarity were written by the assistant that built the system, not by
+  independent annotators, and the samples are small (hence the wide intervals).
+* The polarity model is trained on whole reviews and applied to clauses. Negation inside very
+  short clauses ("aren't terrible") can still fool it.
+* The aspect lexicon is a word list; its recall has not been measured.
+* Aspect scores rest on 10-30 reviews per film, mostly from before 2012.
+* Weights you set with the sliders cannot be validated offline: there is no ground truth for stated
+  preferences.
+* The Dockerfile and the CI job that builds it have **not been run yet** (no Docker on the
+  development machine). Treat deployment as unverified.
 
 ## Repository layout
 
 ```
-.
-├── Movie_Sentiment_Analysis.ipynb   the current prototype (38 cells)
-├── Movie_Sentiment_Analysis_Report.md   original report — see warning above
-├── check_env.py                     import-presence check
-├── requirements.txt                 fully pinned closure (105 packages)
-├── setup.bat                        Windows environment setup
-├── CLAUDE.md                        session rules for AI-assisted work
-├── Data/                            dataset goes here (gitignored)
-└── docs/
-    ├── AUDIT-2026-08-26.md          ★ the audit + full roadmap
-    ├── ARCHITECTURE.md              system map (target + today)
-    ├── FLOW.md                      execution trace, and where it breaks
-    ├── DECISIONS.md                 why, not just what
-    ├── MODEL_CARD.md                what the sentiment model does, fails at, and was measured on
-    ├── CONSTRAINTS.md               what an AI session may not do
-    ├── TEST_CHECKLIST.md            commands + expected observables
-    ├── ROLLBACK.md                  the way back out
-    ├── HANDOVER.md                  ★ where things stand right now
-    └── templates/                   bug + feature trace templates
+api/            FastAPI app (main.py), HTTP-only response models (models.py)
+cinewhy/
+  schemas.py    the contract between modules (changing it is a two-person decision)
+  text/         normalisation shared by training and serving; negation is preserved
+  data/         sources.py (the aclImdb x MovieLens join), fetch.py (hash-checked download)
+  absa/         extract.py (clauses, aspects, build_profile), polarity.py (the model),
+                train.py (the leakage-proof harness), gold.py (hand-labelled evaluation)
+  recsys/       cf.py, rank.py (the one blend), catalogue.py (artifact I/O), evaluate.py
+  artifacts/    manifest.py (hash, build, verify)
+  build.py      the whole offline pipeline
+web/            index.html, styles.css, app.js (no build step)
+tests/          pytest suite; tests/data holds the hand-labelled gold clauses
+docs/           HANDOVER, DECISIONS, ARCHITECTURE, MODEL_CARD, CONSTRAINTS, ...
+start.bat       run the demo locally
+Movie_Sentiment_Analysis.ipynb   the original prototype, kept for history
 ```
 
-New here? Read `docs/HANDOVER.md` first, then the audit.
+New here? Read `docs/HANDOVER.md`, then `docs/DECISIONS.md` (D-012 to D-014 cover this build).
 
----
+> `Movie_Sentiment_Analysis_Report.md` and the notebook predate the audit
+> (`docs/AUDIT-2026-08-26.md`) and contain claims the code contradicts. They are kept for history;
+> where they disagree with the audit, the audit is right.
 
-## Where this is going
+## Data and attribution
 
-| Phase | Work | Sessions |
-|---|---|---|
-| A | Correct false claims, pin dependencies | 1 |
-| B | CI foundation — *before* any code change | 1 |
-| C | Methodology repair (C-1, C-2, C-3) | 2 |
-| D | Data acquisition + recommender core | 3 |
-| E | FastAPI service | 2 |
-| F | Next.js frontend + the "Why this?" panel | 3 |
-| G | Deploy, monitor, drill the rollback | 1 |
-
-Target stack, all free tier: **FastAPI on Hugging Face Spaces** · artifacts on **HF Hub** ·
-**Next.js on Vercel**. Rationale and rejected alternatives are in the audit.
-
-> The current dataset has two columns — `review` and `sentiment`. No movie IDs, no user IDs. It
-> **cannot** power a recommender, which is why Phase D starts with data acquisition
-> (MovieLens 32M + TMDB + an item-keyed review corpus). See `docs/DECISIONS.md` D-002.
-
----
-
-## Documentation approach
-
-This project follows the *AI Collaboration Field Guide* — nine documents that keep AI-assisted work
-traceable: handover, decisions, flow, architecture, constraints, test checklist, rollback, and
-bug/feature traces. The point is that no session, human or AI, has to re-derive context that was
-already established, and no claim survives without evidence attached.
-
-## Data & attribution
-
-IMDB 50K Movie Reviews dataset — Lakshmipathi N, via Kaggle. Not redistributed here.
-Planned: MovieLens 32M (GroupLens, non-commercial), TMDB API (attribution required).
+* **aclImdb v1**: Maas, Daly, Pham, Huang, Ng and Potts, *Learning Word Vectors for Sentiment
+  Analysis*, ACL 2011. Not redistributed here.
+* **MovieLens 25M**: F. Maxwell Harper and Joseph A. Konstan, *The MovieLens Datasets: History and
+  Context*, ACM TiiS 2015. GroupLens data is for non-commercial use and must not be redistributed,
+  so the repository ships only the loader.
+* Quoted sentences are verbatim excerpts of IMDb user reviews from the aclImdb research dataset.
 
 ## License
 
-MIT — see [`LICENSE`](LICENSE).
+MIT, see [`LICENSE`](LICENSE).

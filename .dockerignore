@@ -1,0 +1,16 @@
+.git
+.github
+venv
+.venv
+Data
+artifacts
+docs
+**/__pycache__
+.mypy_cache
+.ruff_cache
+.pytest_cache
+*.ipynb
+Movie_Sentiment_Analysis_Report.md
+# tests are not shipped, except the hand-labelled gold sets the build evaluates against
+tests/*
+!tests/data

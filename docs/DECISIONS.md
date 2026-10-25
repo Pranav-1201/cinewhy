@@ -296,3 +296,82 @@ conclusion, not the digits: about 0.83 to 0.84, and the three candidates are not
 
 **What this rules out.** Naming a best model from test accuracy, quoting any accuracy without its
 spread, and treating this table and D-009's as one series.
+
+---
+
+## D-012 · 2026-10-22 · Claude Sonnet 5.5
+### Join reviews to films on the IMDb title number from aclImdb's `urls_*.txt`, not on Amazon ASINs
+
+**Decision.** The review corpus is the original aclImdb v1 archive, whose `urls_pos/neg/unsup.txt`
+give the IMDb title page of every review (line N of each file belongs to review file `N_<stars>.txt`).
+That number joins exactly to MovieLens `links.csv`. This resolves HANDOVER item H-1 without any
+fuzzy ASIN-to-film matching. The Kaggle CSV that `Data/` holds had dropped these files, which is
+why D-002 found it keyless.
+
+**Evidence (RAN 2026-10-22).** 100,000 URL lines, 14,127 films; 7,897 exist in MovieLens; 2,355 have
+at least 10 reviews and form the catalogue. A misaligned join would show as reviews that do not
+mention their film: 39.8% of 44,768 reviews name their own film's title against 0.14% when each film's
+reviews are paired with the next film's title (`title_match_rate`, tested with a deliberately shifted
+join).
+
+**Caveats.** Up to 30 reviews per film, mostly from before 2012, so the catalogue is old films only.
+ai.stanford.edu was unreachable from the development machine, so the tarball came from a Hugging Face
+mirror (`NolanChai/aclImdb_v1`); `cinewhy.data.fetch` accepts any mirror only if the bytes match the
+pinned SHA-256 (size 84,125,825 as published).
+
+---
+
+## D-013 · 2026-10-22 · Claude Sonnet 5.5
+### Score clauses, not reviews; measure clause accuracy on hand-labelled samples and disclose who labelled
+
+**Decision.** Sentences are split at contrast markers (`but`, `however`, `although`, `though`, `yet`,
+`whereas`, `;`) into clauses that are verbatim substrings, so "great acting but dull plot" gives each
+aspect its own polarity. Only clauses with |polarity| >= 0.2 count as opinions; neutral mentions would
+dilute means and inflate support. Rewatchability is read by rule ("watch it again", negated only by a
+negator within six words before the phrase) because normalisation strips "again".
+
+**Why.** The polarity model is trained on whole reviews (official test 89.27% +/- 0.38, evaluated once;
+CV 88.80 +/- 0.89 vs 89.72 +/- 0.56, so C=10 wins by 0.0092 against a fold std of 0.0089: barely).
+On clauses it is out of distribution, so it was measured on its own.
+
+**Gold sets.** `tests/data/aspect_gold_dev.jsonl` (154 clauses) was used to tune the lexicon;
+`aspect_gold_heldout.jsonl` (98 clauses, fresh sample, new lexicon, no shared reviews) is reported.
+Held-out: detector precision 86.7% [78.6, 92.1]; clause polarity 82.6% [72.0, 89.8] (n=69), 86.4% at
+the evidence threshold (n=59). Before the lexicon fixes the dev sample gave 76.0% precision and 77.9%
+polarity, so the fixes were worth about 6 and 2 points, on the data they were tuned on.
+
+**Disclosure.** **The labels were written by the assistant, not an independent human**, and each row
+says `labelled_by: assistant`. Recall of the aspect lexicon is not measurable from a sample drawn from
+what it flagged. Known remaining failure: negation inside short clauses ("aren't terrible" scores
+strongly negative).
+
+**Found by reading output, not by metrics.** "win High Points on the Score Board" was quoted as
+soundtrack evidence; fixed and pinned by a test.
+
+---
+
+## D-014 · 2026-10-22 · Claude Sonnet 5.5
+### The recommender is collaborative filtering plus an explanation layer; the aspect blend costs accuracy and says so
+
+**Protocol.** Users are split by user: train, 1,000 validation, 2,000 test. Similarity and popularity
+are fitted on train users only; the similarity shrinkage and the aspect-fit share are chosen on
+validation users only; test users are read once. Each test user hides one liked film (rating >= 4) and
+gives the ranker up to ten others. Hit-rate@k with bootstrap 95% intervals; differences are paired over
+users; ties count against the method.
+
+**Result (RAN, seed 42).** hit@20: popularity 0.150 [0.134, 0.166]; CF 0.398 [0.376, 0.419]; aspect
+fit alone 0.119 [0.104, 0.134]; hybrid 0.385 [0.364, 0.405]. CF beats popularity by 24.7 points
+(interval [22.6, 26.9]). Aspect fit alone is significantly *worse* than popularity (-3.1 points). The
+hybrid costs 1.3 points against pure CF (paired [-2.1, -0.4]).
+
+**Decision.** Keep the aspect layer because it is the product (every pick is explained with real
+sentences), but do not claim it improves accuracy. With inferred taste the aspect share is the largest
+whose validation hit@20 stays within one standard error of CF (rule fixed before looking): 0.2, from
+candidates 0 to 0.45 (0.45 cost 5 points on validation). When the viewer sets sliders themselves the
+share is 0.45: they asked for aspect-driven results. **That explicit case cannot be validated offline**
+(no ground truth for stated preferences) and is documented as such.
+
+**Also found and fixed.** A first 45% blend cost 6.5 points of hit-rate@20; a single liked film with
+no positive aspect silently dropped viewers onto the popularity list (now shows the film's own
+best-supported praise with `user_weight = 0`); a manifest that hashed a log file still being written
+would have failed verification on the next boot (now takes an explicit file list).

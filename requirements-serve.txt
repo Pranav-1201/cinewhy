@@ -1,0 +1,12 @@
+# What the RUNNING service imports, pinned to the versions exercised in venv/ on 2026-10-22.
+# requirements.txt is the full development closure (Jupyter, plotting, ...), which a web
+# image does not need. Transitive packages here resolve to the newest compatible release;
+# the artifact manifest, not this file, is what guards the model numbers.
+numpy==2.4.4
+scipy==1.17.1
+scikit-learn==1.8.0
+joblib==1.5.3
+pydantic==2.13.5
+fastapi==0.159.1
+starlette==1.9.0
+uvicorn==0.54.0

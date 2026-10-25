@@ -10,6 +10,9 @@
 
 ## State in five lines
 
+0. **UPDATE 2026-10-22: the five lines below describe the 2026-08-26 audit and are historical.**
+   A working local demo now exists (data join, polarity model, aspect analysis, recommender, API,
+   web UI, hash-verified artifacts). Read the "Session 2026-10-22" ritual entry at the bottom first.
 1. Project is a **prototype**, graded **3.4/10** overall — one notebook, no tests, no CI, no API.
 2. It was repositioned this session from *sentiment classifier* → **recommender with review-grounded
    explanations** (`DECISIONS.md` D-001). The Netflix-recommender assignment is the real target.
@@ -90,6 +93,10 @@ predicted **0 (negative)**.
 
 ## Open items marked "reproduce first"
 
+**H-1 · RESOLVED 2026-10-22 by a different route (D-012): aclImdb's `urls_*.txt` give an exact
+IMDb title number per review, joined to MovieLens `links.csv`. No ASIN matching was needed.**
+The original text below is kept for history.
+
 **H-1 · ASIN → film mapping (not attempted this session).**
 Amazon Movies&TV review item IDs are ASINs — a specific product/edition, not a film. Whether they
 map cleanly to MovieLens/TMDB IDs is **unknown and unverified**. Do not assume. Reproduce by pulling
@@ -133,6 +140,28 @@ permanently by `unique_review_indices` and `test_no_review_text_appears_in_both_
 ## Five-line handoff ritual (fill in each session)
 
 ```
+Session date:      2026-10-22 (session "nlp 1")
+Model:             Claude Sonnet 5.5
+What we did:       Built the whole demo. aclImdb x MovieLens join (D-012, H-1 resolved);
+                   polarity model via run_experiment; clause-level aspect analysis with
+                   hand-labelled dev + held-out gold sets (D-013); item-item CF + aspect
+                   blend evaluated on held-out users (D-014); hash-verified artifacts;
+                   FastAPI (+rate limit, size cap, opaque errors); web UI (3 tabs);
+                   start.bat; fetch.py with pinned SHA-256. All xfails are gone.
+Verified (RAN):    pytest all green, ruff clean, mypy strict clean (37+ files); UI driven in
+                   Chrome: sliders, analyze tab, eval tab. See README "What was measured".
+What's left:       Deployment, deliberately postponed at the user's request: the Dockerfile
+                   and its CI job have NEVER been run (no Docker here). Independent human
+                   labels for the gold sets. Measure aspect-lexicon recall. Fix negation in
+                   short clauses. Poster images (needs a TMDB key). Commit: NOTHING from
+                   this session is committed yet; stage explicit paths.
+Watch out for:     GateGuard denies the first write to every new path: state facts, write a
+                   one-line stub, then the real content. Junk 0-byte files appear at the repo
+                   root named after the token after `->`; sweep with git status. artifacts/
+                   and Data/raw/ are gitignored and must be rebuilt on a fresh machine
+                   (start.bat does it). ai.stanford.edu was unreachable; the HF mirror is
+                   hash-pinned. Do not quote 0.89 as clause accuracy: it is whole-review.
+
 Session date:      2026-09-29
 Model:             Claude Sonnet 5.5
 What we did:       Phase A (pinned requirements, dedupe helper, report errata, model

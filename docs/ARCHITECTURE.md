@@ -3,7 +3,11 @@
 > The shape of the system, so no session has to re-derive the terrain.
 > Field Guide habit #6. Update this when a module or a data flow changes — not when a line changes.
 
-**Status:** target architecture. Only the shaded "Today" block below exists on disk as of 2026-08-26.
+**Status (2026-10-22):** the offline pipeline, ranker, API and a static web UI are built and run
+locally; see README. Differences from the target below: the ANN index (hnswlib) was not needed at
+2,355 films (a dense similarity matrix is 22 MB), artifacts are JSON + `.npy` + one joblib instead of
+parquet, the UI is plain HTML/JS served by FastAPI rather than Next.js on Vercel, and nothing is
+deployed. Section 2 ("Today") is the 2026-08-26 snapshot and is historical.
 **Version-pin:** last revised by Claude Opus 5, 2026-08-26.
 
 ---

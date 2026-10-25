@@ -1,5 +1,12 @@
 # MODEL_CARD.md — the sentiment classifier in `Movie_Sentiment_Analysis.ipynb`
 
+> **2026-10-22: this card covers the ORIGINAL notebook model only.** The model the demo ships is
+> a different one (`cinewhy/absa/polarity.py`: TF-IDF 1-2 grams + logistic regression, C=10,
+> negation preserved, trained on the aclImdb train split). It scores 89.27% +/- 0.38 on the
+> official test split (n = 25,000, evaluated once), but only **82.6% [72.0, 89.8]** on
+> hand-labelled clauses (n = 69, labelled by the assistant), which is what the product actually
+> judges. Full numbers and caveats: `docs/DECISIONS.md` D-013 and the README.
+
 > Audit item S5. What the model does, what it cannot do, and what has and has not been
 > measured. Every figure here was produced on 2026-09-29 on the pinned environment
 > (`requirements.txt`: scikit-learn 1.8.0, numpy 2.4.4, pandas 3.0.2) and is transcribed from
