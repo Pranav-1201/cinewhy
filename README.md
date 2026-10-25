@@ -14,7 +14,7 @@ Everything below runs on a laptop with `start.bat`. Nothing is deployed to the i
 
 | Part | What it does |
 |---|---|
-| **Data** | Joins 100,000 IMDb reviews (aclImdb) to MovieLens 25M on the exact IMDb title number, giving 2,355 films with enough reviews. |
+| **Data** | Joins 100,000 IMDb reviews (aclImdb) to MovieLens 25M on the exact IMDb title number, giving 4,164 films with at least 5 reviews each (60,604 reviews, 33,355 quotable sentences). |
 | **Polarity model** | Logistic regression on 1-2 word TF-IDF, trained through a harness that makes the leakage / test-reuse / spread rules structural. |
 | **Aspect analysis** | Splits reviews into clauses, finds which of 7 aspects (acting, plot, pacing, visuals, ending, soundtrack, rewatchability) each is about, scores it, and keeps the strongest sentences as verbatim evidence. |
 | **Recommender** | Item-item collaborative filtering on 3.4 M ratings, blended with aspect fit, evaluated on held-out users against a popularity baseline. |
@@ -104,26 +104,38 @@ All numbers come from `artifacts/eval.json`. Intervals are 95%.
 
 | Question | Result |
 |---|---|
-| Is the review-to-film join right? | 39.8% of reviews name their own film, against 0.14% when each film's reviews are paired with a different film (n = 44,768). |
+| Is the review-to-film join right? | 38.6% of reviews name their own film, against 0.17% when each film's reviews are paired with a different film (n = 55,780). |
 | Polarity of whole reviews (official aclImdb test split, evaluated once) | 89.27% +/- 0.38 (n = 25,000). 5-fold CV: 88.80 +/- 0.89 (C=1) vs 89.72 +/- 0.56 (C=10). |
-| Aspect detector precision (hand-labelled held-out clauses) | 86.7% [78.6, 92.1], n = 98. |
-| Clause polarity sign (same sample) | 82.6% [72.0, 89.8], n = 69; 86.4% [75.5, 93.0] on clauses strong enough to be quoted, n = 59. |
-| Recommender hit-rate@20 (2,000 held-out users) | Popularity 15.0% [13.4, 16.6]; **collaborative filtering 39.8% [37.6, 41.9]**; aspect fit alone 11.9% [10.4, 13.4]; hybrid shown in the UI 38.5% [36.4, 40.5]. |
+| Aspect finder **recall**: real aspect mentions it finds (300 random clauses, clean) | 50.8% [38.8, 62.7], n = 63 real mentions. |
+| Aspect finder **precision**: flagged mentions that really are about the aspect (same sample) | 60.4% [46.9, 72.4], n = 53 flags. |
+| Clause polarity sign on the mentions it finds (two clean random samples pooled) | 82.5% [72.7, 89.3], n = 80. |
+| Sliders steer results the way they are labelled | Pushing any slider to 100% raises that aspect's average score in the top 20 by +0.30 to +0.45. This checks direction only, not that stated preferences predict enjoyment. |
+| Recommender hit-rate@20 (2,000 held-out users, 4,164 films) | Popularity 12.6% [11.3, 14.1]; **collaborative filtering 34.9% [32.7, 37.0]**; aspect fit alone 9.6% [8.3, 10.9]; hybrid shown in the UI 33.8% [31.7, 35.9]. |
 
-**Read the last row honestly.** Collaborative filtering does the heavy lifting. Aspect fit alone is
-*worse* than the popularity baseline at predicting what someone liked, and blending it in costs
-1.3 points of hit-rate@20 against pure CF (paired interval [-2.1, -0.4]). What it buys is that every
-pick can be explained with real sentences. The blend weight was chosen on separate validation
-users, not the test users.
+**Read these honestly.**
+
+* Collaborative filtering does the heavy lifting. Aspect fit alone is *worse* than the popularity
+  baseline at predicting what someone liked, and blending it in costs 1.1 points of hit-rate@20
+  against pure CF (paired interval [-2.0, -0.3]). What it buys is that every pick can be explained
+  with real sentences. The blend weight was chosen on separate validation users.
+* The aspect finder is weak: it finds about half of what reviewers say about an aspect, and about
+  4 in 10 of its flags are wrong. An earlier figure of 86.7% precision came from a sample drawn
+  *from the finder's own flags*, which cannot show misses and flatters precision; it was replaced
+  by random clauses. Word-list additions tuned on a sample looked like a big gain on that sample
+  (recall 55% to 93%) and gave nothing on fresh clauses, and a classifier trained on the word list's
+  own output raised recall by about 3 points while dropping precision from 74% to 49%. Both are
+  recorded in `docs/DECISIONS.md` D-015.
 
 ## Limits you should know about
 
 * The gold labels for aspect/polarity were written by the assistant that built the system, not by
-  independent annotators, and the samples are small (hence the wide intervals).
-* The polarity model is trained on whole reviews and applied to clauses. Negation inside very
-  short clauses ("aren't terrible") can still fool it.
-* The aspect lexicon is a word list; its recall has not been measured.
-* Aspect scores rest on 10-30 reviews per film, mostly from before 2012.
+  independent annotators, and the samples are small (hence the wide intervals). A kit to fix this
+  is ready: fill `tests/data/aspect_label_sheet.csv` (see `docs/LABELLING.md`) and run
+  `python -m cinewhy.absa.agreement` to get agreement and independent accuracy.
+* The polarity model is trained on whole reviews and applied to clauses. A cue layer handles
+  explicit negation ("aren't terrible") but did not measurably improve accuracy on clean data.
+* The aspect finder's recall and precision are about 51% and 60% (see above).
+* Aspect scores rest on 5-30 reviews per film, mostly from before 2012.
 * Weights you set with the sliders cannot be validated offline: there is no ground truth for stated
   preferences.
 * The Dockerfile and the CI job that builds it have **not been run yet** (no Docker on the
@@ -146,12 +158,12 @@ web/            index.html, styles.css, app.js (no build step)
 tests/          pytest suite; tests/data holds the hand-labelled gold clauses
 docs/           HANDOVER, DECISIONS, ARCHITECTURE, MODEL_CARD, CONSTRAINTS, ...
 start.bat       run the demo locally
-Movie_Sentiment_Analysis.ipynb   the original prototype, kept for history
+archive/        the original notebook and report, kept for history (see archive/README.md)
 ```
 
 New here? Read `docs/HANDOVER.md`, then `docs/DECISIONS.md` (D-012 to D-014 cover this build).
 
-> `Movie_Sentiment_Analysis_Report.md` and the notebook predate the audit
+> `archive/legacy/Movie_Sentiment_Analysis_Report.md` and the notebook beside it predate the audit
 > (`docs/AUDIT-2026-08-26.md`) and contain claims the code contradicts. They are kept for history;
 > where they disagree with the audit, the audit is right.
 

@@ -348,6 +348,10 @@ strongly negative).
 **Found by reading output, not by metrics.** "win High Points on the Score Board" was quoted as
 soundtrack evidence; fixed and pinned by a test.
 
+> **Correction (D-015, 2026-10-25):** the 86.7% detector precision above came from a sample drawn
+> from the detector's own flags and must not be quoted. On random clauses recall is 50.8% and
+> precision 60.4%. The 82.6% clause-polarity figure was close: pooled clean samples give 82.5%.
+
 ---
 
 ## D-014 · 2026-10-22 · Claude Sonnet 5.5
@@ -375,3 +379,52 @@ share is 0.45: they asked for aspect-driven results. **That explicit case cannot
 no positive aspect silently dropped viewers onto the popularity list (now shows the film's own
 best-supported praise with `user_weight = 0`); a manifest that hashed a log file still being written
 would have failed verification on the next boot (now takes an explicit file list).
+
+> **Update 2026-10-25.** Numbers here are for the first build (2,355 films). After D-015 the
+> catalogue is 4,164 films and the figures are CF 0.349 [0.327, 0.370], popularity 0.126
+> [0.113, 0.141], hybrid 0.338 [0.317, 0.359] at hit@20; the hybrid costs 1.1 points against CF
+> (paired [-2.0, -0.3]). The conclusions are unchanged.
+
+---
+
+## D-015 · 2026-10-25 · Claude Sonnet 5.5
+### Measure the aspect finder on random clauses; report what failed; widen the catalogue to 5 reviews
+
+**Correction.** D-013 reported aspect-detector precision of 86.7% from a sample drawn from clauses
+the detector had already flagged. That design cannot count misses and inflates precision. Replaced by
+three uniform random samples of clauses from the aclImdb test split (A: 200, B: 300, C: 300),
+labelled by the assistant before looking at what the detector flagged. **D-013's precision figure
+should not be quoted.**
+
+**Result on clean sample C** (nothing tuned on it): recall **50.8%** [38.8, 62.7] (n = 63 real
+mentions); precision **60.4%** [46.9, 72.4] (n = 53 flags); polarity sign on found mentions **82.5%**
+[72.7, 89.3] (n = 80, samples B and C pooled; the cue layer was not tuned on either).
+
+**What did not work, kept so nobody repeats it.**
+1. *Hand-added lexicon terms.* After tuning on A's misses, recall on A rose from 54.5% to 93.2%.
+   On the fresh sample B it was 47.9% before mining and 71.2% after tuning on B. On clean C the
+   expanded lexicon scored recall 54.0% / precision 53.1%, versus the old lexicon's 49.2% / 62.0%:
+   about +5 points of recall for -9 of precision. A per-term ablation on A+B (keep a term only if it
+   recovered at least one true mention and added no false flag) pruned the list; the pruned lexicon
+   scores 50.8% / 60.4% on C, indistinguishable from the old one. Generic words were the worst:
+   `characters?` added 3 true and 13 false matches.
+2. *Weak supervision.* A classifier trained on 478,073 train-split clauses, labelled by the lexicon
+   with every trigger word masked, combined with the lexicon by OR. On dev samples recall rose from
+   79.5% to at most 82.1% while precision fell from 73.8% to 49.0%. Under a threshold rule fixed in
+   advance (most recall within 3 points of the lexicon's dev precision) no threshold qualified.
+3. *The polarity cue layer* (`apply_cues`: explicit positive and negative cue words, flipped by a
+   nearby negator) lifted the dev and held-out gold sets from 0.800 to 0.863 and 0.826 to 0.913, but
+   those were the sets it was tuned on. On clean data it is 80.8% without and 82.1% with the layer
+   (n = 78): +1.3 points, not significant. It stays because it fixes explicit negation patterns that
+   unit tests pin ("aren't terrible"), not because it is proven to help.
+
+**Catalogue threshold.** `min_reviews` default 10 to 5: 2,355 to 4,164 films, same relative
+recommender quality (CF is 2.8x popularity at hit@20 versus 2.65x). Films with few reviews simply
+report fewer aspects, each with its support.
+
+**Slider check.** For each aspect, the top 20 with that slider at 100% had average aspect score
++0.30 to +0.45 above the default list. This shows the controls point the right way. It does not
+validate that stated preferences predict enjoyment, which has no ground truth.
+
+**Still open.** All labels are the assistant's. The kit for an independent second labeller is
+`tests/data/aspect_label_sheet.csv` + `docs/LABELLING.md` + `python -m cinewhy.absa.agreement`.

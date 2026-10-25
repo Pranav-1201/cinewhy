@@ -140,6 +140,22 @@ permanently by `unique_review_indices` and `test_no_review_text_appears_in_both_
 ## Five-line handoff ritual (fill in each session)
 
 ```
+Session date:      2026-10-25 (session "nlp 1", continued)
+Model:             Claude Sonnet 5.5
+What we did:       Pushed the demo (3 commits). Then fixed quality gaps: measured aspect-finder
+                   recall/precision on random clauses (51% / 60%; D-015 corrects D-013's 86.7%),
+                   tried and recorded two failed recall fixes, added a negation cue layer,
+                   a slider direction check, catalogue 2,355 to 4,164 films (min_reviews 5),
+                   independent-labelling kit (docs/LABELLING.md, cinewhy.absa.agreement),
+                   archive/ for the old notebook and report, fully pinned requirements-serve.txt.
+What's left:       A human must fill tests/data/aspect_label_sheet.csv (only an independent
+                   labeller can remove "the assistant labelled everything"). Deployment is
+                   still unverified (Dockerfile never built; CI docker job never run). The aspect
+                   finder is the weakest component; improving it needs far more labelled data.
+                   Constitution section 6 and audit-prompt Phase 5 passes are owed.
+Watch out for:     Never quote D-013's 86.7%. Samples A and B informed the lexicon, so only C
+                   (and B+C polarity) are clean. GateGuard denies first writes per path; stub first.
+
 Session date:      2026-10-22 (session "nlp 1")
 Model:             Claude Sonnet 5.5
 What we did:       Built the whole demo. aclImdb x MovieLens join (D-012, H-1 resolved);
