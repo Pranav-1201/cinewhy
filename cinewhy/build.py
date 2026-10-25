@@ -32,7 +32,7 @@ from typing import Any
 import numpy as np
 
 from cinewhy.absa.extract import build_profile
-from cinewhy.absa.gold import evaluate_gold, load_gold
+from cinewhy.absa.gold import evaluate_gold, evaluate_random, load_gold, load_random_gold
 from cinewhy.absa.polarity import PolarityModel
 from cinewhy.artifacts.manifest import build as build_manifest
 from cinewhy.data.sources import (
@@ -44,7 +44,7 @@ from cinewhy.data.sources import (
 )
 from cinewhy.recsys.catalogue import Catalogue, FilmStats, write_catalogue
 from cinewhy.recsys.cf import bayesian_popularity, build_item_similarity
-from cinewhy.recsys.evaluate import evaluate_recommenders
+from cinewhy.recsys.evaluate import evaluate_recommenders, slider_response
 from cinewhy.schemas import ArtifactManifest, Aspect, EvidenceSentence, Movie, MovieAspectProfile
 
 ARTIFACT_FILES = (
@@ -55,6 +55,8 @@ ARTIFACT_FILES = (
     "eval.json",
     "polarity.joblib",
 )
+# Which random gold samples may be quoted as clean. A and B informed the lexicon (D-015).
+RANDOM_SAMPLE_ROLES = {"a": "tuned-on", "b": "tuned-on", "c": "clean"}
 _NON_ALNUM = re.compile(r"[^a-z0-9]+")
 _PARENTHETICAL = re.compile(r"\([^)]*\)")
 _MIN_TITLE_CHARS = 5
@@ -68,7 +70,10 @@ class BuildConfig:
     ml_archive: Path = Path("Data/raw/ml-25m.zip")
     out_dir: Path = Path("artifacts")
     gold_dir: Path = Path("tests/data")
-    min_reviews: int = 10
+    # 5 rather than 10: measured on 2026-10-25, this grows the catalogue 77% (2,355 to 4,164
+    # films) with the same relative recommender quality (DECISIONS D-015). Films with few
+    # reviews simply report fewer aspects, each shown with its support.
+    min_reviews: int = 5
     seed: int = 42
 
 
@@ -240,6 +245,22 @@ def build_artifacts(config: BuildConfig) -> ArtifactManifest:
         path = config.gold_dir / f"aspect_gold_{name}.jsonl"
         if path.is_file():
             gold[name] = asdict(evaluate_gold(load_gold(path), model))
+    # Uniform random samples of clauses: the only ones that can measure recall. A and B were
+    # used to tune the lexicon, so only C (and the polarity of B+C, which the lexicon tuning
+    # did not touch) are reported as clean. See DECISIONS D-015.
+    random_rows = {
+        name: load_random_gold(config.gold_dir / f"aspect_gold_random_{name}.jsonl")
+        for name in RANDOM_SAMPLE_ROLES
+        if (config.gold_dir / f"aspect_gold_random_{name}.jsonl").is_file()
+    }
+    random_gold: dict[str, Any] = {
+        name: {**asdict(evaluate_random(rows, model)), "role": RANDOM_SAMPLE_ROLES[name]}
+        for name, rows in random_rows.items()
+    }
+    clean_pool = [r for n in ("b", "c") for r in random_rows.get(n, [])]
+    if clean_pool:
+        random_gold["clean_pooled_b_c"] = asdict(evaluate_random(clean_pool, model))
+    slider = slider_response(catalogue)
     polarity_path = out / "polarity_report.json"
     n_reviews = sum(len(v) for v in reviews.values())
     eval_blob = {
@@ -265,6 +286,8 @@ def build_artifacts(config: BuildConfig) -> ArtifactManifest:
         if polarity_path.is_file()
         else None,
         "gold": gold,
+        "random_gold": random_gold,
+        "slider_check": slider,
         "gold_note": "Labels written by the assistant, not an independent human. See gold.py.",
         "recommender": asdict(rec_report),
     }

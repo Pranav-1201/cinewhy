@@ -28,8 +28,10 @@ from dataclasses import dataclass
 import numpy as np
 import numpy.typing as npt
 
+from cinewhy.recsys.catalogue import Catalogue
 from cinewhy.recsys.cf import bayesian_popularity, build_item_similarity
-from cinewhy.recsys.rank import _unit, blend_scores, infer_weights_from_rows
+from cinewhy.recsys.rank import _unit, blend_scores, infer_weights_from_rows, recommend
+from cinewhy.schemas import Aspect, Recommendation, RecommendRequest, TasteProfile
 
 LIKE_THRESHOLD = 4.0
 _KS = (10, 20)
@@ -130,6 +132,44 @@ def _user_cases(
         pool = rng.permutation(liked)
         cases.append((int(pool[0]), [int(i) for i in pool[1 : 1 + n_seeds]]))
     return cases
+
+
+def slider_response(catalogue: Catalogue, *, limit: int = 20) -> dict[str, dict[str, float]]:
+    """Check that each aspect slider steers the results the way it is labelled.
+
+    This does NOT show that stated preferences predict what a viewer will enjoy: there is no
+    ground truth for that, and offline numbers cannot supply one. It shows only the
+    directional property a user would notice first: pushing the Pacing slider to the maximum
+    should return films whose pacing scores are higher than the default list's.
+
+    Args:
+        catalogue: The catalogue under test.
+        limit: How many films to compare.
+
+    Returns:
+        Per aspect: the mean support-shrunk score of that aspect over the top `limit` films
+        with that slider at 1.0 (`steered`), over the default cold-start list (`default`),
+        and their difference (`lift`).
+    """
+    cold = recommend(catalogue, RecommendRequest(profile=TasteProfile(), limit=limit), "check")
+    result: dict[str, dict[str, float]] = {}
+    for aspect in Aspect:
+        steered = recommend(
+            catalogue,
+            RecommendRequest(profile=TasteProfile(aspect_weights={aspect: 1.0}), limit=limit),
+            "check",
+        )
+
+        def mean(items: tuple[Recommendation, ...], a: Aspect = aspect) -> float:
+            return float(np.mean([catalogue.shrunk(i.movie.movie_id, a) for i in items]))
+
+        steered_mean, default_mean = mean(steered.items), mean(cold.items)
+        result[aspect.value] = {
+            "steered": steered_mean,
+            "default": default_mean,
+            "lift": steered_mean - default_mean,
+        }
+    return result
 
 
 def evaluate_recommenders(

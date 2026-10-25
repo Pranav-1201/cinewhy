@@ -26,7 +26,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from cinewhy.absa.extract import PolarityScorer, aspect_polarity
+from cinewhy.absa.extract import PolarityScorer, aspect_polarity, detect_aspects
 from cinewhy.schemas import Aspect
 
 _Z95 = 1.96
@@ -100,6 +100,73 @@ def load_gold(path: Path) -> list[GoldRow]:
             raise ValueError(f"{path}:{line_no}: on_topic and polarity disagree or are invalid")
         rows.append(GoldRow(raw["id"], raw["aspect"], raw["text"], raw["on_topic"], polarity))
     return rows
+
+
+@dataclass(frozen=True)
+class RandomRow:
+    """One clause from a uniform random sample, with every aspect it genuinely discusses."""
+
+    id: int
+    text: str
+    aspects: dict[Aspect, int]
+
+
+@dataclass(frozen=True)
+class RandomReport:
+    """Recall, precision and polarity from a uniform random sample of clauses.
+
+    Unlike `GoldReport`, the sample was drawn from ALL clauses, flagged or not, so recall is
+    measurable: a real aspect mention the lexicon misses appears here as a miss.
+    """
+
+    detector_recall: Proportion
+    detector_precision: Proportion
+    polarity_accuracy: Proportion
+    n_clauses: int
+
+
+def load_random_gold(path: Path) -> list[RandomRow]:
+    """Read a uniform-random-sample gold JSONL file."""
+    rows: list[RandomRow] = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if line.strip():
+            raw = json.loads(line)
+            aspects = {Aspect(k): int(v) for k, v in raw["aspects"].items()}
+            rows.append(RandomRow(raw["id"], raw["text"], aspects))
+    return rows
+
+
+def evaluate_random(rows: Sequence[RandomRow], scorer: PolarityScorer) -> RandomReport:
+    """Score the detector's recall and precision and the polarity on a random sample.
+
+    Args:
+        rows: Labelled random clauses.
+        scorer: Polarity scorer under test.
+
+    Returns:
+        Recall over real mentions, precision over flagged mentions, and sign accuracy over
+        real mentions that were flagged and carry a clear polarity.
+    """
+    real = flagged_total = real_flagged = 0
+    signed: list[tuple[RandomRow, Aspect]] = []
+    for row in rows:
+        found = detect_aspects(row.text)
+        truth = set(row.aspects)
+        real += len(truth)
+        flagged_total += len(found)
+        real_flagged += len(truth & found)
+        signed.extend((row, a) for a in truth & found if row.aspects[a] in (-1, 1))
+    scores = scorer.score_many([row.text for row, _ in signed])
+    correct = [
+        (aspect_polarity(a, row.text, s) > 0) == (row.aspects[a] == 1)
+        for (row, a), s in zip(signed, scores, strict=True)
+    ]
+    return RandomReport(
+        detector_recall=Proportion(real_flagged, real),
+        detector_precision=Proportion(real_flagged, flagged_total),
+        polarity_accuracy=Proportion(sum(correct), len(correct)),
+        n_clauses=len(rows),
+    )
 
 
 def evaluate_gold(rows: Sequence[GoldRow], scorer: PolarityScorer) -> GoldReport:

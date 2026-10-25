@@ -305,15 +305,26 @@
           h("p", { class: "meta", text: "That is whole reviews. Judging single clauses is harder, measured below." })));
       }
 
-      const g = e.gold && e.gold.heldout;
-      if (g) {
+      const rg = e.random_gold;
+      if (rg && rg.c) {
+        const clean = rg.c, pooled = rg.clean_pooled_b_c;
         cards.push(h("div", { class: "card" }, h("h2", { text: "Aspect detection and clause polarity" }),
-          table(["Measure (held-out hand-labelled clauses)", "Result [95% Wilson interval]"], [
-            ["Lexicon precision: flagged clauses really about that aspect", prop(g.detector_precision)],
-            ["Polarity sign correct (clear-cut clauses)", prop(g.polarity_accuracy)],
-            ["Polarity sign correct, only clauses strong enough to be quoted", prop(g.polarity_accuracy_confident)],
+          h("p", { class: "hint", text: `Measured on ${clean.n_clauses} clauses drawn at random from reviews the system never trained on, so misses are counted as well as hits. Nothing in the method was tuned on this sample.` }),
+          table(["Measure", "Result [95% Wilson interval]"], [
+            ["Recall: real aspect mentions the word list finds", prop(clean.detector_recall)],
+            ["Precision: flagged mentions that really are about that aspect", prop(clean.detector_precision)],
+            ["Polarity sign correct on mentions it found" + (pooled ? " (two clean samples pooled)" : ""), prop(pooled ? pooled.polarity_accuracy : clean.polarity_accuracy)],
           ]),
-          h("p", { class: "callout", text: e.gold_note + " Samples are small, hence the wide intervals. Recall of the aspect lexicon cannot be measured from this sample." })));
+          h("p", { class: "callout", text: "Read this plainly: the aspect finder misses about half of what reviewers say about an aspect, and about 4 in 10 of the mentions it flags are not really about it. Scores and quotes you see are therefore a sample of what was said, not all of it. Many further word-list additions, and a classifier trained on the word list's own output, were tried and did not improve this on fresh clauses (DECISIONS D-015)." }),
+          h("p", { class: "meta", text: e.gold_note + " The samples are small, hence the wide intervals." })));
+      }
+
+      const sc = e.slider_check;
+      if (sc) {
+        cards.push(h("div", { class: "card" }, h("h2", { text: "Do the sliders do what they say?" }),
+          h("p", { class: "hint", text: "Each aspect slider was pushed to 100% and the top 20 films compared with the default list. Numbers are the average support-shrunk aspect score (−1 to +1) of those films." }),
+          table(["Aspect", "Default list", "Slider at 100%", "Lift"], Object.keys(sc).map((a) => [label(a), signed(sc[a].default), signed(sc[a].steered), signed(sc[a].lift)])),
+          h("p", { class: "callout", text: "This checks the controls steer the results in the labelled direction. It does not show that your stated preferences predict what you will enjoy: there is no ground truth to test that against." })));
       }
 
       const row = (n, title) => [title, ci(byName[n].hit_rate[10]), ci(byName[n].hit_rate[20])];
@@ -336,10 +347,10 @@
         h("ul", {},
           ["Aspect scores come from 10-30 reviews per film, mostly written years ago. Treat them as hints, not verdicts.",
            "The polarity model was trained on whole reviews and applied to clauses; negation inside short clauses ('aren't terrible') can still fool it.",
-           "The aspect lexicon is word-list based and has no measured recall.",
+           "The aspect finder is a word list. On fresh random clauses it finds about half of real aspect mentions and about 4 in 10 flags are wrong; improving it by hand or with a classifier trained on its own output did not help.",
            "Gold labels were written by the assistant that built the system, not by independent annotators.",
            "Slider weights you set yourself cannot be validated offline: there is no ground truth for stated preferences.",
-           "The catalogue is limited to films present in both datasets (mostly released before 2012)."].map((t) => h("li", { text: t })))));
+           "The catalogue is limited to films present in both datasets with at least 5 reviews (mostly released before 2012), and has no posters."].map((t) => h("li", { text: t })))));
 
       root.replaceChildren(h("div", { class: "grid2" }, cards));
       evalDone = true;

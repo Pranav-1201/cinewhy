@@ -60,14 +60,26 @@ _ASPECT_PATTERNS: Final[dict[Aspect, re.Pattern[str]]] = {
     aspect: re.compile(r"\b(?:" + "|".join(fragments) + r")\b", re.IGNORECASE)
     for aspect, fragments in {
         # "cast" as a passive verb ("Fonda was cast in the original") is not about acting.
+        # Every pattern below the first group earned its place by uniquely recovering at least
+        # one real mention, and adding no false flag, on the dev samples (DECISIONS D-015).
         Aspect.ACTING: (
             "acting", "actors?", "actress(?:es)?", "performances?", "performers?", "portrayal",
             "portrayed",
             r"(?<!was\s)(?<!were\s)(?<!been\s)(?<!be\s)(?<!is\s)(?<!get\s)cast(?:ing)?",
+            r"support\s+from", r"pulled\s+(?:it|that|this)?\s*off",
+            r"play(?:s|ed|ing)?\s+(?:the\s+)?(?:role|roll|part)",
+            r"(?:girl|boy|man|woman|actor|actress|guy|lady|kid|child)\s+playing",
+            r"(?:convincing|believable|hilarious|enjoyable|sincere|dependable|wonderful|great"
+            r"|superb|terrific|excellent|awful|terrible|wooden)\s+as\b",
+            r"(?:screen\s+)?presence", r"(?:can|can't|cannot|couldn't|could)\s+act",
+            r"(?:well|brilliantly|beautifully|superbly|perfectly)\s+(?:played|cast|acted)",
         ),
         Aspect.PLOT: (
-            "plots?", "story(?:lines?)?", "script", "screenplay", "twists?", "narrative",
+            "plots?", "story(?:lines?)?", "script", "screenplay", "twists?", r"narrativ(?:e|ly)",
             "dialogues?", "writing",
+            "premise", "subplots?", r"events\s+in\s+(?:this|the)\s+(?:film|movie)",
+            r"what\s+(?:this|the)\s+(?:movie|film)\s+was\s+about",
+            r"(?:best|great|good|bad|worst|memorable)\s+lines",
         ),
         # Bare "drag" and "slowly" were the main false positives (drag queens, "slowly loses
         # it"), and "change of pace" is an idiom. Each is now tied to the film or its tempo.
@@ -76,18 +88,25 @@ _ASPECT_PATTERNS: Final[dict[Aspect, re.Pattern[str]]] = {
             r"too\s+long", r"drag(?:s|ged|ging)?\s+(?:on|out|down|badly|a\s+lot|a\s+bit)",
             r"(?:it|film|movie|story|plot|part|half|hour|middle|act|second|third)\s+drag(?:s|ged|ging)?",
             r"(?:moves|runs|unfolds|progresses|builds)\s+(?:very\s+|so\s+|too\s+)?slowly",
+            r"dull\s+stretch(?:es)?", "tedious", "momentum", r"kept\s+waiting",
         ),
         # "effects of tradition" is not special effects; require a visual qualifier.
         Aspect.VISUALS: (
             "visuals?", "cinematograph(?:y|er)", "cgi", "scenery", "camerawork", "animation",
             "costumes?", "photography", r"(?:special|visual|digital|computer|practical)\s+effects?",
             r"effects\s+(?:are|were|was|look|looked|work|worked)", r"set\s+design",
+            r"picture\s+quality", r"blue\s?screen", r"fashions?", r"production\s+values?",
+            "artwork", r"well[-\s]shot", r"(?:production\s+)?sets\b", r"low[-\s]budget",
+            r"visually\s+\w+", r"underwater\s+scenes",
         ),
         # `(?<!-)` keeps "never-ending" out; "in conclusion" is a discourse marker.
-        Aspect.ENDING: (r"(?<!-)endings?", "finale", "climax", r"(?<!in\s)conclusion"),
+        Aspect.ENDING: (
+            r"(?<!-)endings?", "finale", "climax", r"(?<!in\s)conclusion",
+            r"(?:final|last)\s+(?:scene|act|minutes|twist|sequence)",
+        ),
         # Bare "score" also means a rating ("a score of 4"), so it needs a music context.
         Aspect.SOUNDTRACK: (
-            "soundtracks?", "music", "songs?", "composer", r"sound\s+design",
+            "soundtracks?", "music", "songs?", "composer", r"sound\s+design", "hymn",
             r"(?:music|musical|original|film|movie)\s+score",
             r"(?:the|its)\s+score(?!\s*(?:of|board))",
         ),
@@ -96,7 +115,8 @@ _ASPECT_PATTERNS: Final[dict[Aspect, re.Pattern[str]]] = {
             "rewatch(?:ed|ing|able)?",
             r"(?:watch|see|seen|view)(?:ed|ing)?\s+(?:it\s+|this\s+|that\s+|the\s+(?:movie|film)\s+)?(?:again|twice)",
             r"(?:watch|see|seen)(?:ed|ing)?\s+(?:it\s+)?(?:a\s+(?:few|couple)\s+(?:of\s+)?times|multiple\s+times)",
-            r"second\s+viewing", r"multiple\s+viewings",
+            r"second\s+viewing", r"multiple\s+viewings", r"second\s+(?:and\s+third\s+)?time",
+            r"(?:watch|see)(?:ing)?\s+(?:it\s+|this\s+|that\s+)?(?:a\s+)?(?:second|third)",
         ),
     }.items()
 }  # fmt: skip
@@ -271,7 +291,56 @@ def aspect_polarity(aspect: Aspect, clause: str, model_score: float) -> float:
     """
     if aspect is Aspect.REWATCHABILITY:
         return -_REWATCH_STRENGTH if _rewatch_is_negated(clause) else _REWATCH_STRENGTH
-    return model_score
+    return apply_cues(clause, model_score)
+
+
+# Words that settle the polarity of a short clause where a model trained on whole reviews is
+# unreliable: it learned that "entertainment" means praise, so "too long for a night's
+# entertainment" scored +0.86, and it reads "aren't terrible" as strongly negative.
+_NEG_CUES: Final[re.Pattern[str]] = re.compile(
+    r"\b(?:too\s+(?:long|slow|rushed|short|loud)|dragg(?:s|ed|ing|y)|tedious|plodding|glacial"
+    r"|lack(?:s|ed|ing)?|inconclusive|puzzling|confusing|abrupt|let\s?down|dated|dodgy|cheesy"
+    r"|cheap|poor(?:ly)?|weak|mediocre|wooden|bland|forgettable|uninspired|predictable"
+    r"|ridiculous|silly|non-?existent|awful|terrible|horrible|boring|dull|lame|annoying"
+    r"|irritating|bad(?:ly)?|worst|out\s+of\s+place|overdone|overrated)\b",
+    re.IGNORECASE,
+)
+_POS_CUES: Final[re.Pattern[str]] = re.compile(
+    r"\b(?:perfect(?:ly)?|brilliant|excellent|superb|stunning|beautiful(?:ly)?|memorable"
+    r"|wonderful(?:ly)?|amazing|fantastic|gripping|tight|crisp|moving|touching|impressive"
+    r"|great|best|gorgeous|masterful|terrific|top-?notch)\b",
+    re.IGNORECASE,
+)
+_CUE_STRENGTH: Final[float] = 0.4
+_NEGATION_WINDOW: Final[int] = 3
+
+
+def apply_cues(clause: str, model_score: float) -> float:
+    """Correct the model's score when explicit cue words say the opposite.
+
+    Each cue word votes for its own polarity, flipped when a negator sits within three
+    words before it ("not terrible" is mildly positive; "not great" is mildly negative).
+    The model's score is kept when there are no cues, when positive and negative cues
+    cancel (a mixed clause), or when the cues agree with the model. When the cues disagree
+    with the model, the cues win and the score becomes a mild +-0.4: we trust the
+    direction, not the magnitude.
+
+    Args:
+        clause: The clause text.
+        model_score: The polarity model's score for it.
+
+    Returns:
+        The corrected polarity in [-1.0, 1.0].
+    """
+    net = 0
+    for pattern, sign in ((_NEG_CUES, -1), (_POS_CUES, 1)):
+        for found in pattern.finditer(clause):
+            lead = _CLAUSE_BREAK.split(clause[: found.start()])[-1]
+            negated = bool(_NEGATOR.search(" ".join(lead.split()[-_NEGATION_WINDOW:])))
+            net += -sign if negated else sign
+    if net == 0 or (net > 0) == (model_score > 0):
+        return model_score
+    return _CUE_STRENGTH if net > 0 else -_CUE_STRENGTH
 
 
 _CLAUSE_BREAK: Final[re.Pattern[str]] = re.compile(r"[,.;:!?()—-]")

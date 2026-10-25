@@ -16,7 +16,7 @@ import pytest
 import cinewhy.recsys.evaluate as evaluate_module
 from cinewhy.recsys.catalogue import Catalogue, aspect_order, load_catalogue, write_catalogue
 from cinewhy.recsys.cf import bayesian_popularity, build_item_similarity
-from cinewhy.recsys.evaluate import evaluate_recommenders
+from cinewhy.recsys.evaluate import evaluate_recommenders, slider_response
 from cinewhy.recsys.rank import infer_weights, popular, recommend, search
 from cinewhy.schemas import Aspect, RecommendRequest, TasteProfile
 from tests.conftest import make_catalogue
@@ -296,3 +296,16 @@ class TestEvaluationProtocol:
             shrinks=(5.0, 20.0),
         )
         assert chosen in (5.0, 20.0) and report.chosen_shrink == chosen
+
+
+class TestSliderResponse:
+    def test_pushing_a_slider_raises_that_aspects_score_in_the_results(self) -> None:
+        result = slider_response(_catalogue())
+        # Hand-derived: default list mean pacing = (0.64+0.56-0.48+0+0+0.257)/6 = 0.163;
+        # pacing-steered list = films cw-1, cw-2, cw-6 = (0.64+0.56+0.257)/3 = 0.486.
+        assert result["pacing"]["default"] == pytest.approx(0.163, abs=0.001)
+        assert result["pacing"]["steered"] == pytest.approx(0.486, abs=0.001)
+        assert result["pacing"]["lift"] > 0
+
+    def test_every_aspect_is_reported(self) -> None:
+        assert set(slider_response(_catalogue())) == {a.value for a in Aspect}
