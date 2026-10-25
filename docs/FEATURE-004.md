@@ -38,8 +38,42 @@ Everything else in the request (recency ranking, posters, a "New & Now" shelf) i
 | TMDB review text | median 0-6 per film; Hindi 12 of 100 films in 2024 have any | `spike_reviews.py` |
 | Amazon 2023 | title-only join; 32 Hindi films after 2020 | `amazon_hindi.py` |
 
-Caveat on the join numbers: they were measured with the loose ebD pattern that includes series and
-with the +-1 year fallback, so they are upper bounds; the build recomputes them under the rules below.
+Caveat on the join numbers above: they were measured with the loose ebD pattern that includes series
+and with an unchecked +-1 year fallback, so they are upper bounds. The real run below replaces them.
+
+## Real-data run under the final rules (2026-10-26, `cinewhy.data.{spine,linking,reviews}`)
+
+14,620 films selected (en 11,550, hi 3,070); 7 removed for sharing a title and year with another
+candidate. 187,622 TMDB rows had no IMDb number and 3 were duplicates (dropped before ranking).
+
+Link outcomes (candidates after the 7 removals):
+
+| Source | English | Hindi |
+|---|---|---|
+| RT exact year | 5,612 | 72 |
+| RT adjacent year, runtimes confirmed | 513 | 0 |
+| RT ambiguous / runtime rejected / none | 7 / 30 / 5,382 | 0 / 2 / 2,995 |
+| ebD exact year | 8,239 | 2,019 |
+| ebD none (adjacent years not accepted, no runtime) | 3,305 | 1,050 |
+
+Reviews that cleared the filters before the cap: RT 32,688,585; ebD 1,730,561. After the cap of 150
+per source per film, films with at least 20 / at least 5 usable reviews:
+
+| Language, era | Films | RT >= 20 | ebD >= 20 | Either source >= 20 | Either source >= 5 |
+|---|---|---|---|---|---|
+| English, before 2000 | 3,750 | 1,419 | 3,272 | 3,310 | 3,533 |
+| English, 2000-2011 | 3,600 | 1,810 | 2,578 | 2,788 | 2,883 |
+| English, 2012-2025 | 4,200 | 2,851 | 1,882 | 3,219 | 3,287 |
+| Hindi, before 2000 | 1,250 | 3 | 40 | 40 | 257 |
+| Hindi, 2000-2011 | 840 | 12 | 184 | 187 | 456 |
+| Hindi, 2012-2025 | 980 | 37 | 337 | 349 | 470 |
+
+Totals: 9,317 English and 576 Hindi films with at least 20 reviews (9,703 and 1,183 with at least 5).
+About 1.70 million reviews survive the cap, so profiling cost is bounded. The run took 1,527 s
+(RT stream 936 s, ebD stream 527 s). English 2012-2025 averages 230 films a year with at least 20
+reviews, which meets the 200-300 target; Hindi 2012-2025 averages 25 a year (349 over 14 years).
+These are counts of films with text, not yet films with ratings; ratings (MovieLens 32M) are a
+separate filter applied by the build.
 
 ## Success criteria — verifiable, not vibes
 
@@ -71,8 +105,10 @@ the build, polarity check and evaluation; a written overview of the dataset.
    with no `imdb_id` are dropped and counted. The IMDb number stays the key, so `cw-<imdb>` ids of
    existing films do not change.
 2. `cinewhy/data/linking.py`: one normaliser and the join rules, pure functions. Exact year only;
-   a +-1 year fallback for English only, and only if runtimes agree within 15 minutes; ambiguous
-   keys are dropped; ebD uses the tight pattern `(YYYY)` so series never match.
+   a +-1 year fallback for English only, accepted only when BOTH runtimes are known and agree
+   within 15 minutes (so ebD, which has no runtime, gets exact years only: its 412 adjacent-year
+   matches had nothing to be checked against and were dropped); ambiguous keys are dropped; ebD uses
+   the tight pattern `(YYYY)` so series never match.
 3. `cinewhy/data/reviews.py`: streaming readers for RT and ebD, cleaning RT's leading
    `:fresh:` / `:rotten:` tokens and bracketed edit notes, a deterministic per-film cap (150 per
    source, chosen by hash of the review id) so profiling time is bounded.

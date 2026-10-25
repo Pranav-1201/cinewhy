@@ -85,6 +85,10 @@ def runtimes_agree(a: float | None, b: float | None, tolerance: float) -> bool:
     return abs(a - b) <= tolerance
 
 
+def _known(runtime: float | None) -> bool:
+    return runtime is not None and runtime > 0
+
+
 def match_film[T](
     candidate: Candidate,
     index: Mapping[str, Sequence[T]],
@@ -96,8 +100,9 @@ def match_film[T](
 
     Order: the exact year; then, for English only, the year before and after. Hindi adjacent
     years agreed with runtime only 57.9% of the time (n=19) against 79.5% for exact years, so
-    they are not trusted. The first year with any hit decides: a hit that is ambiguous or fails
-    the runtime check ends the search rather than falling through to a looser year.
+    they are not trusted. An adjacent-year hit is accepted only when both runtimes are known and
+    agree. The first usable year decides: a hit that is ambiguous or fails the runtime check ends
+    the search rather than falling through to a looser year.
 
     Args:
         candidate: The film to look up.
@@ -115,7 +120,12 @@ def match_film[T](
             continue
         if len(hits) > 1:
             return MatchResult("ambiguous")
-        if not runtimes_agree(candidate.runtime, runtime_of(hits[0]), tolerance):
+        source_runtime = runtime_of(hits[0])
+        if offset != 0 and not (_known(candidate.runtime) and _known(source_runtime)):
+            # Nothing to confirm a different-year hit against (ebD has no runtime): a title that
+            # merely recurs a year apart, like a remake, would be accepted blind.
+            continue
+        if not runtimes_agree(candidate.runtime, source_runtime, tolerance):
             return MatchResult("runtime_rejected")
         return MatchResult("exact" if offset == 0 else "adjacent", hits[0])
     return MatchResult("none")

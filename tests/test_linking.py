@@ -78,6 +78,18 @@ def test_adjacent_year_is_used_for_english_only() -> None:
     assert match_film(_cand(language="hi"), index, _runtime).status == "none"
 
 
+def test_adjacent_year_needs_a_runtime_to_confirm_it() -> None:
+    # A source with no runtime (ebD) gives an adjacent-year hit nothing to be checked against;
+    # a title that merely recurs a year apart (a remake, a re-release) would be accepted blind.
+    index = {title_key("Heat") + "1996": [_Item("no-runtime", None)]}
+    assert match_film(_cand(), index, _runtime).status == "none"
+    # ...but the same hit with a known, agreeing runtime is accepted.
+    confirmed = {title_key("Heat") + "1996": [_Item("confirmed", 172.0)]}
+    assert match_film(_cand(), confirmed, _runtime).status == "adjacent"
+    # An unknown runtime on the candidate side is equally unconfirmed.
+    assert match_film(_cand(runtime=0.0), confirmed, _runtime).status == "none"
+
+
 def test_exact_year_wins_over_adjacent() -> None:
     index = {
         title_key("Heat") + "1995": [_Item("exact", 170.0)],
