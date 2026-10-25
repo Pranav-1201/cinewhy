@@ -62,7 +62,7 @@ venv/Scripts/python.exe -m mypy cinewhy api
 #    NOTE: an empty file list is a false green. Check N.
 
 # 6. Notebook is output-stripped before commit
-venv/Scripts/python.exe -m nbstripout --verify Movie_Sentiment_Analysis.ipynb
+venv/Scripts/python.exe -m nbstripout --verify archive/legacy/Movie_Sentiment_Analysis.ipynb
 #    expect: exit 0, no diff
 ```
 

@@ -93,7 +93,7 @@ jobs:
       # scans notebook outputs along with everything else.
       - name: Notebook outputs stripped
         run: |
-          mapfile -t nbs < <(git ls-files '*.ipynb' | grep -v '^Movie_Sentiment_Analysis\.ipynb$' || true)
+          mapfile -t nbs < <(git ls-files '*.ipynb' | grep -v '^archive/legacy/Movie_Sentiment_Analysis\.ipynb$' || true)
           if [ ${#nbs[@]} -eq 0 ]; then
             echo "No non-legacy notebooks tracked — nothing to verify."
             exit 0

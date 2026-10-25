@@ -45,7 +45,8 @@
     change instead. The one exception: a test whose *own name* states a precondition now genuinely
     met — invert it and rename it.
 
-12. **Never modify `Movie_Sentiment_Analysis.ipynb` in place without a `.bak` first.** It is the
+12. **Never modify `archive/legacy/Movie_Sentiment_Analysis.ipynb` (moved there on 2026-10-25,
+    contents unchanged) in place without a `.bak` first.** It is the
     project's only historical artifact and it is not yet under git for its full history.
 
 ---

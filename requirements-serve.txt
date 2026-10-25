@@ -1,12 +1,24 @@
-# What the RUNNING service imports, pinned to the versions exercised in venv/ on 2026-10-22.
-# requirements.txt is the full development closure (Jupyter, plotting, ...), which a web
-# image does not need. Transitive packages here resolve to the newest compatible release;
-# the artifact manifest, not this file, is what guards the model numbers.
-numpy==2.4.4
-scipy==1.17.1
-scikit-learn==1.8.0
-joblib==1.5.3
-pydantic==2.13.5
+# The FULL pinned closure of what the running service imports (19 packages), resolved on
+# 2026-10-25 in a throwaway venv with Python 3.13 by installing numpy, scipy, scikit-learn,
+# joblib, pydantic, fastapi, starlette and uvicorn and running `pip freeze`. requirements.txt is
+# the much larger development closure (Jupyter, plotting, ...), which a web image does not need.
+# To refresh: repeat that procedure, then re-run the suite. Never hand-edit a single line.
+annotated-doc==0.0.5
+annotated-types==0.8.0
+anyio==4.15.1
+click==8.5.0
 fastapi==0.159.1
+h11==0.16.0
+idna==3.20
+joblib==1.5.3
+numpy==2.4.4
+opentelemetry-api==1.45.1
+pydantic==2.13.5
+pydantic_core==2.46.5
+scikit-learn==1.8.0
+scipy==1.17.1
 starlette==1.9.0
+threadpoolctl==3.7.0
+typing-inspection==0.4.4
+typing_extensions==4.16.0
 uvicorn==0.54.0

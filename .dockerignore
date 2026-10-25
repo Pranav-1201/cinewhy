@@ -10,7 +10,7 @@ docs
 .ruff_cache
 .pytest_cache
 *.ipynb
-Movie_Sentiment_Analysis_Report.md
+archive
 # tests are not shipped, except the hand-labelled gold sets the build evaluates against
 tests/*
 !tests/data
