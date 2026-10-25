@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CineWhy - recommendations with receipts</title>
+  <meta name="description" content="A movie recommender that explains every pick with real review sentences, broken down by aspect.">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="top">
+    <div class="wrap top-row">
+      <div>
+        <h1>CineWhy</h1>
+        <p class="tagline">Movie picks that show their receipts: the real review sentences behind every score.</p>
+      </div>
+      <p class="build" id="build" title="Hash of the artifact set this server verified at boot">connecting...</p>
+    </div>
+    <nav class="wrap tabs" role="tablist" aria-label="Sections">
+      <button role="tab" id="tab-discover" aria-controls="panel-discover" aria-selected="true">Discover</button>
+      <button role="tab" id="tab-analyze" aria-controls="panel-analyze" aria-selected="false">Try a review</button>
+      <button role="tab" id="tab-eval" aria-controls="panel-eval" aria-selected="false">How well does it work?</button>
+    </nav>
+  </header>
+
+  <main class="wrap">
+    <section id="panel-discover" role="tabpanel" aria-labelledby="tab-discover" class="discover">
+      <aside class="card taste" aria-label="Your taste">
+        <h2>Your taste</h2>
+        <p class="hint">Move a slider to say what matters to you. Or just like a few films and we infer it.</p>
+        <div id="sliders"></div>
+
+        <h3>Find films</h3>
+        <label class="sr-only" for="search">Search films by title</label>
+        <input id="search" type="search" placeholder="Search a title, e.g. Matrix" autocomplete="off">
+        <ul id="search-results" class="plain results-list" aria-live="polite"></ul>
+
+        <h3>Your list</h3>
+        <ul id="my-films" class="plain chips"></ul>
+        <button id="reset" class="ghost" type="button">Reset everything</button>
+      </aside>
+
+      <section class="results" aria-live="polite">
+        <div id="rec-banner" class="banner"></div>
+        <ol id="recs" class="plain"></ol>
+      </section>
+    </section>
+
+    <section id="panel-analyze" role="tabpanel" aria-labelledby="tab-analyze" hidden>
+      <div class="card">
+        <h2>Paste a review</h2>
+        <p class="hint">The same pipeline that built the film pages runs on your text: it splits the review into clauses, finds the aspects each one is about, and scores them.</p>
+        <label class="sr-only" for="review-text">Review text</label>
+        <textarea id="review-text" rows="6" maxlength="5000" placeholder="The acting was brilliant, but the pacing dragged and the ending was a letdown."></textarea>
+        <div class="row">
+          <button id="analyze" type="button" class="primary">Analyze</button>
+          <button id="sample" type="button" class="ghost">Use an example</button>
+        </div>
+        <div id="analysis" aria-live="polite"></div>
+      </div>
+    </section>
+
+    <section id="panel-eval" role="tabpanel" aria-labelledby="tab-eval" hidden>
+      <div id="eval"></div>
+    </section>
+  </main>
+
+  <dialog id="movie-dialog" aria-labelledby="movie-title">
+    <div id="movie-body"></div>
+    <form method="dialog"><button class="primary" type="submit">Close</button></form>
+  </dialog>
+
+  <footer class="wrap foot">
+    <p>Scores are model estimates from public IMDb review text (aclImdb) and MovieLens ratings. Quotes are verbatim and never generated. See "How well does it work?" for measured accuracy and its limits.</p>
+  </footer>
+  <script src="app.js" defer></script>
+</body>
+</html>
