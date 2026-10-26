@@ -113,6 +113,10 @@ def match_film[T](
     Returns:
         The match, with `status` recording which rule decided.
     """
+    if not title_key(candidate.title):
+        # No Latin letters or digits survive (kana, Devanagari): the key would be the bare year and
+        # match whichever source record of that year is also stemless. No evidence, so no link.
+        return MatchResult("none")
     offsets = (0, -1, 1) if candidate.language == "en" else (0,)
     for offset in offsets:
         hits = index.get(film_key(candidate.title, candidate.year + offset))

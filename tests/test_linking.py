@@ -118,6 +118,16 @@ def test_no_hit_is_none() -> None:
     assert match_film(_cand(), {}, _runtime).status == "none"
 
 
+def test_a_title_with_no_latin_letters_never_links_on_the_year_alone() -> None:
+    # The key keeps only ASCII letters and digits, so a kana title is the bare year "2001" and
+    # would link to the one source record of that year whose own title is also all non-Latin.
+    kana = "".join(chr(code) for code in (0x30A2, 0x30CB, 0x30E1))
+    index = {"2001": [_Item("some-other-film", 100.0)]}
+    result = match_film(_cand(title=kana, year=2001, language="ja", runtime=100.0), index, _runtime)
+    assert result.status == "none"
+    assert result.item is None
+
+
 def test_candidates_sharing_a_key_are_flagged() -> None:
     a = Candidate(1, "Don", 2006, "hi", 170.0)
     b = Candidate(2, "Don", 2006, "hi", 120.0)
