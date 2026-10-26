@@ -147,27 +147,24 @@ What we did:       Data layer (FEATURE-004), posters/meta API, /discover + /face
                    optional onboarding, How it works from eval.json), the REAL build into
                    artifacts/v2 (11,065 films, 1.72M reviews, manifest 123a0a7f5da2), and
                    browser checks at 375 and 1440 px (zero console errors). docs/DATASET.md is
-                   the inventory; D-016..D-018 record the decisions. 397 tests.
-What's left:       1) Demographic prior (needs approval to download MovieLens-1M, ~6 MB):
-                   ship it ON only if it beats no-demographics on held-out ML-1M users beyond
-                   the spread, else OFF (Facets.demographics_enabled is not implemented yet;
-                   the sex question stays hidden until it is). 2) Print the recency cost and
-                   the "cold-start top 20 mostly 2000+" check into eval.json. 3) Replace stale
-                   figures (4,164 films, 2,355, "mostly before 2012", "no posters") in README
-                   and other docs. 4) D-017: retrain polarity on mixed sources? 5) Point the
-                   default server at artifacts/v2 (port 8000 may still serve the old build).
-                   6) Constitution section 6 self-revision passes.
+                   the inventory; D-016..D-020 record the decisions. 409 tests.
+What's left:       1) Decide whether to lower the under-25 default "how new" from 80% to about
+                   50% (D-020: 80% costs 2.5 points of hit@20, 50% costs nothing). 2) D-017:
+                   retrain polarity on mixed sources? 3) Fix or retire the Docker job and CI
+                   (still describe the older build). 4) Constitution section 6 self-revision
+                   passes. Done this session: demographics tested and shipped OFF (D-019),
+                   recency cost measured (D-020), stale figures replaced, default server
+                   points at artifacts/v2, static files revalidate.
 Watch out for:     The hybrid is slightly WORSE than similar-taste alone (D-018); do not claim
                    the aspects raise hit rate. Hindi: only 72 films link to RT, reviews come
                    from ebD; few Hindi films have MovieLens ratings. The TMDB token was pasted
-                   into chat on 2026-10-25: regenerate it. Static files are served without a
-                   cache-busting name, so a browser can run stale JS after a deploy. Junk 0-byte
+                   into chat on 2026-10-25: regenerate it. Junk 0-byte
                    files appear at the repo root: sweep with git status. 9.7 GB of Amazon files
                    in Data/raw/amazon2023 were deleted on 2026-10-26 at Pranav's request.
                    Teammate onboarding: README "Set up on a new machine". The served build
-                   (artifacts/v2, manifest 2ef0f79b1034) is NOT in git: it travels as
-                   cinewhy-artifacts-v2.zip (365 MB, SHA-256 9879A3CB...512C). MovieLens-1M
-                   download is still pending (GroupLens site was down).
+                   (artifacts/v2, manifest 38722c0129d3) is NOT in git: it travels as
+                   cinewhy-artifacts-v2.zip (365 MB, SHA-256 0FE7698E...9DAE). MovieLens-1M is
+                   in Data/raw/ml1m (grouplens.org DNS failed; files.grouplens.org works).
 
 Session date:      2026-10-25 (session "nlp 1", continued)
 Model:             Claude Sonnet 5.5

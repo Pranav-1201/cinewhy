@@ -96,7 +96,7 @@ anything fails on a fresh clone, stop and tell Pranav before changing anything.
 ### 5. Get the ready-made build and run the site
 
 Ask Pranav for **`cinewhy-artifacts-v2.zip`** (365 MB, SHA-256
-`9879A3CBA169B771EBDF9FF1A160D352F2A350CB3315B7BF1D147F539437512C`; check it with
+`0FE7698EFA12B808A40987E2AA25CABF8E1FA19D19C29105288427DE1AE49DAE`; check it with
 `certutil -hashfile cinewhy-artifacts-v2.zip SHA256`). Unzip it **into** `artifacts\v2\` so that
 this file exists: `artifacts\v2\manifest.json`. The folder `artifacts\` is git-ignored, so it never
 gets committed. Then:
@@ -249,7 +249,7 @@ All numbers come from `artifacts/v2/eval.json`. Intervals are 95%.
 | Clause polarity sign on the mentions it finds (two clean random samples pooled) | 82.5%, 66 of 80. |
 | Sliders steer results the way they are labelled | Pushing any slider to 100% raises that aspect's average score in the top 20 by +0.17 to +0.37. This checks direction only, not that stated preferences predict enjoyment. |
 | Recommender hit-rate@20 (2,000 held-out users, 11,065 films) | Popularity 8.3% [7.2, 9.6]; **collaborative filtering 20.1% [18.3, 21.9]**; aspect fit alone 5.5% [4.5, 6.6]; hybrid shown in the UI 18.9% [17.1, 20.6]. |
-| Does "how new" do what it says? | With nothing known about the visitor, 6 of the first 20 films are from 2000 on at no preference, 18 at the default (50%) and 20 at 80%. See `eval.json` `recency` for the cost in hit rate. |
+| Does "how new" do what it says? | With nothing known about the visitor, 6 of the first 20 films are from 2000 on at no preference, 18 at the default (50%) and 20 at 80%. Cost in held-out hit rate@20 against the hybrid without it: +1.5 points at 25%, no measurable change at 50% (+0.9 [-0.2, 2.0]), **-2.5 at 80%** and **-6.3 at 100%** (`docs/DECISIONS.md` D-020). |
 
 **Read these honestly.**
 

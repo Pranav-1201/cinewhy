@@ -471,3 +471,26 @@ interface defaults the visitor can change, not predictions.
 **Limits of the test.** ML-1M has no location (only a US zip code), so region could not be tested
 at all; its users joined in 2000 and rated until 2003, so even a positive result would describe
 people from that era; and it measures genre taste only.
+
+## D-020: the "how new" lift is free up to 50% and costs hit rate above that (2026-10-26, Sonnet 5.5)
+
+`python -m cinewhy.recsys.recency_check` re-ran the held-out protocol (2,000 test users, same split;
+it reproduces the `recommender` block exactly) with the live `recency_lift` added to the hybrid.
+Change in hit@20 against the hybrid without the lift, mean [95% paired interval]:
+
+| How new | Change in hit@20 |
+|---|---|
+| 25% | +1.45 points [+0.65, +2.30] |
+| 50% (default) | +0.90 points [-0.20, +2.00], no measurable difference |
+| 80% (default for under 25s) | -2.50 points [-3.90, -1.10] |
+| 100% | -6.25 points [-7.70, -4.75] |
+
+Baseline hybrid 18.85% [17.05, 20.65]. First-page mix for an unknown visitor (same file, `cold_start`):
+6 of 20 films from 2000 on at no preference, 13 at 25%, 18 at 50%, 20 at 80% and 100%.
+**Decision.** Keep the lift and the age-based defaults, because recency is what the user asked for
+and the cost of 80% is a visible, stated number, not a hidden one. The *How it works* page prints
+the table, so a visitor choosing 100% can see what it costs. **Open:** lowering the under-25 default
+from 80% to about 50% would keep an 18-of-20 recent first page at no measured cost; not changed
+without Pranav's say. **Caveat:** the evaluated hybrid ranks with MovieLens popularity, not the IMDb
+scores the live list uses, and MovieLens users rated films of every year, so this is the cost for
+people who rate old and new films alike.

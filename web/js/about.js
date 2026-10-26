@@ -114,7 +114,7 @@ function recencyCard(e) {
     String(row.median_year),
   ]);
   const cost = r.cost;
-  const costRows = cost ? Object.values(cost.settings).map((s) => {
+  const costRows = cost ? Object.values(cost.settings).sort((a, b) => a.recency - b.recency).map((s) => {
     const d = s.vs_hybrid?.[20];
     return d ? [pct(s.recency, 0), interval(s.hit_rate[20]), diff(d)] : null;
   }).filter(Boolean) : [];
@@ -123,7 +123,7 @@ function recencyCard(e) {
     table(["How new", "From 2000 on", "From 2012 on", "Median year"], rows),
     costRows.length ? h("p", { text: "What it costs: for held-out MovieLens users, how often a film they liked stays in the top 20 when the newer-film lift is added." }) : null,
     costRows.length ? table(["How new", "Hit rate at 20", "Change [95% interval]"], costRows) : null,
-    h("p", { class: "note", text: r.note || "" }));
+    h("p", { class: "note", text: (r.note || "").replaceAll("`", "") }));
 }
 
 function limitsCard(e) {
