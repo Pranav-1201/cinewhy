@@ -61,7 +61,9 @@ def _toy_polarity(path: Path) -> None:
     PolarityModel(vectorizer, classifier).save(path)
 
 
-def _build(tmp_path: Path, *, wrong_tmdb_id_for: int | None = None) -> Path:
+def _build(
+    tmp_path: Path, *, wrong_tmdb_id_for: int | None = None, cache_file: Path | None = None
+) -> Path:
     tmdb = [tmdb_row(k + 1, 100 + k, _TITLES[k], 2005 + k % 8) for k in range(N_TMDB)]
     ebd = [
         (
@@ -96,7 +98,13 @@ def _build(tmp_path: Path, *, wrong_tmdb_id_for: int | None = None) -> Path:
     out.mkdir()
     _toy_polarity(out / "polarity.joblib")
     config = BuildConfig(
-        sources=sources, ml_archive=ml, out_dir=out, gold_dir=gold, min_reviews=3, seed=7
+        sources=sources,
+        cache_file=cache_file,
+        ml_archive=ml,
+        out_dir=out,
+        gold_dir=gold,
+        min_reviews=3,
+        seed=7,
     )
     build_artifacts(config)
     return out
@@ -131,6 +139,24 @@ def test_rating_counts_land_on_the_right_films(tmp_path: Path) -> None:
     for film in range(UNRATED):
         assert meta[f"cw-{100 + film:07d}"]["rating_count"] == expected[film]
     assert meta["cw-0000113"]["rating_count"] == 0
+
+
+def test_the_build_writes_a_gather_cache_when_asked_and_not_otherwise(tmp_path: Path) -> None:
+    uncached = tmp_path / "uncached"
+    uncached.mkdir()
+    _build(uncached)
+    assert not list(uncached.rglob("*.jsonl"))
+    cached = tmp_path / "cached"
+    cached.mkdir()
+    cache_file = cached / "gathered.jsonl"
+    _build(cached, cache_file=cache_file)
+    assert cache_file.is_file()
+    # A second build served from the cache must produce the same catalogue.
+    again = tmp_path / "again"
+    again.mkdir()
+    out = _build(again, cache_file=cache_file)
+    first = json.loads((cached / "artifacts" / "meta.json").read_text(encoding="utf-8"))
+    assert json.loads((out / "meta.json").read_text(encoding="utf-8")) == first
 
 
 def test_a_disagreement_between_movielens_and_tmdb_ids_is_counted(tmp_path: Path) -> None:

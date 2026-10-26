@@ -36,7 +36,7 @@ from cinewhy.absa.extract import build_profile
 from cinewhy.absa.gold import evaluate_gold, evaluate_random, load_gold, load_random_gold
 from cinewhy.absa.polarity import PolarityModel
 from cinewhy.artifacts.manifest import build as build_manifest
-from cinewhy.data.catalogue_sources import SourcePaths, gather
+from cinewhy.data.catalogue_sources import SourcePaths, gather, gather_cached
 from cinewhy.data.sources import load_movielens_links, load_ratings
 from cinewhy.data.spine import SpineFilm
 from cinewhy.recsys.catalogue import Catalogue, FilmStats, write_catalogue
@@ -65,6 +65,9 @@ class BuildConfig:
     """Where inputs live and how selective the catalogue is."""
 
     sources: SourcePaths = field(default_factory=SourcePaths)
+    # Where the 25-minute gather step keeps its result between runs. None means no cache, which
+    # is what tests want; the command line turns it on (see `main`).
+    cache_file: Path | None = None
     ml_archive: Path = Path("Data/raw/ml32m/ml-32m.zip")
     # MovieLens names the folder inside its zip after the release.
     ml_prefix: str = "ml-32m"
@@ -225,7 +228,10 @@ def build_artifacts(config: BuildConfig) -> ArtifactManifest:
     out.mkdir(parents=True, exist_ok=True)
 
     _log("gathering films and reviews from TMDB, aclImdb, Rotten Tomatoes and ebD")
-    gathered = gather(config.sources, on_progress=_log)
+    if config.cache_file is None:
+        gathered = gather(config.sources, on_progress=_log)
+    else:
+        gathered = gather_cached(config.sources, config.cache_file, on_progress=_log)
     chosen = select_films(gathered.films, gathered.reviews, config.min_reviews)
     imdb_ids = [f.imdb_id for f in chosen]
     films = {f.imdb_id: f for f in chosen}
@@ -420,12 +426,21 @@ def main() -> None:
     parser.add_argument("--ml", type=Path, default=defaults.ml_archive)
     parser.add_argument("--out", type=Path, default=defaults.out_dir)
     parser.add_argument("--min-reviews", type=int, default=defaults.min_reviews)
+    parser.add_argument(
+        "--cache",
+        type=Path,
+        default=Path("Data/raw/_cache/gathered.jsonl"),
+        help="where the gather step keeps its result (gitignored); reused while the dumps and "
+        "the gather logic are unchanged",
+    )
+    parser.add_argument("--no-cache", action="store_true", help="always re-read the dumps")
     args = parser.parse_args()
     build_artifacts(
         BuildConfig(
             sources=SourcePaths(
                 tmdb_csv=args.tmdb, rt_zip=args.rt, ebd_zip=args.ebd, acl_archive=args.acl
             ),
+            cache_file=None if args.no_cache else args.cache,
             ml_archive=args.ml,
             out_dir=args.out,
             min_reviews=args.min_reviews,

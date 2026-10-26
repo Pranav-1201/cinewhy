@@ -15,9 +15,10 @@ Merging keeps three guarantees the product relies on:
 from __future__ import annotations
 
 import hashlib
+import json
 from collections import Counter, defaultdict
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
@@ -71,6 +72,98 @@ class Gathered:
 
 def _silent(_message: str) -> None:
     return None
+
+
+# Bump when selection, linking, cleaning or merging changes: a cache written by older logic
+# would otherwise hide the change behind stale data.
+GATHER_VERSION = 1
+
+
+def _cache_key(paths: SourcePaths, cap: int) -> dict[str, Any]:
+    """Everything the gathered result depends on: logic version, cap, and each dump's identity."""
+    files: dict[str, list[int]] = {}
+    for name, path in (
+        ("tmdb", paths.tmdb_csv),
+        ("rt", paths.rt_zip),
+        ("ebd", paths.ebd_zip),
+        ("acl", paths.acl_archive),
+    ):
+        stat = path.stat()
+        files[name] = [stat.st_size, stat.st_mtime_ns]
+    return {"version": GATHER_VERSION, "cap": cap, "files": files}
+
+
+def _write_cache(cache_file: Path, key: dict[str, Any], gathered: Gathered) -> None:
+    """Write JSON lines: a header (key, films, links, report), then one line per film.
+
+    One line per film keeps memory flat for about half a gigabyte of review text, and writing to
+    a temporary file first means a crash mid-write never leaves a cache that looks complete.
+    """
+    cache_file.parent.mkdir(parents=True, exist_ok=True)
+    header = {
+        "key": key,
+        "films": [asdict(f) for f in gathered.films],
+        "rt_url": {str(imdb): url for imdb, url in gathered.rt_url.items()},
+        "report": gathered.report,
+        "entries": len(gathered.reviews),
+    }
+    temporary = cache_file.with_suffix(".tmp")
+    with temporary.open("w", encoding="utf-8") as handle:
+        handle.write(json.dumps(header, ensure_ascii=False) + "\n")
+        for imdb_id, reviews in gathered.reviews.items():
+            handle.write(json.dumps({"imdb": imdb_id, "reviews": reviews}, ensure_ascii=False))
+            handle.write("\n")
+    temporary.replace(cache_file)
+
+
+def _read_cache(cache_file: Path, key: dict[str, Any]) -> Gathered | None:
+    """The cached result, or None when it is absent, for other inputs, or damaged."""
+    if not cache_file.is_file():
+        return None
+    try:
+        with cache_file.open(encoding="utf-8") as handle:
+            header = json.loads(handle.readline())
+            if header["key"] != key:
+                return None
+            reviews: dict[int, list[tuple[str, str]]] = {}
+            for line in handle:
+                entry = json.loads(line)
+                reviews[int(entry["imdb"])] = [(r[0], r[1]) for r in entry["reviews"]]
+            if len(reviews) != header["entries"]:
+                return None
+            films = tuple(SpineFilm(**{**f, "genres": tuple(f["genres"])}) for f in header["films"])
+            rt_url = {int(imdb): url for imdb, url in header["rt_url"].items()}
+            return Gathered(films, reviews, rt_url, header["report"])
+    except (json.JSONDecodeError, KeyError, TypeError, ValueError, IndexError):
+        return None
+
+
+def gather_cached(
+    paths: SourcePaths,
+    cache_file: Path,
+    *,
+    cap: int = MAX_REVIEWS_PER_SOURCE,
+    on_progress: Callable[[str], None] = _silent,
+) -> Gathered:
+    """`gather`, reusing a cached result when nothing it depends on has changed.
+
+    Args:
+        paths: Locations of the four dumps.
+        cache_file: Where the result is kept between runs.
+        cap: Most reviews kept per film per source.
+        on_progress: Called with a status line at each stage.
+
+    Returns:
+        The same result `gather` would return.
+    """
+    key = _cache_key(paths, cap)
+    cached = _read_cache(cache_file, key)
+    if cached is not None:
+        on_progress(f"using the cached gather result at {cache_file}")
+        return cached
+    gathered = gather(paths, cap=cap, on_progress=on_progress)
+    _write_cache(cache_file, key, gathered)
+    return gathered
 
 
 def _claim_rt_film(
