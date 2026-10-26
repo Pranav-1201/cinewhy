@@ -36,12 +36,15 @@ Branch `feature/roadmap-v4`, worktree `D:\NLPPROJECT-dev`, local only, never pus
 * Official IMDb dumps downloaded and measured (roadmap section 17): recent films and series are plentiful; only
   25 titles with 1,000+ votes are flagged adult.
 
+## Measured since (roadmap section 18, DECISIONS D-026)
+* spine_reach: at 50 reviews Hindi+Telugu 355, Japanese 147, French 171 (targets 7,500 / 5,000 / 2,500): Tier B for those.
+* title_join_lift: original-title matching helps French only (+2,778 ebD links); `film_key` guard added (`8c32296`).
+* TMDB reviews pilot: 0 of 65 films reach 50 reviews; not a source for full receipts.
+* confidence weighting: no gain (D-026); not shipped.
+* Pranav accepted the language targets as unreachable for now, and asked for adult titles by both the explicit flag and mature ratings.
+
 ## Now
-* Running in the background: `experiments/spine_reach.py` (widened film list, counts films reaching 5/20/50 reviews
-  per language and era from the dumps already on disk). Result file:
-  `C:/Users/Dell/AppData/Local/Temp/claude/D--NLPPROJECT/33717dde-bb2b-4de8-b656-cb441c7b62e6/scratchpad/spine_reach.json`.
-  If the session was interrupted, rerun: `python -u experiments/spine_reach.py --root D:/NLPPROJECT --out spine_reach.json`.
-* Dev server on port 8010 is STOPPED to free memory; restart with `CINEWHY_ARTIFACTS=D:/NLPPROJECT/artifacts/v3`
+* Nothing running. Dev server on port 8010 is STOPPED to free memory; restart with `CINEWHY_ARTIFACTS=D:/NLPPROJECT/artifacts/v3`
   `python -m uvicorn api.main:app --port 8010` from `D:\NLPPROJECT-dev`. The demo on 8000 is untouched.
 
 ## Next (in order)

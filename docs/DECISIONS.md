@@ -588,3 +588,18 @@ perhaps a third to a half of the films they have seen, and offers "Show me more 
 are heavier raters than a typical newcomer, so read the curve for its shape, not as the rate a new
 visitor will see. The deck is chosen for variety, not for films a person has probably seen; choosing
 films people are likely to know would raise the number of useful answers per card and is untested.
+
+## D-026: do not weight films by review count (2026-10-27, Sonnet 5.5)
+
+Pranav's idea: films with few reviews should count for less, so thin evidence cannot lift a film.
+`experiments/confidence_weight.py` multiplies each film's hybrid score by n/(n+k), n being its review
+count, under the D-018 protocol. The rule was fixed before looking: k chosen among 10, 50, 200 on
+1,000 validation cases, adopted only if it beat no weighting by more than one standard error. Validation
+hit-at-20: **none 0.192; k=10 0.197; k=50 0.189; k=200 0.180**; standard error 0.012, so the best
+gain (+0.005) is inside it and **no weighting was chosen**. Test (2,000 cases, read once), paired
+difference from unweighted with 95% interval: k=10 +0.001 [-0.003, +0.005]; k=50 +0.0005 [-0.0055,
++0.007]; k=200 -0.004 [-0.0125, +0.004]. Unweighted test hit-at-20 is 0.190. **Decision.** Do not ship
+it. **Limit.** Test users can only be scored on films that have MovieLens ratings, so this shows the
+weighting does not help (and at k=200 may hurt) among rated films. It cannot say whether it would
+protect users from films that have reviews but no ratings, which is the Tier B case; there the
+honest label and the 50-review / 200-vote floors do that job.
