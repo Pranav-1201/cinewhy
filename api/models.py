@@ -7,9 +7,11 @@ review analysis), so changing them never touches the ranker or the ABSA pipeline
 
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict, Field
+from typing import Annotated, Literal
 
-from cinewhy.schemas import Aspect, EvidenceSentence, Movie, Polarity
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints
+
+from cinewhy.schemas import Aspect, EvidenceSentence, Movie, Polarity, TasteProfile
 
 # What the UI shows next to each slider and bar. One definition, served at /aspects, so the
 # frontend never carries its own copy that could drift from the enum.
@@ -62,6 +64,33 @@ class MovieDetail(_Out):
     rt_url: str | None = None
     # How many of the film's reviews each source (acl, ebd, rt) contributed.
     reviews_by_source: dict[str, int] = Field(default_factory=dict)
+
+
+class DiscoverRequest(BaseModel):
+    """A discovery request from a browser, so every field is bounded."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    profile: TasteProfile = Field(default_factory=TasteProfile)
+    limit: int = Field(default=20, ge=1, le=100)
+    # 0 = no preference for new films, 1 = the strongest lift the ranker allows.
+    recency: float = Field(default=0.5, ge=0.0, le=1.0)
+    languages: tuple[Literal["en", "hi"], ...] = Field(default=(), max_length=2)
+    genres: tuple[Annotated[str, StringConstraints(max_length=40)], ...] = Field(
+        default=(), max_length=10
+    )
+    from_year: int | None = Field(default=None, ge=1880, le=2100)
+    exclude_movie_ids: tuple[str, ...] = Field(default=(), max_length=500)
+
+
+class Facets(_Out):
+    """Counts the UI shows next to its filters."""
+
+    films: int
+    languages: dict[str, int]
+    genres: dict[str, int]
+    oldest_year: int | None
+    newest_year: int | None
 
 
 class AnalyzeRequest(BaseModel):

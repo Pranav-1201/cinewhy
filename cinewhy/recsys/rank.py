@@ -194,6 +194,10 @@ def _reasons(
     )
 
 
+# Public name for the reasons builder, so `cinewhy.recsys.discover` does not import a private one.
+reasons_for = _reasons
+
+
 def popular(catalogue: Catalogue, excluded: set[str], limit: int) -> tuple[Recommendation, ...]:
     """Most-liked films by Bayesian mean rating, labelled as the fallback they are."""
     order = sorted(range(len(catalogue.movies)), key=lambda i: (-catalogue.stats[i].bayes_mean, i))

@@ -40,7 +40,9 @@ from api.models import (
     AspectMention,
     AspectSummary,
     ClauseAnalysis,
+    DiscoverRequest,
     ErrorResponse,
+    Facets,
     MovieDetail,
     SentenceAnalysis,
 )
@@ -53,8 +55,9 @@ from cinewhy.absa.extract import (
 )
 from cinewhy.absa.polarity import PolarityModel
 from cinewhy.artifacts.manifest import load_manifest, verify
-from cinewhy.recsys import rank
+from cinewhy.recsys import discover, rank
 from cinewhy.recsys.catalogue import Catalogue, load_catalogue
+from cinewhy.recsys.discover import DiscoverResult
 from cinewhy.schemas import (
     ArtifactManifest,
     Aspect,
@@ -236,6 +239,31 @@ def recommend(request: RecommendRequest) -> RecommendResponse:
     return rank.recommend(state.catalogue, request, state.manifest.manifest_hash)
 
 
+def discover_films(request: DiscoverRequest) -> DiscoverResult:
+    """Discovery list: what is worth watching now, with a say over era, language and genre.
+
+    Deterministic, like `recommend`. See `cinewhy.recsys.discover` for what the ranking does and
+    why filters narrow the list but never the catalogue.
+    """
+    state = _loaded()
+    return discover.discover(
+        state.catalogue,
+        request.profile,
+        limit=request.limit,
+        recency=request.recency,
+        languages=request.languages,
+        genres=request.genres,
+        from_year=request.from_year,
+        exclude=request.exclude_movie_ids,
+        manifest=state.manifest.manifest_hash,
+    )
+
+
+def facets() -> Facets:
+    """Counts for the UI's filters: films per language and genre, and the year range."""
+    return Facets.model_validate(discover.catalogue_facets(_loaded().catalogue))
+
+
 def analyze(request: AnalyzeRequest) -> AnalyzeResponse:
     """Break a pasted review into clauses, aspects and polarities.
 
@@ -369,6 +397,14 @@ def create_app(artifacts: Path | None = None, *, rate_limit: int = _RATE_LIMIT) 
     @app.post("/recommend")
     def recommend_route(request: RecommendRequest) -> RecommendResponse:
         return recommend(request)
+
+    @app.post("/discover")
+    def discover_route(request: DiscoverRequest) -> DiscoverResult:
+        return discover_films(request)
+
+    @app.get("/facets")
+    def facets_route() -> Facets:
+        return facets()
 
     @app.post("/analyze")
     def analyze_route(request: AnalyzeRequest) -> AnalyzeResponse:
