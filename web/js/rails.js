@@ -6,7 +6,7 @@ import { api, post } from "./api.js";
 import { $, clear, h, icon, reducedMotion } from "./dom.js";
 import { clamp, eraRange, languageName, runtimeLabel } from "./format.js";
 import { linesFromAspects, receipt } from "./receipt.js";
-import { profileForApi, state } from "./state.js";
+import { excludedIds, profileForApi, state } from "./state.js";
 import { poster, tile } from "./tile.js";
 import { hueOf } from "./format.js";
 
@@ -22,6 +22,8 @@ function shared(facets) {
   const req = { recency: state.recency, profile: profileForApi() };
   if (state.languages.length) req.languages = state.languages;
   if (state.genres.length) req.genres = state.genres;
+  const watched = excludedIds(); // films the visitor has seen are left out unless they chose to see them
+  if (watched.length) req.exclude_movie_ids = watched;
   return { ...req, ...eraRange(state.era, facets.newest_year) };
 }
 

@@ -105,7 +105,8 @@ class TestPolicy:
         assert client.post("/recommend", json={"profile": {}, "offset": 3}).status_code == 422
 
     def test_oversized_body_is_refused_before_parsing(self, client: TestClient) -> None:
-        big = {"profile": {"liked_movie_ids": ["cw-1"] * 20000}}
+        # about 280 KB, over the 160 KB cap
+        big = {"profile": {"liked_movie_ids": ["cw-1"] * 40000}}
         assert client.post("/recommend", json=big).status_code == 413
 
     def test_security_headers_are_set(self, client: TestClient) -> None:

@@ -81,7 +81,9 @@ class DiscoverRequest(BaseModel):
     )
     from_year: int | None = Field(default=None, ge=1880, le=2100)
     to_year: int | None = Field(default=None, ge=1880, le=2100)
-    exclude_movie_ids: tuple[str, ...] = Field(default=(), max_length=500)
+    # Watched films travel here. The browser caps each of its lists at 3,000 (web/js/profile.js
+    # LIST_CAP); this must not be lower, or a long watched list would turn every shelf into a 422.
+    exclude_movie_ids: tuple[str, ...] = Field(default=(), max_length=3000)
 
 
 class Facets(_Out):

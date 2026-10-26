@@ -70,7 +70,9 @@ from cinewhy.schemas import (
 
 log = logging.getLogger("cinewhy.api")
 
-_MAX_BODY_BYTES = 64 * 1024  # a taste profile is a few hundred bytes; this is generous
+# A taste profile is a few hundred bytes, but a long library sends up to 3,000 liked, disliked and
+# watched ids (about 13 bytes each, so about 120 KB at the extreme); this leaves room for that.
+_MAX_BODY_BYTES = 160 * 1024
 _RATE_WINDOW_SECONDS = 60.0
 _RATE_LIMIT = 120  # POSTs per client per window; POST is where the real work happens
 _SEARCH_LIMIT_MAX = 50
