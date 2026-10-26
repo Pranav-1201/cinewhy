@@ -35,8 +35,12 @@ export function receipt({ title, lines, bySource, maxQuotes = 2, animate = true,
     "article", { class: `receipt${animate ? " unfurl" : ""}`, "aria-label": `Review evidence for ${title}` },
     h("h3", { text: heading }),
     h("p", { class: "sub", text: reviewsLine(bySource) }));
+  // One sentence often evidences two aspects; show it once and give the other line a different one.
+  const shown = new Set();
   for (const line of lines) {
     const name = labelOf(line.aspect);
+    const fresh = line.quotes.filter((q) => !shown.has(q.text)).slice(0, maxQuotes);
+    fresh.forEach((q) => shown.add(q.text));
     el.append(
       h("div", { class: "line" },
         h("span", { text: line.weight > 0 ? `${name}, which you care about` : name }),
@@ -44,7 +48,7 @@ export function receipt({ title, lines, bySource, maxQuotes = 2, animate = true,
         h("span", { class: "value" }, signed(line.score),
           line.support ? h("span", { class: "support", text: ` (${line.support.toLocaleString("en")} sentences)` }) : null)),
       bar(name, line.score),
-      ...line.quotes.slice(0, maxQuotes).map(quote));
+      ...fresh.map(quote));
   }
   el.append(h("div", { class: "scale", "aria-hidden": "true" }, h("span", { text: "Criticism" }), h("span", { text: "Praise" })));
   return el;

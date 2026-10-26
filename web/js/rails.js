@@ -7,7 +7,7 @@ import { $, clear, h, icon, reducedMotion } from "./dom.js";
 import { clamp, eraRange, languageName, runtimeLabel } from "./format.js";
 import { linesFromAspects, receipt } from "./receipt.js";
 import { profileForApi, state } from "./state.js";
-import { poster, sampleHue, tile } from "./tile.js";
+import { poster, tile } from "./tile.js";
 import { hueOf } from "./format.js";
 
 let sequence = 0;
@@ -84,10 +84,6 @@ async function spotlight(item, open) {
       h("div", { class: "actions" }, h("button", { class: "btn primary", type: "button", onclick: () => open(m.movie_id), text: "See all the receipts" })),
       lines.length ? h("div", { class: "receipts" }, receipt({ title: m.title, lines, bySource: d.reviews_by_source, maxQuotes: 1, heading: "Why tonight's pick" })) : null));
   root.replaceChildren(section);
-  if (m.poster_url) {
-    const hue = await sampleHue(m.poster_url);
-    if (hue !== null && section.isConnected) section.style.setProperty("--tint", String(hue));
-  }
 }
 
 /** Fetch every shelf and draw it. Safe to call again at any time. */

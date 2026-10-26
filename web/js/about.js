@@ -32,7 +32,7 @@ function builtFrom(e) {
   return h("div", { class: "how-card" }, h("h3", { text: "What it is built from" }),
     h("p", { text: `${c.films.toLocaleString("en")} films, ${c.reviews?.toLocaleString("en") ?? "many"} reviews read, ${c.evidence_sentences?.toLocaleString("en") ?? "many"} sentences chosen as quotable.` }),
     rows.length ? table(["Films by", ...eras.map(([, t]) => t)], rows) : null,
-    has(c.films_with_ratings) ? h("p", { text: `${c.films_with_ratings.toLocaleString("en")} of ${c.films.toLocaleString("en")} films have any MovieLens rating. The rest, most Hindi films among them, are placed by their reviews and IMDb scores instead of by viewers with similar taste.` }) : null,
+    has(c.films_with_ratings) ? h("p", { text: `${c.films_with_ratings.toLocaleString("en")} of ${c.films.toLocaleString("en")} films have any MovieLens rating. The rest are placed by their reviews and IMDb scores instead of by viewers with similar taste.` }) : null,
     e.sources?.reviews ? h("p", { class: "note", text: e.sources.reviews }) : null);
 }
 
@@ -76,7 +76,7 @@ function aspectCard(e) {
       ["Flagged mentions that are really about that aspect", prop(clean.detector_precision)],
       ["Praise or criticism read correctly" + (pooled ? " (two samples pooled)" : ""), prop(pooled ? pooled.polarity_accuracy : clean.polarity_accuracy)],
     ]),
-    h("p", { class: "callout", text: "Read this plainly: the aspect finder misses about half of what reviewers say about an aspect, and some of what it flags is not really about it. The scores and quotes you see are a sample of what was said, not all of it." }),
+    h("p", { class: "callout", text: `Read this plainly: the aspect finder found ${pct(clean.detector_recall.hits / clean.detector_recall.n, 0)} of the real mentions, and ${pct(1 - clean.detector_precision.hits / clean.detector_precision.n, 0)} of what it flagged was not really about that aspect. The scores and quotes you see are a sample of what was said, not all of it.` }),
     e.gold_note ? h("p", { class: "note", text: e.gold_note }) : null);
 }
 
@@ -108,7 +108,8 @@ function limitsCard(e) {
   const items = [];
   if (has(c.films_with_ratings) && has(c.films)) items.push(`${(c.films - c.films_with_ratings).toLocaleString("en")} films have no MovieLens ratings, so they have no “viewers like you” signal.`);
   items.push("Aspect scores come from the reviews we could match to each film. Treat them as hints, not verdicts.");
-  items.push("The aspect finder is a word list: it misses about half of real mentions on fresh text.");
+  const rc = e.random_gold?.c?.detector_recall;
+  if (rc?.n) items.push(`The aspect finder is a word list: on fresh text it found ${pct(rc.hits / rc.n, 0)} of real mentions.`);
   items.push("Quality labels for aspect tests were written by the assistant that built the system, not by independent annotators.");
   items.push("Dial settings you choose cannot be validated offline: there is no ground truth for stated preferences.");
   return h("div", { class: "how-card" }, h("h3", { text: "Limits you should know about" }), h("ul", {}, items.map((t) => h("li", { text: t }))));

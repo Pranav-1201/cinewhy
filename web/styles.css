@@ -282,6 +282,7 @@ input[type="range"] { width: 100%; height: 28px; background: none; accent-color:
 textarea { width: 100%; min-height: 120px; resize: vertical; padding: 12px 14px; border-radius: 14px; border: 1px solid var(--line); background: var(--surface); color: var(--text); font: inherit; }
 textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .btn[aria-pressed="true"] { background: var(--like); color: var(--like-ink); border-color: transparent; font-weight: 700; }
+a.btn { text-decoration: none; }
 .skeleton.tall { height: 360px; border-radius: 18px; }
 .analysis { margin-top: 18px; display: grid; gap: 14px; }
 .analysis-text { line-height: 2; max-width: 64ch; }
@@ -307,8 +308,9 @@ footer { padding: 28px var(--gutter) 48px; color: var(--muted); font-size: 0.85r
 @media (max-width: 640px) {
   .bar { flex-wrap: wrap; gap: 10px; }
   .search { order: 3; flex-basis: 100%; max-width: none; margin-left: 0; }
-  .bar-actions { margin-left: auto; }
-  .btn.text-btn { display: none; }
+  .bar-actions { order: 4; flex-basis: 100%; margin-left: 0; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+  .bar-actions > * { flex: none; }
+  .btn.text-btn { min-height: 40px; padding: 0 14px; font-size: 0.9rem; }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
