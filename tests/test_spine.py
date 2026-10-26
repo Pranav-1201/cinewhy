@@ -37,6 +37,9 @@ def _row(
         "poster_path": poster,
         "genres": genres,
         "overview": "A film.",
+        "imdb_rating": "7.4",
+        "imdb_votes": "10069.0",
+        "vote_average": "7.1",
     }
 
 
@@ -112,3 +115,13 @@ def test_fields_are_parsed_and_output_is_sorted_by_imdb_number() -> None:
     assert first.genres == ("Drama", "Romance")
     assert first.year == 2015
     assert first.runtime == 100.0
+
+
+def test_audience_scores_are_read_and_blank_ones_are_zero() -> None:
+    # IMDb's rating and vote count exist for films MovieLens knows nothing about, so they are
+    # the popularity signal that works for every film, Hindi ones included.
+    blank = {**_row(1), "imdb_rating": "", "imdb_votes": "", "vote_average": ""}
+    result = select_spine([_row(2), blank], quota_for=lambda lang, year: 10)
+    by_id = {f.tmdb_id: f for f in result.films}
+    assert (by_id[2].imdb_rating, by_id[2].imdb_votes, by_id[2].vote_average) == (7.4, 10069, 7.1)
+    assert (by_id[1].imdb_rating, by_id[1].imdb_votes, by_id[1].vote_average) == (0.0, 0, 0.0)

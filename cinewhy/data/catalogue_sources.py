@@ -76,7 +76,7 @@ def _silent(_message: str) -> None:
 
 # Bump when selection, linking, cleaning or merging changes: a cache written by older logic
 # would otherwise hide the change behind stale data.
-GATHER_VERSION = 1
+GATHER_VERSION = 2  # 2: films carry imdb_rating, imdb_votes and vote_average
 
 
 def _cache_key(paths: SourcePaths, cap: int) -> dict[str, Any]:

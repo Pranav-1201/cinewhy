@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 
 from cinewhy.build import (
     era_of,
@@ -94,6 +95,11 @@ class TestFilmMeta:
 
     def test_is_json_serialisable(self) -> None:
         json.dumps(film_meta(_film(1), [("rt/a/u", "x")], None, 0))
+
+    def test_carries_the_audience_scores_that_exist_for_every_film(self) -> None:
+        film = replace(_film(7), imdb_rating=8.1, imdb_votes=12345, vote_average=7.9)
+        meta = film_meta(film, [("rt/a/u", "x")], None, 0)
+        assert (meta["imdb_rating"], meta["imdb_votes"], meta["vote_average"]) == (8.1, 12345, 7.9)
 
 
 class TestEra:

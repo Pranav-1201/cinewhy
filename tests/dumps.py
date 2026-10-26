@@ -28,6 +28,9 @@ TMDB_COLUMNS = [
     "poster_path",
     "genres",
     "overview",
+    "imdb_rating",
+    "imdb_votes",
+    "vote_average",
 ]
 
 
@@ -55,6 +58,9 @@ def tmdb_row(
         "poster_path": "/p.jpg",
         "genres": "Crime, Drama",
         "overview": "A film.",
+        "imdb_rating": "7.4",
+        "imdb_votes": "10069.0",
+        "vote_average": "7.1",
     }
 
 

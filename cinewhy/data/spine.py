@@ -41,6 +41,11 @@ class SpineFilm:
     poster_path: str | None
     genres: tuple[str, ...]
     overview: str
+    # Audience scores that exist for every film, unlike MovieLens ratings: IMDb's rating (0-10)
+    # and vote count, and TMDB's own vote average. 0 means the export had none.
+    imdb_rating: float = 0.0
+    imdb_votes: int = 0
+    vote_average: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -91,6 +96,9 @@ def _film(row: Mapping[str, str], imdb_id: int, year: int) -> SpineFilm:
         poster_path=row["poster_path"] or None,
         genres=tuple(g for g in row["genres"].split(", ") if g),
         overview=row["overview"],
+        imdb_rating=_number(row["imdb_rating"]),
+        imdb_votes=int(_number(row["imdb_votes"])),
+        vote_average=_number(row["vote_average"]),
     )
 
 
