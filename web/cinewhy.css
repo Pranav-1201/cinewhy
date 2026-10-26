@@ -211,16 +211,24 @@ button { font: inherit; color: inherit; }
 .tile-title { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; margin-top: 10px; font-weight: 700; line-height: 1.2; }
 .tile-meta { display: block; margin-top: 2px; color: var(--muted); font-size: 0.85rem; }
 .tile-why { display: block; margin-top: 4px; color: var(--accent-text); font-size: 0.82rem; }
-.like {
-  position: absolute; top: 8px; right: 8px; width: 34px; height: 34px; border-radius: 999px; border: 0; cursor: pointer;
+/* Quick answers on a tile: a stack of three round buttons (like, seen it, want to watch). They show
+   on hover and focus, always on touch screens, and stay visible on any tile the visitor has answered. */
+.tile-acts { position: absolute; top: 8px; right: 8px; display: flex; flex-direction: column; gap: 6px; opacity: 0; transition: opacity 120ms ease; }
+.tile:hover .tile-acts, .tile:focus-within .tile-acts, .tile-acts:has([aria-pressed="true"]) { opacity: 1; }
+.tile-act {
+  width: 34px; height: 34px; border-radius: 999px; border: 0; cursor: pointer; padding: 0;
   background: rgb(21 10 39 / 0.72); color: #fff; backdrop-filter: blur(6px); display: grid; place-items: center;
-  opacity: 0; transition: opacity 120ms ease, transform 120ms ease;
+  transition: transform 120ms ease;
 }
-.tile:hover .like, .tile:focus-within .like, .like[aria-pressed="true"] { opacity: 1; }
-.like[aria-pressed="true"] { background: var(--like); color: var(--like-ink); }
-.like svg { width: 18px; height: 18px; fill: currentColor; }
+.tile-act:hover { transform: scale(1.08); }
+.tile-act.like[aria-pressed="true"] { background: var(--like); color: var(--like-ink); }
+.tile-act.seen[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.tile-act.save[aria-pressed="true"] { background: var(--pos); color: #fff; }
+.tile-act svg { width: 18px; height: 18px; flex: none; }
+.tile-act.like svg, .tile-act.save svg { fill: currentColor; }
+.tile-act.seen svg { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .tile .badge.lang { top: 8px; right: 50px; }
-@media (hover: none) { .like { opacity: 1; } }
+@media (hover: none) { .tile-acts { opacity: 1; } }
 
 .empty { margin: 8px var(--gutter) 24px; padding: 28px; border: 1px dashed var(--line); border-radius: 18px; color: var(--text-2); }
 
@@ -345,7 +353,7 @@ footer { padding: 28px var(--gutter) 48px; color: var(--muted); font-size: 0.85r
   *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 }
 @media (forced-colors: active) {
-  .chip[aria-pressed="true"], .like[aria-pressed="true"] { forced-color-adjust: none; outline: 2px solid CanvasText; }
+  .chip[aria-pressed="true"], .tile-act[aria-pressed="true"] { forced-color-adjust: none; outline: 2px solid CanvasText; }
   .dbar .fill.pos { background: Highlight; }
   .dbar .fill.neg { background: LinkText; }
 }
