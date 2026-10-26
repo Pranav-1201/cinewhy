@@ -140,6 +140,30 @@ permanently by `unique_review_indices` and `test_no_review_text_appears_in_both_
 ## Five-line handoff ritual (fill in each session)
 
 ```
+Session date:      2026-10-27 (session "nlp 3"), branch feature/roadmap-v4 in D:\NLPPROJECT-dev
+Model:             Claude Sonnet 5.5
+What we did:       Audit + plan (docs/ROADMAP-2026-10-27.md, section 15 is the final draft), then built on a
+                   LOCAL branch in a separate worktree so the demo in D:\NLPPROJECT stays on main:
+                   runtime-only Dockerfile + CI boot check (A), responsive header and phone bottom bar +
+                   browser tests (B), profile model v3 (watched, want, stars, export/import), Library, Rate
+                   films, Profile sheet, hide-watched toggle, favourite-genre question (C), POST /shelves
+                   (one request, no repeats, similar / explore / new / old school / language / genre
+                   shelves) (D), year-range bar with Old school and New presets, plain-language receipts (E).
+                   DECISIONS D-021..D-024. 466 passed, 1 skipped; ruff and mypy clean.
+What's left:       1) Pranav's OK to PUSH the branch: CI has never run the Docker image build or the
+                   browser job. 2) Data expansion (roadmap F0/F): verify sources, English 2021-26, Hindi/
+                   Telugu, Japanese (anime 5 : movies 3 : live-action 2), French, series; review floor 50
+                   with a ratings-only tier (needs Pranav's OK to use the TMDB key). 3) Measure hit-at-20 by
+                   number of rated films (sets the Rate films deck size). 4) Plain "because you liked X"
+                   reasons need a server field. 5) Region and age shelves are parked. 6) Labelling parked.
+Watch out for:     main is untouched and equals origin/main. Run the suite from D:\NLPPROJECT-dev with the
+                   demo venv's python and PYTHONPATH=D:\NLPPROJECT-dev\.e2e-deps (Playwright lives there);
+                   the new .venv in the dev folder cannot import scikit-learn (Windows Application
+                   Control blocked a DLL), do not use it. Dev server on port 8010 with
+                   CINEWHY_ARTIFACTS=D:\NLPPROJECT\artifacts\v3; the demo is on 8000. Two guard tests were
+                   re-pinned on purpose (D-021). GateGuard denies the first edit of every path: state the
+                   facts and retry the identical call.
+
 Session date:      2026-10-26 (session "nlp 2", final state)
 Model:             Claude Sonnet 5.5
 What we did:       Data layer (FEATURE-004), posters/meta API, /discover + /facets with recency

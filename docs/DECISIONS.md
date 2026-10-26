@@ -513,3 +513,48 @@ Pranav asked for everything outside deployment to be finished; the one test that
 values was updated to the new ones on purpose.) **Caveat:** the evaluated hybrid ranks with MovieLens popularity, not the IMDb
 scores the live list uses, and MovieLens users rated films of every year, so this is the cost for
 people who rate old and new films alike.
+
+## D-021: the profile lives in the browser as one exportable object; accounts come later (2026-10-27, Sonnet 5.5)
+
+**Decision (Pranav, "browser now, accounts later").** Everything a visitor says (likes, not for me,
+watched with optional 1 to 5 stars, want to watch, favourite genres, languages, year range, age and
+region) is one versioned object in `localStorage` (`cinewhy.profile.v3`), with Download and Load as
+a JSON file, so a person can move browsers now and an account can adopt the same shape later. The rules
+(one list per opinion, ratings only for watched films, capped well-formed id lists, migration of the
+v2 key and of the old four era chips) are in `web/js/profile.js` and pinned by 22 Node tests; 11
+planted bugs were each caught. **Limits changed to carry it:** `exclude_movie_ids` 500 to 3,000 and the
+request body 64 KB to 160 KB, because the watched list travels with every shelf request. Two guard
+tests that pinned the old numbers were re-pinned to the new boundary on purpose, with a new test that
+the largest library the browser can send is accepted. **Not decided:** what a star rating is worth to
+the ranker. Today 4 and 5 stars count as a like and 1 and 2 as a dislike (`opinionForStars`); the
+hit-at-20 by number of rated films has not been measured yet.
+
+## D-022: one request returns every shelf, and a short shelf is left out (2026-10-27, Sonnet 5.5)
+
+`POST /shelves` (`cinewhy/recsys/shelves.py`) replaces one `/discover` call per row. `discover()` was
+split into `score_films` (the costly pass) and `select_items` (cheap per shelf) with unchanged behaviour
+(27 existing tests). Shelves in order: picks (spotlight plus 15), similar viewers, explore, new (2021
+on), old school (before 1990), one per language with at least 25 films (English, Hindi, Japanese,
+French), one per top genre. No film is on two shelves; watched, liked and disliked films never appear;
+a shelf under 4 films is not shown. **The language ratio is a catalogue ratio, not an exposure ratio**
+(Pranav's clarification), so there is no language mixer: the mix comes from how many films each
+language has. *Explore* first offered famous but mediocre films under a "well reviewed" heading; it now
+needs the top quarter by shrunk IMDb rating, and its subtitle says popular and well rated. Measured in
+a browser: 13 shelves, 256 films, no repeats, one 76 ms request.
+
+## D-023: receipts say a word, then what it rests on (2026-10-27, Sonnet 5.5)
+
+The signed score is no longer printed. Five words from symmetric bands (Loved at 0.5 and up, Liked at
+0.2, Mixed between, Disliked at minus 0.2, Panned at minus 0.5), the basis in plain words ("Based on 238
+review sentences about acting"), and the raw score in a hover. This changes presentation only: no score
+or ranking changed. **Open:** the bands are a judgement, not a measurement; the true share of positive
+sentences per aspect needs a build change (roadmap B4).
+
+## D-024: the Docker image is runtime-only and CI boots it on synthetic artifacts (2026-10-27, Sonnet 5.5)
+
+The Dockerfile used to fetch `ml-25m.zip` and rebuild the old pipeline; its CI job failed on four
+commits with a certificate error and never described build v3. The image now holds code and web files
+only; artifacts are mounted or downloaded at start and still verified against the manifest.
+`tests/smoke_artifacts.py` writes a six-film verified set, and the CI `docker` job boots the image on it
+and probes `/health`, `/recommend` and the page. **Unverified until the branch is pushed:** Docker is not
+installed here, so the image build has never run; everything else in that job was run locally.
