@@ -3,76 +3,115 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>CineWhy - recommendations with receipts</title>
-  <meta name="description" content="A movie recommender that explains every pick with real review sentences, broken down by aspect.">
+  <meta name="color-scheme" content="dark light">
+  <title>CineWhy: what to watch tonight, with receipts</title>
+  <meta name="description" content="Film picks in English and Hindi, each backed by real review sentences from Rotten Tomatoes and IMDb.">
   <link rel="stylesheet" href="styles.css">
+  <link rel="preload" href="/fonts/bricolage-grotesque-latin-wdth-normal.woff2" as="font" type="font/woff2" crossorigin>
 </head>
 <body>
-  <header class="top">
-    <div class="wrap top-row">
-      <div>
-        <h1>CineWhy</h1>
-        <p class="tagline">Movie picks that show their receipts: the real review sentences behind every score.</p>
-      </div>
-      <p class="build" id="build" title="Hash of the artifact set this server verified at boot">connecting...</p>
+  <a class="skip" href="#main">Skip to the films</a>
+
+  <header class="bar">
+    <a class="brand" href="/" aria-label="CineWhy, home"><span class="brand-mark" aria-hidden="true"></span>CineWhy</a>
+    <form class="search" role="search" id="search-form" autocomplete="off">
+      <label class="sr-only" for="q">Search films by title</label>
+      <input id="q" type="search" placeholder="Search a film" autocomplete="off" aria-controls="results" aria-expanded="false">
+      <ul id="results" class="results" hidden></ul>
+    </form>
+    <div class="bar-actions">
+      <button id="taste-btn" class="btn text-btn" type="button">Your taste</button>
+      <button id="review-btn" class="btn text-btn" type="button">Try a review</button>
+      <button id="about-btn" class="btn text-btn" type="button">How it works</button>
+      <button id="theme-btn" class="btn icon-btn" type="button" aria-label="Switch between dark and light">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5z"/></svg>
+      </button>
     </div>
-    <nav class="wrap tabs" role="tablist" aria-label="Sections">
-      <button role="tab" id="tab-discover" aria-controls="panel-discover" aria-selected="true">Discover</button>
-      <button role="tab" id="tab-analyze" aria-controls="panel-analyze" aria-selected="false">Try a review</button>
-      <button role="tab" id="tab-eval" aria-controls="panel-eval" aria-selected="false">How well does it work?</button>
-    </nav>
   </header>
 
-  <main class="wrap">
-    <section id="panel-discover" role="tabpanel" aria-labelledby="tab-discover" class="discover">
-      <aside class="card taste" aria-label="Your taste">
-        <h2>Your taste</h2>
-        <p class="hint">Move a slider to say what matters to you. Or just like a few films and we infer it.</p>
-        <div id="sliders"></div>
+  <nav class="filters" aria-label="Filters">
+    <div class="chip-group" id="era-chips" role="group" aria-label="Release era"></div>
+    <div class="chip-group" id="lang-chips" role="group" aria-label="Language"></div>
+    <div class="chip-group" id="genre-chips" role="group" aria-label="Genre"></div>
+  </nav>
 
-        <h3>Find films</h3>
-        <label class="sr-only" for="search">Search films by title</label>
-        <input id="search" type="search" placeholder="Search a title, e.g. Matrix" autocomplete="off">
-        <ul id="search-results" class="plain results-list" aria-live="polite"></ul>
-
-        <h3>Your list</h3>
-        <ul id="my-films" class="plain chips"></ul>
-        <button id="reset" class="ghost" type="button">Reset everything</button>
-      </aside>
-
-      <section class="results" aria-live="polite">
-        <div id="rec-banner" class="banner"></div>
-        <ol id="recs" class="plain"></ol>
-      </section>
-    </section>
-
-    <section id="panel-analyze" role="tabpanel" aria-labelledby="tab-analyze" hidden>
-      <div class="card">
-        <h2>Paste a review</h2>
-        <p class="hint">The same pipeline that built the film pages runs on your text: it splits the review into clauses, finds the aspects each one is about, and scores them.</p>
-        <label class="sr-only" for="review-text">Review text</label>
-        <textarea id="review-text" rows="6" maxlength="5000" placeholder="The acting was brilliant, but the pacing dragged and the ending was a letdown."></textarea>
-        <div class="row">
-          <button id="analyze" type="button" class="primary">Analyze</button>
-          <button id="sample" type="button" class="ghost">Use an example</button>
-        </div>
-        <div id="analysis" aria-live="polite"></div>
-      </div>
-    </section>
-
-    <section id="panel-eval" role="tabpanel" aria-labelledby="tab-eval" hidden>
-      <div id="eval"></div>
-    </section>
+  <main id="main">
+    <section id="spotlight" aria-label="Tonight's pick" aria-live="polite"></section>
+    <div id="rails"></div>
+    <p id="status" class="empty" hidden></p>
   </main>
 
-  <dialog id="movie-dialog" aria-labelledby="movie-title">
-    <div id="movie-body"></div>
-    <form method="dialog"><button class="primary" type="submit">Close</button></form>
+  <footer>
+    <p>Scores are estimates from public review text and ratings, and every quote is a real sentence, never generated.
+       Reviews come from Rotten Tomatoes users and IMDb; ratings from MovieLens.</p>
+    <p>This product uses the TMDB API but is not endorsed or certified by TMDB. Posters and film details are provided by TMDB.</p>
+    <p id="build" class="note"></p>
+  </footer>
+
+  <dialog id="film-dialog" class="drawer" aria-labelledby="film-title">
+    <button class="btn icon-btn close" type="button" data-close aria-label="Close">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </button>
+    <div id="film-body" class="dialog-pad"></div>
   </dialog>
 
-  <footer class="wrap foot">
-    <p>Scores are model estimates from public IMDb review text (aclImdb) and MovieLens ratings. Quotes are verbatim and never generated. See "How well does it work?" for measured accuracy and its limits.</p>
-  </footer>
-  <script src="app.js" defer></script>
+  <dialog id="taste-dialog" class="sheet" aria-labelledby="taste-title">
+    <div class="dialog-pad">
+      <h2 id="taste-title">Your taste</h2>
+      <p class="lede">Turn up what matters to you. The list reorders as you move a dial, and every pick shows the review sentences behind it.</p>
+      <fieldset class="field">
+        <legend>How much should newer films come first?</legend>
+        <div class="dial">
+          <label for="recency"><span>Older films first</span><output id="recency-out"></output></label>
+          <input id="recency" type="range" min="0" max="1" step="0.05">
+          <p class="desc">Older films are never hidden. At the far right, films from the last few years rise to the top.</p>
+        </div>
+      </fieldset>
+      <div id="dials"></div>
+      <div class="sheet-actions">
+        <button class="btn primary" type="button" data-close>Done</button>
+        <button id="reset" class="btn" type="button">Reset everything</button>
+        <button id="redo-onboarding" class="btn" type="button">Answer the questions again</button>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog id="onboard-dialog" class="sheet" aria-labelledby="onboard-title">
+    <form method="dialog" class="dialog-pad" id="onboard-form">
+      <h2 id="onboard-title">Make the first page yours</h2>
+      <p class="lede">Every question is optional. Your answers stay in this browser; nothing is stored on our server.</p>
+      <fieldset class="field"><legend>Which languages?</legend><div class="chip-group" id="ob-lang" role="group"></div></fieldset>
+      <fieldset class="field"><legend>Your age</legend><div class="chip-group" id="ob-age" role="group"></div></fieldset>
+      <fieldset class="field"><legend>Where are you?</legend><div class="chip-group" id="ob-region" role="group"></div></fieldset>
+      <fieldset class="field" id="ob-sex-field" hidden><legend>You are</legend><div class="chip-group" id="ob-sex" role="group"></div></fieldset>
+      <p class="note" id="ob-note"></p>
+      <div class="sheet-actions">
+        <button class="btn primary" type="submit" value="save">Show me films</button>
+        <button class="btn" type="submit" value="skip">Skip</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="review-dialog" class="sheet" aria-labelledby="review-title">
+    <button class="btn icon-btn close" type="button" data-close aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    <div class="dialog-pad">
+      <h2 id="review-title">Try a review</h2>
+      <p class="lede">Paste any review. The same reader that built the film pages splits it into clauses, finds what each one is about, and scores it.</p>
+      <label class="sr-only" for="review-text">Review text</label>
+      <textarea id="review-text" rows="6" maxlength="5000" placeholder="The acting was brilliant, but the pacing dragged and the ending was a letdown."></textarea>
+      <div class="sheet-actions">
+        <button id="analyze" class="btn primary" type="button">Read it</button>
+        <button id="sample" class="btn" type="button">Use an example</button>
+      </div>
+      <div id="analysis" aria-live="polite"></div>
+    </div>
+  </dialog>
+
+  <dialog id="about-dialog" class="sheet wide" aria-labelledby="about-title">
+    <button class="btn icon-btn close" type="button" data-close aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    <div class="dialog-pad" id="about-body"><h2 id="about-title">How it works</h2><p class="lede">Loading the numbers.</p></div>
+  </dialog>
+
+  <script type="module" src="js/main.js"></script>
 </body>
 </html>
