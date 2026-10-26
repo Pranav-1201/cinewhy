@@ -558,6 +558,13 @@ only; artifacts are mounted or downloaded at start and still verified against th
 `tests/smoke_artifacts.py` writes a six-film verified set, and the CI `docker` job boots the image on it
 and probes `/health`, `/recommend` and the page. **Unverified until the branch is pushed:** Docker is not
 installed here, so the image build has never run; everything else in that job was run locally.
+**Follow-up.** A free host has no volume holding the 365 MB set, so the image's start command runs
+`python -m cinewhy.artifacts.download` first: if no manifest is present it downloads
+`$CINEWHY_ARTIFACTS_URL` (https only), requires the zip's SHA-256 to equal
+`$CINEWHY_ARTIFACTS_SHA256`, and unpacks it, refusing paths that escape the folder, symlinks, an
+oversize archive and an archive with no manifest. 16 tests; 12 planted bugs, each caught either alone
+or (for the overlapping path checks, which back one another up) when all path checks are removed
+together. Where the zip is hosted, and whether its licence allows that, is still Pranav's decision.
 
 ## D-025: three liked films roughly double the first page; keep the 12-card Rate deck and let people go on (2026-10-27, Sonnet 5.5)
 
