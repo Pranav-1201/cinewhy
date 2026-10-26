@@ -33,6 +33,7 @@ from cinewhy.recsys.discover import (
     audience_popularity,
     audience_quality,
     catalogue_facets,
+    expand_languages,
     score_films,
     select_items,
 )
@@ -241,9 +242,13 @@ def build_shelves(
     language_counts = facets["languages"]
     assert isinstance(language_counts, dict)
     for code in LANGUAGE_ORDER:
-        enough = language_counts.get(code, 0) >= MIN_LANGUAGE_FILMS
+        # The Hindi shelf also holds Telugu films, so both count towards it having enough.
+        members = expand_languages([code])
+        enough = sum(language_counts.get(m, 0) for m in members) >= MIN_LANGUAGE_FILMS
         if enough and (not languages or code in languages):
             name = LANGUAGE_NAMES[code]
+            if "te" in members and language_counts.get("te", 0):
+                name = f"{name} and Telugu"
             add(
                 f"lang-{code}",
                 f"Best of {name}",

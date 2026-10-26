@@ -116,8 +116,8 @@ def test_the_same_request_gives_the_same_list(client: TestClient) -> None:
 @pytest.mark.parametrize(
     "bad",
     [
-        {"languages": ["fr"]},  # only English and Hindi are offered
-        {"languages": ["en", "hi", "en"]},  # more than the two there are
+        {"languages": ["de"]},  # English, Hindi, Japanese and French are offered; not German
+        {"languages": ["en", "hi", "ja", "fr", "en"]},  # more than the four there are
         {"recency": 1.5},
         {"recency": -0.1},
         {"from_year": 1500},

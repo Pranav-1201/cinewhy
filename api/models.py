@@ -80,7 +80,7 @@ class DiscoverRequest(BaseModel):
     limit: int = Field(default=20, ge=1, le=100)
     # 0 = no preference for new films, 1 = the strongest lift the ranker allows.
     recency: float = Field(default=0.5, ge=0.0, le=1.0)
-    languages: tuple[Literal["en", "hi"], ...] = Field(default=(), max_length=2)
+    languages: tuple[Literal["en", "hi", "ja", "fr"], ...] = Field(default=(), max_length=4)
     genres: tuple[Annotated[str, StringConstraints(max_length=40)], ...] = Field(
         default=(), max_length=10
     )

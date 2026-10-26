@@ -17,7 +17,7 @@ const ID = /^[A-Za-z0-9_-]{1,32}$/;
 const AGES = ["under-18", "18-24", "25-34", "35-44", "45+"];
 const REGIONS = ["india", "north-america", "europe", "elsewhere"];
 const SEXES = ["female", "male", "other"];
-const LANGUAGES = ["en", "hi"];
+const LANGUAGES = ["en", "hi", "ja", "fr"];
 // Profiles saved before the year-range bar stored one of four fixed choices; each becomes a start year.
 const LEGACY_ERA_FROM = { new: 2021, 2012: 2012, 2000: 2000 };
 

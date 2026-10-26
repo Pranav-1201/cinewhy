@@ -2,7 +2,7 @@
    it loads: a missing or slow image leaves a deliberate-looking tile, never a hole. */
 
 import { h, icon } from "./dom.js";
-import { hueOf } from "./format.js";
+import { hueOf, languageName } from "./format.js";
 import { isWanted, isWatched, labelOf, opinionOf, setOpinion, setWant, setWatched } from "./state.js";
 
 export function poster(movie, { language = null, isNew = false } = {}) {
@@ -16,7 +16,10 @@ export function poster(movie, { language = null, isNew = false } = {}) {
     el.append(img);
   }
   if (isNew) el.append(h("span", { class: "badge", text: "New" }));
-  if (language === "hi") el.append(h("span", { class: "badge lang", text: "Hindi" }));
+  // English is the unmarked case; any other original language is named on the poster.
+  if (language && language !== "en" && languageName(language)) {
+    el.append(h("span", { class: "badge lang", text: languageName(language) }));
+  }
   return el;
 }
 

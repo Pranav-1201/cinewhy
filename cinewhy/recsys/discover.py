@@ -48,6 +48,14 @@ QUALITY_SHARE: Final[float] = 0.5
 # ratings for these films to measure it against.
 RATINGS_ONLY_GENRE_WEIGHT: Final[float] = 0.45
 RATINGS_ONLY_POPULARITY_WEIGHT: Final[float] = 0.1
+# A language choice that stands for more than one original language: the Hindi choice also covers
+# Telugu, since the catalogue's South Indian share is meant to travel with Bollywood's (roadmap 15).
+LANGUAGE_GROUPS: Final[dict[str, tuple[str, ...]]] = {"hi": ("hi", "te")}
+
+
+def expand_languages(codes: Collection[str]) -> set[str]:
+    """The original-language codes a visitor's language choice stands for."""
+    return {member for code in codes for member in LANGUAGE_GROUPS.get(code, (code,))}
 
 
 class _Frozen(BaseModel):
@@ -470,7 +478,8 @@ def select_items(
         # classics rather than let a missing date pass for a very old film.
         allowed &= (years > 0) & (years <= to_year)
     if languages:
-        allowed &= np.array([lang in languages for lang in scored.language_of], dtype=bool)
+        wanted_languages = expand_languages(languages)
+        allowed &= np.array([lang in wanted_languages for lang in scored.language_of], dtype=bool)
     if genres:
         wanted = set(genres)
         allowed &= np.array([bool(wanted & set(m.genres)) for m in all_movies], dtype=bool)

@@ -9,7 +9,7 @@ import { labelOf, resetTaste, save, state } from "./state.js";
 
 const AGES = [["under-18", "Under 18"], ["18-24", "18 to 24"], ["25-34", "25 to 34"], ["35-44", "35 to 44"], ["45+", "45 and over"]];
 const REGIONS = [["india", "India"], ["north-america", "North America"], ["europe", "Europe"], ["elsewhere", "Somewhere else"]];
-const LANGUAGES = [["en", "English"], ["hi", "Hindi"]];
+const LANGUAGES = [["en", "English"], ["hi", "Hindi"], ["ja", "Japanese"], ["fr", "French"]];
 const SEXES = [["female", "Woman"], ["male", "Man"], ["other", "Another way"]];
 
 /** Chip group inside `root`. Returns a function that reads the current choices. */

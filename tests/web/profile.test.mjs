@@ -59,7 +59,7 @@ test("garbage is never trusted: wrong types give a fresh profile", () => {
 test("migrate drops malformed ids, duplicates and values outside their allowed set", () => {
   const p = migrate({
     liked: ["cw-1", "cw-1", "../etc", "has space", 5, "", "x".repeat(40), "cw-2"],
-    languages: ["en", "fr", 3], age: "ancient", region: "mars", sex: "robot", era: "1990",
+    languages: ["en", "de", 3], age: "ancient", region: "mars", sex: "robot", era: "1990",
     weights: { pacing: 2, plot: 0.5, acting: 0, ending: "high" }, recency: 9,
   });
   assert.deepEqual(p.liked, ["cw-1", "cw-2"]);

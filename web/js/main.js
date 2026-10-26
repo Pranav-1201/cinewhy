@@ -14,7 +14,7 @@ import { aspectLabels, initTheme, load, save, state, toggleTheme } from "./state
 import { poster } from "./tile.js";
 import { activePreset, describeYears, normaliseYears, presetYears } from "./years.js";
 
-const LANGS = [["en", "English"], ["hi", "Hindi"]];
+const LANGS = [["en", "English"], ["hi", "Hindi"], ["ja", "Japanese"], ["fr", "French"]];
 const ctx = { facets: null, aspects: [], open: openFilm, refresh: null, syncFilters: null };
 
 function chip(text, pressed, onclick) {

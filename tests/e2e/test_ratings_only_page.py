@@ -20,6 +20,28 @@ def test_a_ratings_only_tile_is_labelled_and_never_the_spotlight(
     assert not [t for t in picks if t.startswith("Anime film")], picks
 
 
+def test_the_japanese_chip_asks_for_japanese_and_the_posters_say_so(
+    open_ratings_only_page: Callable[..., Any],
+) -> None:
+    page = open_ratings_only_page(1280)
+    page.wait_for_selector(f"{_JAPANESE_SHELF} .tile", timeout=20_000)
+    assert page.locator("#lang-chips .chip").all_inner_texts()[-2:] == ["Japanese", "French"]
+    bodies: list[dict[str, Any]] = []
+    page.on(
+        "request",
+        lambda r: bodies.append(r.post_data_json) if r.url.endswith("/shelves") else None,
+    )
+    page.click("#lang-chips .chip >> text=Japanese")
+    page.wait_for_function(
+        "() => document.querySelectorAll('#rails .tile').length > 0"
+        " && !document.querySelector('#rails [aria-busy=true]')"
+    )
+    page.wait_for_timeout(900)
+    assert bodies[-1]["languages"] == ["ja"]
+    badges = set(page.locator("#rails .badge.lang").all_inner_texts())
+    assert badges == {"Japanese"}, badges
+
+
 def test_the_film_page_of_a_ratings_only_film_gives_its_imdb_numbers_and_no_receipt(
     open_ratings_only_page: Callable[..., Any],
 ) -> None:

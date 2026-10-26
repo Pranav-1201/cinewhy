@@ -110,7 +110,10 @@ test("the ratings-only note admits what is missing and promises no quotes", () =
 test("languageName", () => {
   assert.equal(languageName("en"), "English");
   assert.equal(languageName("hi"), "Hindi");
-  assert.equal(languageName("fr"), "");
+  assert.equal(languageName("fr"), "French");
+  assert.equal(languageName("ja"), "Japanese");
+  assert.equal(languageName("te"), "Telugu");
+  assert.equal(languageName("de"), "");
   assert.equal(languageName(null), "");
 });
 

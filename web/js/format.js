@@ -56,7 +56,7 @@ export function clamp(text, max) {
 
 /** Language chip text for an ISO code the catalogue uses. */
 export function languageName(code) {
-  return { en: "English", hi: "Hindi" }[code] || "";
+  return { en: "English", hi: "Hindi", te: "Telugu", ja: "Japanese", fr: "French" }[code] || "";
 }
 
 const count = (n) => n.toLocaleString("en");
