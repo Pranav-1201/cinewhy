@@ -565,6 +565,11 @@ installed here, so the image build has never run; everything else in that job wa
 oversize archive and an archive with no manifest. 16 tests; 12 planted bugs, each caught either alone
 or (for the overlapping path checks, which back one another up) when all path checks are removed
 together. Where the zip is hosted, and whether its licence allows that, is still Pranav's decision.
+**Rate limit behind a proxy (SOURCE-ONLY, not exercised).** The limiter keys on the connecting
+address, so behind a host's proxy every visitor would share one 120-a-minute budget. uvicorn's
+documented `FORWARDED_ALLOW_IPS` setting makes it read the real address from `X-Forwarded-For`; the
+Dockerfile says to set it to `*` only where the container is reachable through the proxy alone. A
+check from a real proxied deployment is still owed.
 
 ## D-025: three liked films roughly double the first page; keep the 12-card Rate deck and let people go on (2026-10-27, Sonnet 5.5)
 

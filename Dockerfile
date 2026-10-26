@@ -9,6 +9,13 @@
 # before it serves anything, so a missing or edited artifact stops the container instead of
 # serving wrong answers.
 #
+# Behind a host's reverse proxy every request arrives from the proxy's address, so the per-client rate
+# limit (120 POSTs a minute) would be one budget shared by every visitor. uvicorn reads the real
+# address from X-Forwarded-For for peers named in FORWARDED_ALLOW_IPS (default 127.0.0.1 only). On a
+# host where the container is reachable ONLY through its proxy (Hugging Face Spaces, Render) set
+# FORWARDED_ALLOW_IPS=*; never set it when the container is also exposed directly, because a client
+# could then send its own header and dodge the limit.
+#
 # Verified by the CI job "docker" (.github/workflows/ci.yml): it builds this image, boots it on the
 # small synthetic artifact set from tests/smoke_artifacts.py, and probes /health, /recommend and /.
 # That job has not run against this file yet when it is first committed: treat it as unverified
