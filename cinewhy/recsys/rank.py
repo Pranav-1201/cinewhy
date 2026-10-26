@@ -295,8 +295,9 @@ def search(catalogue: Catalogue, query: str, limit: int = 20) -> list[Movie]:
     needle = query.strip().lower()
     if not needle:
         return []
-    hits: list[tuple[int, int, int]] = []
-    for i, movie in enumerate(catalogue.movies):
+    hits: list[tuple[int, int, int, int]] = []
+    everything = catalogue.all_movies
+    for i, movie in enumerate(everything):
         title = movie.title.lower()
         if title.startswith(needle):
             tier = 0
@@ -306,9 +307,14 @@ def search(catalogue: Catalogue, query: str, limit: int = 20) -> list[Movie]:
             tier = 2
         else:
             continue
-        hits.append((tier, -catalogue.stats[i].rating_count, i))
+        # Films with reviews first within a tier; a ratings-only film follows, best known first
+        # (its vote count is IMDb's, not MovieLens', so the two are never compared with each other).
+        if i < len(catalogue.movies):
+            hits.append((tier, 0, -catalogue.stats[i].rating_count, i))
+        else:
+            hits.append((tier, 1, -catalogue.ratings_only_at(i).imdb_votes, i))
     hits.sort()
-    return [catalogue.movies[i] for _, _, i in hits[:limit]]
+    return [everything[i] for _, _, _, i in hits[:limit]]
 
 
 def movie_detail(

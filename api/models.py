@@ -64,6 +64,11 @@ class MovieDetail(_Out):
     rt_url: str | None = None
     # How many of the film's reviews each source (acl, ebd, rt) contributed.
     reviews_by_source: dict[str, int] = Field(default_factory=dict)
+    # True for a film we hold only ratings for: `aspects` is empty because no reviews were read, and
+    # the IMDb numbers below are what it is placed by.
+    ratings_only: bool = False
+    imdb_rating: float | None = None
+    imdb_votes: int | None = None
 
 
 class DiscoverRequest(BaseModel):

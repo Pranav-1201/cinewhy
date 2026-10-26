@@ -142,7 +142,11 @@ def load_artifacts(directory: Path | None = None) -> ArtifactManifest:
     )
     # `meta.json` is read only when the verified manifest lists it: a stray file on disk is
     # unverified, and its poster paths end up in URLs the browser loads.
-    catalogue = load_catalogue(root, with_meta="meta.json" in manifest.files)
+    catalogue = load_catalogue(
+        root,
+        with_meta="meta.json" in manifest.files,
+        with_ratings_only="ratings_only.json" in manifest.files,
+    )
     _state = _State(manifest, catalogue, metrics, polarity)
     log.info(
         "artifacts verified: manifest=%s films=%d",
@@ -208,6 +212,26 @@ def _rotten_tomatoes_url(value: object) -> str | None:
     return value if isinstance(value, str) and value.startswith(_RT_PREFIX) else None
 
 
+def _ratings_only_detail(catalogue: Catalogue, movie_id: str) -> MovieDetail:
+    """The movie page for a film we hold only ratings for: facts and IMDb numbers, no receipt."""
+    film = catalogue.ratings_only_at(catalogue.all_index[movie_id])
+    return MovieDetail(
+        movie=film.movie,
+        imdb_url=f"https://www.imdb.com/title/tt{film.imdb_id:07d}/",
+        rating_count=0,
+        mean_rating=0.0,
+        review_count=0,
+        aspects=(),
+        overview=film.overview,
+        language=film.language,
+        release_date=film.release_date,
+        runtime_minutes=film.runtime,
+        ratings_only=True,
+        imdb_rating=film.imdb_rating,
+        imdb_votes=film.imdb_votes,
+    )
+
+
 def movie_detail(movie_id: str) -> MovieDetail:
     """The movie page: the film, its stats, and every reported aspect with its quotes.
 
@@ -215,6 +239,8 @@ def movie_detail(movie_id: str) -> MovieDetail:
         KeyError: If no such film.
     """
     state = _loaded()
+    if movie_id not in state.catalogue.index and movie_id in state.catalogue.all_index:
+        return _ratings_only_detail(state.catalogue, movie_id)
     movie, profile, evidence = rank.movie_detail(state.catalogue, movie_id)
     stats = state.catalogue.stats[state.catalogue.index[movie_id]]
     extra = state.catalogue.meta.get(movie_id, {})

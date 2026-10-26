@@ -171,6 +171,7 @@ def build_shelves(
         hi: int | None = to_year,
         order: Sequence[int] | None = None,
         minimum: int = MIN_SHELF,
+        ratings_only: bool = True,
     ) -> None:
         items = select_items(
             catalogue,
@@ -182,6 +183,7 @@ def build_shelves(
             to_year=hi,
             exclude=seen,
             order=order,
+            include_ratings_only=ratings_only,
         )
         if len(items) < minimum:
             return
@@ -197,6 +199,7 @@ def build_shelves(
         else "Ranked by your taste, with the sentences behind each pick",
         limit=PICKS_SIZE,
         minimum=1,
+        ratings_only=False,  # the spotlight and its row promise the sentences behind each pick
     )
 
     liked = [catalogue.index[i] for i in profile.liked_movie_ids if i in catalogue.index]
@@ -207,6 +210,7 @@ def build_shelves(
             "Viewers like you also watch",
             "Films that people who liked the same things went on to like",
             scored=similar,
+            ratings_only=False,  # needs viewer overlap, which these films do not have
         )
         add(
             "explore",
@@ -216,6 +220,7 @@ def build_shelves(
             order=_explore_order(
                 catalogue, liked, audience_popularity(catalogue), audience_quality(catalogue)
             ),
+            ratings_only=False,  # "unlike your taste" is measured on similarity, which they lack
         )
 
     add(

@@ -67,7 +67,7 @@ def test_an_empty_request_is_a_cold_start_discovery_list(client: TestClient) -> 
 def test_each_card_has_what_the_ui_needs(client: TestClient) -> None:
     item = client.post("/discover", json={"limit": 1}).json()["items"][0]
     assert set(item) == {
-        "movie", "language", "is_new", "score", "reasons", "is_fallback", "because",
+        "movie", "language", "is_new", "score", "reasons", "is_fallback", "because", "ratings_only",
     }  # fmt: skip
     assert item["movie"]["poster_url"].startswith("https://image.tmdb.org/t/p/w342/cw")
     assert item["language"] in {"en", "hi"}
