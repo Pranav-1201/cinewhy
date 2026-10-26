@@ -116,8 +116,8 @@ Hit rate at 20 (one hidden liked film lands in the top 20 of 11,065), mean and 9
 | Review aspects alone | 5.5% (4.6 to 6.6) |
 | Both together (shipped) | 18.9% (17.1 to 20.7) |
 
-Similar-taste beats popularity by 11.8 points (10.1 to 13.5). The hybrid is 1.3 points below
-similar-taste alone (difference interval minus 2.2 to minus 0.4 at 20), so slightly worse, not better;
+Similar-taste beats popularity by 11.8 points (10.1 to 13.5). The hybrid is 1.25 points below
+similar-taste alone (difference interval minus 2.15 to minus 0.35 at 20), so slightly worse, not better;
 the review aspects are kept in the blend because they are what produces the quotes, not because they
 raise the hit rate. Validation hit@20 was identical (0.184) for shrink 10, 50 and 200, so that
 setting does not matter at this scale.

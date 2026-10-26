@@ -70,6 +70,20 @@ def _unit(values: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
     return (values - values.min()) / span if span > 0 else np.zeros_like(values)
 
 
+def recency_lift(years: npt.NDArray[np.int64], recency: float) -> npt.NDArray[np.float64]:
+    """Score added to each film for being recent, at a recency setting from 0 to 1.
+
+    Zero up to `RECENCY_FROM_YEAR`, then linear to `RECENCY_MAX * recency` for the newest film.
+    The evaluation and the live ranking both call this, so what is measured is what ships.
+    """
+    newest = int(years.max()) if len(years) else 0
+    span = max(1, newest - RECENCY_FROM_YEAR)
+    return np.asarray(
+        RECENCY_MAX * recency * np.clip((years - RECENCY_FROM_YEAR) / span, 0.0, 1.0),
+        dtype=np.float64,
+    )
+
+
 def film_years(catalogue: Catalogue) -> npt.NDArray[np.int64]:
     """Release year per film: its own year, else the year in its TMDB release date, else 0.
 
@@ -208,8 +222,7 @@ def discover(
 
     skip = set(exclude) | set(profile.liked_movie_ids) | set(profile.disliked_movie_ids)
     popularity = audience_popularity(catalogue)
-    span = max(1, newest - RECENCY_FROM_YEAR)
-    lift = RECENCY_MAX * recency * np.clip((years - RECENCY_FROM_YEAR) / span, 0.0, 1.0)
+    lift = recency_lift(years, recency)
 
     liked = [catalogue.index[i] for i in profile.liked_movie_ids if i in catalogue.index]
     disliked = [catalogue.index[i] for i in profile.disliked_movie_ids if i in catalogue.index]

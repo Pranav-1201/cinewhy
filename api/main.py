@@ -88,6 +88,18 @@ class _State:
 
 _state: _State | None = None
 
+# The TMDB-based build lives in artifacts/v2; the aclImdb-only build it replaced sits directly in
+# artifacts/. v2 wins when it exists so `start.bat` serves the current catalogue without a rename.
+CURRENT_BUILD = Path("artifacts") / "v2"
+
+
+def default_artifacts_dir() -> Path:
+    """Where to load artifacts from: `$CINEWHY_ARTIFACTS`, else artifacts/v2, else artifacts/."""
+    chosen = os.environ.get("CINEWHY_ARTIFACTS")
+    if chosen:
+        return Path(chosen)
+    return CURRENT_BUILD if (CURRENT_BUILD / "manifest.json").is_file() else Path("artifacts")
+
 
 def load_artifacts(directory: Path | None = None) -> ArtifactManifest:
     """Load and verify every artifact, once, at process start.
@@ -97,7 +109,7 @@ def load_artifacts(directory: Path | None = None) -> ArtifactManifest:
     nonsense (FLOW.md §4).
 
     Args:
-        directory: Artifact directory. Defaults to `$CINEWHY_ARTIFACTS`, then `artifacts/`.
+        directory: Artifact directory. Defaults to `default_artifacts_dir()`.
 
     Returns:
         The verified manifest.
@@ -106,7 +118,7 @@ def load_artifacts(directory: Path | None = None) -> ArtifactManifest:
         ManifestMismatchError: If any file is missing, changed, or the manifest was edited.
     """
     global _state
-    root = directory or Path(os.environ.get("CINEWHY_ARTIFACTS", "artifacts"))
+    root = directory or default_artifacts_dir()
     manifest = load_manifest(root)
     verify(root, manifest)  # BEFORE anything below reads (or unpickles) a file
     metrics_path = root / "eval.json"
@@ -361,6 +373,10 @@ def create_app(artifacts: Path | None = None, *, rate_limit: int = _RATE_LIMIT) 
         response = await call_next(request)
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["Referrer-Policy"] = "no-referrer"
+        # The scripts and styles have no hashed file names, so a browser must revalidate them
+        # (StaticFiles sends an ETag, making that a cheap 304) or it can run last week's JavaScript.
+        if request.method == "GET" and "cache-control" not in response.headers:
+            response.headers["Cache-Control"] = "no-cache"
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; img-src 'self' data: https://image.tmdb.org; "
             "frame-ancestors 'none'; base-uri 'none'"

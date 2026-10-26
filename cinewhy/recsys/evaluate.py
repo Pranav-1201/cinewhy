@@ -22,7 +22,7 @@ gold-set evaluation in `cinewhy.absa.gold`), or whether users like the results.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 
 import numpy as np
@@ -185,6 +185,7 @@ def evaluate_recommenders(
     n_seeds: int = 10,
     max_eval_users: int = 2000,
     on_progress: Callable[[str], None] = lambda _msg: None,
+    recency_lifts: Mapping[str, npt.NDArray[np.float64]] | None = None,
 ) -> tuple[RecEvalReport, float]:
     """Run the full protocol.
 
@@ -200,6 +201,10 @@ def evaluate_recommenders(
         n_seeds: Maximum liked films given to the ranker as the taste profile.
         max_eval_users: Cap on validation and on test users, for runtime.
         on_progress: Called with a status line at each stage.
+        recency_lifts: Optional named score offsets, one per catalogue item (the recency lift the
+            product adds at a given setting). Each adds a method `hybrid_<name>`: the hybrid plus
+            that offset, reported with its paired difference from the plain hybrid. This measures
+            what the recency term costs in hit rate; it changes nothing else.
 
     Returns:
         `(report, chosen_shrink)`. The shrink is returned separately so the build can fit
@@ -290,7 +295,8 @@ def evaluate_recommenders(
 
     test_cases = [c for c in _user_cases(users, items, ratings, test_users, n_seeds, rng) if c[1]]
     sim = chosen_sim
-    names = ("popularity", "cf", "aspect", "hybrid")
+    lifts = dict(recency_lifts or {})
+    names = ("popularity", "cf", "aspect", "hybrid", *(f"hybrid_{k}" for k in lifts))
     ranks: dict[str, list[int]] = {n: [] for n in names}
     for target, seeds in test_cases:
         weights = infer_weights_from_rows(aspect_matrix, seeds)
@@ -316,6 +322,8 @@ def evaluate_recommenders(
         else:  # no aspect signal could be inferred: those methods reduce to their fallbacks
             scored["aspect"] = popularity
             scored["hybrid"] = scored["cf"]
+        for key, lift in lifts.items():
+            scored[f"hybrid_{key}"] = scored["hybrid"] + lift
         for name in names:
             ranks[name].append(_rank_of_target(scored[name], target, seeds))
 
@@ -330,6 +338,7 @@ def evaluate_recommenders(
         ("hybrid", "cf"),
         ("aspect", "popularity"),
         ("hybrid", "popularity"),
+        *((f"hybrid_{k}", "hybrid") for k in lifts),
     )
     differences = tuple(
         PairedDifference(a, b, k, _paired(hits[a][k], hits[b][k], rng))

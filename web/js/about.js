@@ -103,6 +103,29 @@ function recommenderCard(e) {
     h("p", { class: "note", text: "These users rated films on MovieLens, which mostly covers English-language films; Hindi films cannot be measured this way." }));
 }
 
+function recencyCard(e) {
+  const r = e.recency;
+  if (!r?.cold_start?.by_recency?.length) return null;
+  const size = r.cold_start.page_size;
+  const rows = r.cold_start.by_recency.map((row) => [
+    row.recency === 0 ? "No preference" : pct(row.recency, 0),
+    `${row.from_2000} of ${row.films}`,
+    `${row.from_2012} of ${row.films}`,
+    String(row.median_year),
+  ]);
+  const cost = r.cost;
+  const costRows = cost ? Object.values(cost.settings).map((s) => {
+    const d = s.vs_hybrid?.[20];
+    return d ? [pct(s.recency, 0), interval(s.hit_rate[20]), diff(d)] : null;
+  }).filter(Boolean) : [];
+  return h("div", { class: "how-card" }, h("h3", { text: "Does “how new” do what it says?" }),
+    h("p", { text: `With nothing known about you, the first ${size} films at each setting. ${pct(r.cold_start.catalogue_share_from_2000, 0)} of the catalogue is from 2000 on.` }),
+    table(["How new", "From 2000 on", "From 2012 on", "Median year"], rows),
+    costRows.length ? h("p", { text: "What it costs: for held-out MovieLens users, how often a film they liked stays in the top 20 when the newer-film lift is added." }) : null,
+    costRows.length ? table(["How new", "Hit rate at 20", "Change [95% interval]"], costRows) : null,
+    h("p", { class: "note", text: r.note || "" }));
+}
+
 function limitsCard(e) {
   const c = e.catalogue || {};
   const items = [];
@@ -121,7 +144,7 @@ export async function renderAbout() {
   try {
     const e = await api("/metrics");
     if (!e.catalogue) { root.replaceChildren(h("h2", { id: "about-title", text: "How it works" }), h("p", { class: "lede", text: "No evaluation was built with these artifacts." })); return; }
-    const cards = [builtFrom(e), joinCard(e), readingCard(e), aspectCard(e), sliderCard(e), recommenderCard(e), limitsCard(e)].filter(Boolean);
+    const cards = [builtFrom(e), joinCard(e), readingCard(e), aspectCard(e), sliderCard(e), recommenderCard(e), recencyCard(e), limitsCard(e)].filter(Boolean);
     root.replaceChildren(
       h("h2", { id: "about-title", text: "How it works" }),
       h("p", { class: "lede", text: "Every pick is backed by real review sentences. These are the measured limits of the machinery behind them, written when this build was made." }),

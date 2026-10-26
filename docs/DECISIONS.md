@@ -448,6 +448,6 @@ new CV round and the choice must not be made on the evaluation text.
 ## D-018: the hybrid does not beat similar-taste alone; aspects stay for the quotes (2026-10-26, Sonnet 5.5)
 
 On 2,000 held-out MovieLens users, hit@20: popularity 8.3%, similar-taste 20.1%, aspects alone 5.5%,
-hybrid 18.9%. Hybrid minus similar-taste is -1.3 points at 20 (interval -2.2 to -0.4): slightly worse.
+hybrid 18.9%. Hybrid minus similar-taste is -1.25 points at 20 (interval -2.15 to -0.35): slightly worse.
 The aspect blend stays because every pick needs its sentences, not because it raises the hit rate;
 the About page says so. Validation hit@20 was identical (0.184) for shrink 10, 50 and 200.

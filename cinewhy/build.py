@@ -31,6 +31,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+import numpy.typing as npt
 
 from cinewhy.absa.extract import build_profile
 from cinewhy.absa.gold import evaluate_gold, evaluate_random, load_gold, load_random_gold
@@ -218,6 +219,40 @@ def _log(message: str) -> None:
     print(f"[{time.strftime('%H:%M:%S')}] {message}", flush=True)
 
 
+def load_rating_arrays(
+    config: BuildConfig, imdb_ids: Sequence[int]
+) -> tuple[
+    dict[int, tuple[int, int | None]],
+    dict[int, int],
+    npt.NDArray[np.int32],
+    npt.NDArray[np.int32],
+    npt.NDArray[np.float32],
+]:
+    """MovieLens ratings of the catalogue films, with each film as its catalogue position.
+
+    Args:
+        config: Where the MovieLens archive lives.
+        imdb_ids: Catalogue films in catalogue order; a film's position is its row everywhere.
+
+    Returns:
+        `(links, movielens_of, users, items, stars)`: the raw IMDb-to-MovieLens links, the links
+        restricted to catalogue films, and one user id, catalogue position and star rating per
+        rating. Shared by the build and the recency check so both see the same ratings.
+    """
+    links = load_movielens_links(config.ml_archive, config.ml_prefix)
+    movielens_of = {i: links[i][0] for i in imdb_ids if i in links}
+    users, movielens_ids, stars = load_ratings(
+        config.ml_archive, frozenset(movielens_of.values()), config.ml_prefix
+    )
+    position_of = {imdb_id: p for p, imdb_id in enumerate(imdb_ids)}
+    lookup = np.full(
+        max(int(movielens_ids.max()), max(movielens_of.values())) + 1, -1, dtype=np.int32
+    )
+    for imdb_id, movielens_id in movielens_of.items():
+        lookup[movielens_id] = position_of[imdb_id]
+    return links, movielens_of, users, lookup[movielens_ids], stars
+
+
 def build_artifacts(config: BuildConfig) -> ArtifactManifest:
     """Run the whole offline build and return the manifest that was written.
 
@@ -291,8 +326,7 @@ def build_artifacts(config: BuildConfig) -> ArtifactManifest:
     del reviews, gathered
 
     _log("loading ratings for catalogue films")
-    links = load_movielens_links(config.ml_archive, config.ml_prefix)
-    movielens_of = {i: links[i][0] for i in imdb_ids if i in links}
+    links, movielens_of, users, items, stars = load_rating_arrays(config, imdb_ids)
     # A second, independent id: where both MovieLens and TMDB name a TMDB id for the film, they
     # should agree. A disagreement means the IMDb-number join paired two different films.
     tmdb_disagreements = sum(
@@ -302,16 +336,6 @@ def build_artifacts(config: BuildConfig) -> ArtifactManifest:
         f"MovieLens: {len(movielens_of)} of {len(imdb_ids)} catalogue films linked "
         f"({tmdb_disagreements} disagree on the TMDB id)"
     )
-    users, movielens_ids, stars = load_ratings(
-        config.ml_archive, frozenset(movielens_of.values()), config.ml_prefix
-    )
-    position_of = {imdb_id: p for p, imdb_id in enumerate(imdb_ids)}
-    lookup = np.full(
-        max(int(movielens_ids.max()), max(movielens_of.values())) + 1, -1, dtype=np.int32
-    )
-    for imdb_id, movielens_id in movielens_of.items():
-        lookup[movielens_id] = position_of[imdb_id]
-    items = lookup[movielens_ids]
     _log(f"{len(stars)} ratings from {len(np.unique(users))} users")
 
     n_films = len(movies)
