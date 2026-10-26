@@ -438,17 +438,34 @@ year with a runtime check; the independent title-name check gives own-film rates
 reviews. Hindi reviews come almost entirely from ebD (72 Hindi films link to RT). Full inventory:
 `docs/DATASET.md`.
 
-## D-017: polarity model is weak on Rotten Tomatoes text; left as is, undecided (2026-10-26, Sonnet 5.5)
+## D-017: retrain the polarity model on a mix of sources; shipped (2026-10-26, Sonnet 5.5)
 
-Trained only on aclImdb (89.3% on its own test set). On newer text: ebD 88.4% (87.3 to 89.4), Rotten
-Tomatoes 75.0% (73.9 to 76.1, n = 6,000). The How it works page prints this. Candidate fix, not
-done: retrain on a mixture of sources with a held-out split per source. Not decided because it needs a
-new CV round and the choice must not be made on the evaluation text.
+**Problem.** Trained only on aclImdb (2011 IMDb text), the model was right on 89.3% of aclImdb's own
+test split but only 78.2% of Rotten Tomatoes reviews from films it never saw (75.0% on the first,
+review-hash sample; 88.4% on ebD). Rotten Tomatoes supplies most post-2011 evidence.
+**Experiment** (`cinewhy/absa/polarity_mixed.py`; rules written in its docstring before any result):
+training pool = aclImdb train + 50,000 labelled Rotten Tomatoes and 50,000 ebD reviews (stars give
+the label, the middle of the scale left out), taken only from films whose hash puts them on the
+training side (one film in five is held out with ALL its reviews, so film names cannot leak). Old and
+new model scored on identical held-out samples (aclImdb official test split; 6,000 balanced reviews
+each from held-out RT and ebD films) with a paired bootstrap. Ship rule fixed in advance: RT must
+improve with the whole interval above zero, and aclImdb and ebD may lose at most one point.
+**Result** (new minus old, points of accuracy, 95% interval): Rotten Tomatoes 78.2% to 83.6%,
+**+5.4 [+4.5, +6.3]**; ebD 89.3% to 91.1%, +1.8 [+1.1, +2.4]; aclImdb 89.3% to 90.5%, +1.2 [+0.9,
++1.5]. Every source improved, so the rule was met and the new model ships (`artifacts/v3`). Clause
+polarity on the 80 hand-labelled clauses rose from 66 to 71 right (82.5% to 88.8%).
+**Limits.** The regularisation strength was chosen by cross-validation by review, which is
+optimistic about film names for the new sources (it only picked C; the cross-validation could not
+separate the two candidates and the pre-declared default C=1 was used). Labels come from star
+ratings, not annotators. Rotten Tomatoes is still the weakest source (83.5%). The held-out sets are
+scored by `polarity_mixed --domain-only`; the older `domain_check` samples by review hash and would
+include films this model trained on, so it is only valid for the aclImdb-only model.
 
 ## D-018: the hybrid does not beat similar-taste alone; aspects stay for the quotes (2026-10-26, Sonnet 5.5)
 
-On 2,000 held-out MovieLens users, hit@20: popularity 8.3%, similar-taste 20.1%, aspects alone 5.5%,
-hybrid 18.9%. Hybrid minus similar-taste is -1.25 points at 20 (interval -2.15 to -0.35): slightly worse.
+On 2,000 held-out MovieLens users, hit@20 (v3 build): popularity 8.3%, similar-taste 20.1%, aspects
+alone 6.6%, hybrid 19.0%. Hybrid minus similar-taste is -1.1 points at 20 (interval -2.05 to -0.2):
+slightly worse (-1.25 [-2.15, -0.35] on the earlier v2 build).
 The aspect blend stays because every pick needs its sentences, not because it raises the hit rate;
 the About page says so. Validation hit@20 was identical (0.184) for shrink 10, 50 and 200.
 
@@ -480,12 +497,13 @@ Change in hit@20 against the hybrid without the lift, mean [95% paired interval]
 
 | How new | Change in hit@20 |
 |---|---|
-| 25% | +1.45 points [+0.65, +2.30] |
-| 50% (default) | +0.90 points [-0.20, +2.00], no measurable difference |
-| 80% (default for under 25s) | -2.50 points [-3.90, -1.10] |
-| 100% | -6.25 points [-7.70, -4.75] |
+| 25% | +1.15 points [+0.35, +1.95] |
+| 50% (default) | +0.95 points [-0.15, +2.10], no measurable difference |
+| 80% (was the default for under 25s) | -2.80 points [-4.25, -1.40] |
+| 100% | -7.05 points [-8.55, -5.55] |
 
-Baseline hybrid 18.85% [17.05, 20.65]. First-page mix for an unknown visitor (same file, `cold_start`):
+(Measured on the v3 build; the v2 build gave +1.45, +0.90, -2.50 and -6.25 for the same settings.)
+Baseline hybrid 19.0% [17.2, 20.85]. First-page mix for an unknown visitor (same file, `cold_start`):
 6 of 20 films from 2000 on at no preference, 13 at 25%, 18 at 50%, 20 at 80% and 100%.
 **Decision.** Keep the lift, and cap the age-based default at 50%, the highest setting measured as
 free: under-18, 18 to 24 and 25 to 34 start at 50% (they used to start at 80%, 80% and 60%), 35 to 44

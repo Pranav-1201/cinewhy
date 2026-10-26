@@ -17,7 +17,7 @@ Everything below runs on a laptop with `start.bat`. Nothing is deployed to the i
 | **Catalogue** | 11,065 English and Hindi films from 1950 to 2025: the most-voted films per language and year on TMDB (fewer per year before 2000, more after), each with at least 5 usable reviews. 3,757 are from 2012 on. |
 | **Reviews** | 1.72 million reviews from aclImdb, IMDb (to about 2020) and Rotten Tomatoes users (to mid-2024), joined to films by IMDb number or by title, year and runtime. 179,807 sentences were kept as quotable evidence. |
 | **Ratings** | MovieLens 32M: 26.6 million ratings of 10,229 of the catalogue films. |
-| **Polarity model** | Logistic regression on 1-2 word TF-IDF, trained on aclImdb through a harness that makes the leakage / test-reuse / spread rules structural. |
+| **Polarity model** | Logistic regression on 1-2 word TF-IDF, trained on aclImdb plus Rotten Tomatoes and IMDb reviews (whole films held out by hash) through a harness that makes the leakage / test-reuse / spread rules structural. |
 | **Aspect analysis** | Splits reviews into clauses, finds which of 7 aspects (acting, plot, pacing, visuals, ending, soundtrack, rewatchability) each is about, scores it, and keeps the strongest sentences as verbatim evidence. |
 | **Recommender** | Item-item collaborative filtering blended with aspect fit, plus a bounded "how new" lift, evaluated on held-out users against a popularity baseline. |
 | **API** | FastAPI. Verifies SHA-256 hashes of every artifact at boot and refuses to start on a mismatch. Serves posters from TMDB (nothing is stored here). |
@@ -26,7 +26,7 @@ Everything below runs on a laptop with `start.bat`. Nothing is deployed to the i
 ## Set up on a new machine (start here if you are joining the project)
 
 You can work on the website and the API **without downloading any dataset**: you only need the
-ready-made build (`artifacts\v2`) from Pranav. Datasets are needed only to rebuild that build.
+ready-made build (`artifacts\v3`) from Pranav. Datasets are needed only to rebuild that build.
 The commands below are for Windows; for macOS or Linux use `source venv/bin/activate` instead of
 `venv\Scripts\activate` and `python3` for `python`.
 
@@ -95,10 +95,10 @@ anything fails on a fresh clone, stop and tell Pranav before changing anything.
 
 ### 5. Get the ready-made build and run the site
 
-Ask Pranav for **`cinewhy-artifacts-v2.zip`** (365 MB, SHA-256
-`0FE7698EFA12B808A40987E2AA25CABF8E1FA19D19C29105288427DE1AE49DAE`; check it with
-`certutil -hashfile cinewhy-artifacts-v2.zip SHA256`). Unzip it **into** `artifacts\v2\` so that
-this file exists: `artifacts\v2\manifest.json`. The folder `artifacts\` is git-ignored, so it never
+Ask Pranav for **`cinewhy-artifacts-v3.zip`** (365 MB, SHA-256
+`071CC4241C2D8B4608EE0351EBD59452AF658620BE4DF63F1CA806FE16984D47`; check it with
+`certutil -hashfile cinewhy-artifacts-v3.zip SHA256`). Unzip it **into** `artifacts\v3\` so that
+this file exists: `artifacts\v3\manifest.json`. The folder `artifacts\` is git-ignored, so it never
 gets committed. Then:
 
 ```bat
@@ -110,7 +110,7 @@ and refuses to boot if one is missing or changed (`ManifestMismatchError`): unzi
 happens. The film posters load from `image.tmdb.org`, so you need internet for them.
 
 Without `start.bat`: `python -m uvicorn api.main:app --port 8000` (add `--reload` while editing
-Python). The server loads `$CINEWHY_ARTIFACTS` if set, else `artifacts\v2` when it has a manifest,
+Python). The server loads `$CINEWHY_ARTIFACTS` if set, else the highest-numbered `artifacts\vN` that has a manifest,
 else `artifacts\`. Editing `web\` files needs no restart: refresh the browser.
 
 ### 6. Rebuilding the data (only if you change the data pipeline)
@@ -133,10 +133,11 @@ If a download is slow, blocked or Kaggle misbehaves, ask Pranav to send the file
 `Data\raw\` folder instead. Licences and what each file supplies: [`docs/DATASET.md`](docs/DATASET.md).
 
 ```bat
-python -m cinewhy.absa.polarity --out artifacts\v2\polarity.joblib
-python -m cinewhy.build --out artifacts\v2          rem about an hour the first time, 5 GB RAM
-python -m cinewhy.absa.domain_check                 rem polarity on RT and IMDb text (about 15 minutes)
-python -m cinewhy.recsys.recency_check              rem recency cost; needs 5 GB free RAM
+python -m cinewhy.absa.polarity --out artifacts\polarity.joblib       rem the aclImdb-only baseline model
+python -m cinewhy.absa.polarity_mixed --old-model artifacts\polarity.joblib --out-dir artifacts\v3   rem retrain on all sources (about 45 min the first time)
+python -m cinewhy.absa.polarity_mixed --old-model artifacts\polarity.joblib --out-dir artifacts\v3 --domain-only   rem held-out-film report
+python -m cinewhy.build --out artifacts\v3          rem about 40 minutes with the cache, 5 GB RAM
+python -m cinewhy.recsys.recency_check --artifacts artifacts\v3   rem recency cost; needs 5 GB free RAM
 ```
 
 The first build caches its slow gathering step in `Data\raw\_cache\`; later builds take about 35
@@ -160,8 +161,8 @@ put a token or key in a file or in a commit; if one is ever needed use an enviro
 |---|---|
 | `python` is not recognised, or is 3.11 | Install Python 3.13 and reopen the terminal; try `py -3.13 -m venv venv`. |
 | `UnicodeEncodeError` | `set PYTHONUTF8=1` in that terminal. |
-| `ManifestMismatchError` at start | `artifacts\v2` is incomplete or edited: unzip the build again. |
-| `start.bat` says no artifacts found | The zip is not unpacked into `artifacts\v2\` (check `artifacts\v2\manifest.json` exists). |
+| `ManifestMismatchError` at start | `artifacts\v3` is incomplete or edited: unzip the build again. |
+| `start.bat` says no artifacts found | The zip is not unpacked into `artifacts\v3\` (check `artifacts\v3\manifest.json` exists). |
 | Port 8000 is busy | Another copy is running: close it, or use `--port 8001`. |
 | Posters are grey boxes | No internet, or `image.tmdb.org` is blocked by a network filter. The site still works. |
 | Build runs out of memory | Needs 5 GB free; close Chrome and other programs. |
@@ -169,7 +170,7 @@ put a token or key in a file or in a commit; if one is ever needed use an enviro
 ## Run it (short version)
 
 ```bat
-start.bat      rem serves artifacts\v2 (else artifacts\) at http://localhost:8000/
+start.bat      rem serves the newest artifacts\vN (else artifacts\) at http://localhost:8000/
 ```
 
 Everything else is in the setup guide above. Posters need no key: the front end loads
@@ -223,7 +224,7 @@ Interactive docs: <http://localhost:8000/docs>.
 
 ### 4. Try to break it
 
-* **Tamper test.** Stop the server, open `artifacts\v2\profiles.json`, change one character, start
+* **Tamper test.** Stop the server, open `artifacts\v3\profiles.json`, change one character, start
   the server again. It must refuse to boot with `ManifestMismatchError`. Restore the file (or
   rebuild) to recover.
 * **Abuse test.** Send a body over 64 KB (413), more than 120 POSTs in a minute (429), or text
@@ -237,30 +238,30 @@ gives the same numbers. Datasets are checked against pinned SHA-256 hashes where
 
 ## What was measured
 
-All numbers come from `artifacts/v2/eval.json`. Intervals are 95%.
+All numbers come from `artifacts/v3/eval.json`. Intervals are 95%.
 
 | Question | Result |
 |---|---|
 | Is the review-to-film join right? | A review names its own film's title 43.7% of the time for aclImdb, 38.5% for IMDb and 11.0% for Rotten Tomatoes, against 0.25%, 0.15% and 0.06% when it names the neighbouring film's title (n = 25,883 / 762,700 / 770,860). |
-| Polarity of whole reviews, on the data it was trained on (official aclImdb test split, evaluated once) | 89.27% +/- 0.38 (n = 25,000). |
-| Polarity on newer text it never saw | IMDb 88.4% [87.3, 89.4] (n = 3,362); **Rotten Tomatoes 75.0% [73.9, 76.1] (n = 6,000)**. |
+| Polarity of whole reviews on aclImdb's official test split (evaluated once) | 90.50% +/- 0.36 (n = 25,000). |
+| Polarity on newer text, films held out of training, against the earlier aclImdb-only model on the same reviews | IMDb 91.1% [90.3, 91.8] (was 89.3%); **Rotten Tomatoes 83.5% [82.6, 84.5] (was 78.2%)**; n = 6,000 each (`docs/DECISIONS.md` D-017). |
 | Aspect finder **recall**: real aspect mentions it finds (300 random clauses, clean) | 50.8%, 32 of 63 real mentions. |
 | Aspect finder **precision**: flagged mentions that really are about the aspect (same sample) | 60.4%, 32 of 53 flags. |
-| Clause polarity sign on the mentions it finds (two clean random samples pooled) | 82.5%, 66 of 80. |
-| Sliders steer results the way they are labelled | Pushing any slider to 100% raises that aspect's average score in the top 20 by +0.17 to +0.37. This checks direction only, not that stated preferences predict enjoyment. |
-| Recommender hit-rate@20 (2,000 held-out users, 11,065 films) | Popularity 8.3% [7.2, 9.6]; **collaborative filtering 20.1% [18.3, 21.9]**; aspect fit alone 5.5% [4.5, 6.6]; hybrid shown in the UI 18.9% [17.1, 20.6]. |
-| Does "how new" do what it says? | With nothing known about the visitor, 6 of the first 20 films are from 2000 on at no preference, 18 at the default (50%) and 20 at 80%. Cost in held-out hit rate@20 against the hybrid without it: +1.5 points at 25%, no measurable change at 50% (+0.9 [-0.2, 2.0]), **-2.5 at 80%** and **-6.3 at 100%** (`docs/DECISIONS.md` D-020). |
+| Clause polarity sign on the mentions it finds (two clean random samples pooled) | 88.8%, 71 of 80 (was 82.5%, 66 of 80, before the retraining). |
+| Sliders steer results the way they are labelled | Pushing any slider to 100% raises that aspect's average score in the top 20 by +0.12 to +0.33. This checks direction only, not that stated preferences predict enjoyment. |
+| Recommender hit-rate@20 (2,000 held-out users, 11,065 films) | Popularity 8.3% [7.2, 9.6]; **collaborative filtering 20.1% [18.3, 21.9]**; aspect fit alone 6.6% [5.5, 7.6]; hybrid shown in the UI 19.0% [17.2, 20.9]. |
+| Does "how new" do what it says? | With nothing known about the visitor, 6 of the first 20 films are from 2000 on at no preference, 18 at the default (50%) and 20 at 80%. Cost in held-out hit rate@20 against the hybrid without it: +1.15 points at 25%, no measurable change at 50% (+0.95 [-0.15, 2.1]), **-2.8 at 80%** and **-7.05 at 100%** (`docs/DECISIONS.md` D-020). |
 
 **Read these honestly.**
 
 * Collaborative filtering does the heavy lifting: 11.8 points better than popularity at 20 [10.1,
   13.5]. Aspect fit alone is *worse* than the popularity baseline at predicting what someone liked,
-  and blending it in costs about 1.25 points of hit-rate@20 against pure CF (paired interval
-  [-2.15, -0.35]): the blend is slightly worse, not better. What it buys is that every pick can be
+  and blending it in costs about 1.1 points of hit-rate@20 against pure CF (paired interval
+  [-2.05, -0.2]): the blend is slightly worse, not better. What it buys is that every pick can be
   explained with real sentences. The blend weight was chosen on separate validation users.
-* The polarity model was trained on 2011-era IMDb reviews and is clearly weaker on Rotten Tomatoes
-  text (75%), which supplies most post-2011 reviews. Retraining on mixed sources is an open decision
-  (`docs/DECISIONS.md` D-017).
+* The polarity model was first trained only on 2011-era IMDb reviews and was weak on Rotten
+  Tomatoes text (78% on held-out films). Retraining on all three sources lifted that to 83.5%
+  without costing the others (D-017). Rotten Tomatoes is still its weakest source.
 * The aspect finder is weak: it finds about half of what reviewers say about an aspect, and about
   4 in 10 of its flags are wrong. An earlier figure of 86.7% precision came from a sample drawn
   *from the finder's own flags*, which cannot show misses and flatters precision; it was replaced

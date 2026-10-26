@@ -1,11 +1,11 @@
 # MODEL_CARD.md — the sentiment classifier in `Movie_Sentiment_Analysis.ipynb`
 
 > **2026-10-22: this card covers the ORIGINAL notebook model only.** The model the demo ships is
-> a different one (`cinewhy/absa/polarity.py`: TF-IDF 1-2 grams + logistic regression, C=10,
-> negation preserved, trained on the aclImdb train split). It scores 89.27% +/- 0.38 on the
-> official test split (n = 25,000, evaluated once), but only **82.5% [72.7, 89.3]** on
-> hand-labelled clauses (n = 80, labelled by the assistant), which is what the product actually
-> judges. The aspect finder that decides which clauses are scored recalls about 51% of real
+> a different one (`cinewhy/absa/polarity.py` and `polarity_mixed.py`: TF-IDF 1-2 grams + logistic
+> regression, C=1, negation preserved, trained on aclImdb plus Rotten Tomatoes and IMDb reviews with
+> whole films held out; DECISIONS D-017). It scores 90.50% +/- 0.36 on aclImdb's official test split
+> (n = 25,000, evaluated once), 83.5% on held-out Rotten Tomatoes films, and **88.8% (71 of 80)** on
+> hand-labelled clauses (labelled by the assistant), which is what the product actually judges. The aspect finder that decides which clauses are scored recalls about 51% of real
 > mentions with about 60% precision. Full numbers and caveats: `docs/DECISIONS.md` D-013, D-015
 > and the README.
 

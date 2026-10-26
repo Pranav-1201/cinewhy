@@ -1,6 +1,6 @@
 # The CineWhy dataset: what is in it, where it came from, how it is joined
 
-Numbers below are from the build in `artifacts/v2` (manifest `123a0a7f5da2…`, built 2026-10-26) and
+Numbers below are from the build in `artifacts/v3` (manifest `6ef2235588a8…`, built 2026-10-26) and
 are read from its `eval.json`. Design reasoning is in `docs/FEATURE-004.md`; this file is the
 inventory. Raw dumps live in `Data/raw/` and are gitignored.
 
@@ -95,10 +95,11 @@ RT reviews are short, so they name their film less often, but the gap is about 1
 
 ## 5. What the data cannot tell you
 
-* **Polarity model:** trained only on aclImdb. Accuracy on newer text: ebD 88.4% (95% CI 87.3 to
-  89.4, n=3,362); **Rotten Tomatoes 75.0% (73.9 to 76.1, n=6,000)**, against 89.3% on aclImdb's own
-  test set. It is weakest on exactly the source that supplies most post-2011 reviews. Retraining on
-  mixed sources is an open decision (DECISIONS D-017).
+* **Polarity model:** first trained only on aclImdb (2011 IMDb), then retrained on aclImdb plus
+  Rotten Tomatoes and ebD reviews (D-017). On films held out of training, accuracy is now ebD 91.1%
+  (90.3 to 91.8), **Rotten Tomatoes 83.5% (82.6 to 84.5)**, aclImdb 90.5% on its own test set;
+  the earlier model scored 89.3%, 78.2% and 89.3% on the same reviews. Rotten Tomatoes is still the
+  weakest source, and it supplies most post-2011 reviews.
 * **Aspect finder:** a word list. On 300 random clauses it found 32 of 63 real mentions (51%), and 32
   of 53 flagged mentions were really about that aspect (60%).
 * **MovieLens** mostly covers English-language films; Hindi films have few ratings, so collaborative
@@ -113,11 +114,11 @@ Hit rate at 20 (one hidden liked film lands in the top 20 of 11,065), mean and 9
 |---|---|
 | Most popular | 8.3% (7.2 to 9.6) |
 | Viewers with similar taste | 20.1% (18.3 to 21.9) |
-| Review aspects alone | 5.5% (4.6 to 6.6) |
-| Both together (shipped) | 18.9% (17.1 to 20.7) |
+| Review aspects alone | 6.6% (5.5 to 7.6) |
+| Both together (shipped) | 19.0% (17.2 to 20.9) |
 
-Similar-taste beats popularity by 11.8 points (10.1 to 13.5). The hybrid is 1.25 points below
-similar-taste alone (difference interval minus 2.15 to minus 0.35 at 20), so slightly worse, not better;
+Similar-taste beats popularity by 11.8 points (10.1 to 13.5). The hybrid is 1.1 points below
+similar-taste alone (difference interval minus 2.05 to minus 0.2 at 20), so slightly worse, not better;
 the review aspects are kept in the blend because they are what produces the quotes, not because they
 raise the hit rate. Validation hit@20 was identical (0.184) for shrink 10, 50 and 200, so that
 setting does not matter at this scale.

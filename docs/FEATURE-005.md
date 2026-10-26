@@ -26,7 +26,7 @@ poster-led, colourful, fast-feeling product.
 | Evidence citations hard-code "aclImdb review" | `web/app.js` `quote()` | Evidence now comes from IMDb (aclImdb, ebD) and Rotten Tomatoes; the label must follow `source_review_id`'s prefix |
 | "Limits" text says the catalogue is "mostly released before 2012, and has no posters" | `web/app.js` | Stale; generate it from `eval.json` numbers |
 | MovieLens 25M and 32M carry no age, sex or location; ML-1M does, but its films end in 2003 | datasets | Demographics can only be a weak genre prior, and must be measured before it is trusted |
-| The polarity model scores 75.0% (95% interval 73.9-76.1) on Rotten Tomatoes text against 88.4% (87.3-89.4) on ebD | `artifacts/v2/polarity_domain.json` | Newer films' evidence is judged by a weaker model; a retrain on mixed sources is a candidate follow-up (D-017) |
+| The polarity model scores 75.0% (95% interval 73.9-76.1) on Rotten Tomatoes text against 88.4% (87.3-89.4) on ebD | `artifacts/v2/polarity_domain.json` | Newer films' evidence is judged by a weaker model; a retrain on mixed sources is a candidate follow-up (D-017; **done**, Rotten Tomatoes 78.2% to 83.6% on held-out films) |
 
 ## Success criteria — verifiable, not vibes
 

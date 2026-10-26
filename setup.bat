@@ -21,7 +21,7 @@ echo   Setup complete
 echo ====================================
 echo.
 echo Next:
-echo   1. Put the ready-made build in artifacts\v2  (see README.md step 5)
+echo   1. Put the ready-made build in artifacts\v3  (see README.md step 5)
 echo   2. start.bat
 echo   Checks:  venv\Scripts\python.exe -m pytest -p no:cacheprovider
 echo.

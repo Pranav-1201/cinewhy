@@ -11,7 +11,7 @@ FEATURE-005 promised two numbers before the recency lift could be called finishe
 The cost needs the held-out protocol (about 8 minutes and 5 GB of memory on the real data), so it
 is a command, not part of every build:
 
-    python -m cinewhy.recsys.recency_check --artifacts artifacts/v2
+    python -m cinewhy.recsys.recency_check --artifacts artifacts/v3
 
 which adds a `recency` block to that directory's `eval.json` and re-seals its manifest. Caveat
 written into the result: the evaluated hybrid ranks with MovieLens-based popularity, while the
