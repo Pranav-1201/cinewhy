@@ -142,29 +142,28 @@ permanently by `unique_review_indices` and `test_no_review_text_appears_in_both_
 ```
 Session date:      2026-10-26 (session "nlp 2")
 Model:             Claude Sonnet 5.5
-What we did:       FEATURE-004 data layer (docs/FEATURE-004.md has the design and every measured
-                   number). New: spine.py (14,620 films from TMDB, quotas per language/year),
-                   linking.py (title+year join rules), reviews.py (RT and ebD readers),
-                   catalogue_sources.py (gather + merge + cache), meta.json artifact. Changed:
-                   cf.py (memory: works on rated films only), evaluate.py (one candidate matrix
-                   alive at a time), build.py (TMDB + MovieLens 32M + aclImdb + RT + ebD),
-                   extract.py (per-review source link). Commits 0db2b0d..c452c0d, 320 tests.
-What's left:       1) Run the REAL build into artifacts/v2 (copy polarity.joblib and
-                   polarity_report.json there first; the gather result is cached at
-                   Data/raw/_cache/gathered.jsonl once scratchpad warm_cache.py finishes; the
-                   evaluation needs about 5 GB free RAM). 2) Measure the polarity model on RT and
-                   ebD text (trained on 2011-era aclImdb only). 3) Re-run the evaluation and
-                   replace the old figures (4,164 films, 2,355 etc.) in README and docs; write
-                   D-016 and docs/DATASET.md. 4) Plan steps 2-5: posters (poster_path is already
-                   in meta.json; TMDB attribution needed), recency in ranking and search,
-                   optional demographics, UI redesign with a self-hosted font.
-Watch out for:     Free RAM was 3.4 GB (120 node processes held ~8 GB, Chrome ~4 GB): free
-                   memory before the real build. TMDB_TOKEN is not set in sessions (setx needs a
-                   restart) and the token was pasted into a chat on 2026-10-25: consider
-                   regenerating it. Raw data live in Data/raw/{rt_mother,imdb_ebd,tmdb1m,ml32m};
-                   amazon2023 was measured and dropped. Hindi: 576 films with 20+ reviews but
-                   only ~50 with 50+ MovieLens ratings, so Hindi leans on aspects. Junk 0-byte
-                   files appear at the repo root every few commands: sweep with git status.
+What we did:       Data layer (FEATURE-004), posters/meta API, /discover + /facets with recency
+                   (FEATURE-005), a new ES-module front end (web/js, poster wall with receipts,
+                   optional onboarding, How it works from eval.json), the REAL build into
+                   artifacts/v2 (11,065 films, 1.72M reviews, manifest 123a0a7f5da2), and
+                   browser checks at 375 and 1440 px (zero console errors). docs/DATASET.md is
+                   the inventory; D-016..D-018 record the decisions. 397 tests.
+What's left:       1) Demographic prior (needs approval to download MovieLens-1M, ~6 MB):
+                   ship it ON only if it beats no-demographics on held-out ML-1M users beyond
+                   the spread, else OFF (Facets.demographics_enabled is not implemented yet;
+                   the sex question stays hidden until it is). 2) Print the recency cost and
+                   the "cold-start top 20 mostly 2000+" check into eval.json. 3) Replace stale
+                   figures (4,164 films, 2,355, "mostly before 2012", "no posters") in README
+                   and other docs. 4) D-017: retrain polarity on mixed sources? 5) Point the
+                   default server at artifacts/v2 (port 8000 may still serve the old build).
+                   6) Constitution section 6 self-revision passes.
+Watch out for:     The hybrid is slightly WORSE than similar-taste alone (D-018); do not claim
+                   the aspects raise hit rate. Hindi: only 72 films link to RT, reviews come
+                   from ebD; few Hindi films have MovieLens ratings. The TMDB token was pasted
+                   into chat on 2026-10-25: regenerate it. Static files are served without a
+                   cache-busting name, so a browser can run stale JS after a deploy. Junk 0-byte
+                   files appear at the repo root: sweep with git status. 9.7 GB of Amazon files
+                   in Data/raw/amazon2023 are unused and can be deleted.
 
 Session date:      2026-10-25 (session "nlp 1", continued)
 Model:             Claude Sonnet 5.5

@@ -113,3 +113,4 @@ dict
 int
 reviews
 STREAM
+.playwright-mcp/

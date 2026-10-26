@@ -428,3 +428,26 @@ validate that stated preferences predict enjoyment, which has no ground truth.
 
 **Still open.** All labels are the assistant's. The kit for an independent second labeller is
 `tests/data/aspect_label_sheet.csv` + `docs/LABELLING.md` + `python -m cinewhy.absa.agreement`.
+
+## D-016: the catalogue is the popular top of each year, joined by IMDb number (2026-10-26, Sonnet 5.5)
+
+Per language (English, Hindi) and year, the films with most TMDB votes: 75 en / 25 hi before 2000,
+300 en / 70 hi from 2000 (the user's stated ranges). Rotten Tomatoes and ebD reviews join by title and
+year with a runtime check; the independent title-name check gives own-film rates of 43.7%, 38.5% and
+11.0% against 0.25%, 0.15% and 0.06% for the neighbouring title. Result: 11,065 films with at least 5
+reviews. Hindi reviews come almost entirely from ebD (72 Hindi films link to RT). Full inventory:
+`docs/DATASET.md`.
+
+## D-017: polarity model is weak on Rotten Tomatoes text; left as is, undecided (2026-10-26, Sonnet 5.5)
+
+Trained only on aclImdb (89.3% on its own test set). On newer text: ebD 88.4% (87.3 to 89.4), Rotten
+Tomatoes 75.0% (73.9 to 76.1, n = 6,000). The How it works page prints this. Candidate fix, not
+done: retrain on a mixture of sources with a held-out split per source. Not decided because it needs a
+new CV round and the choice must not be made on the evaluation text.
+
+## D-018: the hybrid does not beat similar-taste alone; aspects stay for the quotes (2026-10-26, Sonnet 5.5)
+
+On 2,000 held-out MovieLens users, hit@20: popularity 8.3%, similar-taste 20.1%, aspects alone 5.5%,
+hybrid 18.9%. Hybrid minus similar-taste is -1.3 points at 20 (interval -2.2 to -0.4): slightly worse.
+The aspect blend stays because every pick needs its sentences, not because it raises the hit rate;
+the About page says so. Validation hit@20 was identical (0.184) for shrink 10, 50 and 200.
