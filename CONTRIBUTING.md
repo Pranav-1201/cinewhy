@@ -23,13 +23,14 @@ venv\Scripts\activate          # Windows
 pip install -e ".[dev]"
 ```
 
-Get the dataset separately — it is not in the repo. See [`README.md`](README.md) §Quick start.
+The full setup guide (tools to install, the ready-made build, the datasets and where to put
+them) is in [`README.md`](README.md) §"Set up on a new machine". Data is not in the repo.
 
 **Verify your environment before writing anything:**
 
 ```bash
 python check_env.py            # exits 0 only if every package meets its floor
-pytest                         # expect: "23 passed, 20 xfailed"
+pytest                         # expect: every test passes (409 at the time of writing)
 ```
 
 If `pytest` reports a different passed count, stop and ask before continuing — you are not

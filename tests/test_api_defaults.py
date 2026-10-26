@@ -22,9 +22,7 @@ def _make_build(directory: Path) -> None:
     (directory / "manifest.json").write_text("{}", encoding="utf-8")
 
 
-def test_the_environment_variable_wins(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_the_environment_variable_wins(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.chdir(tmp_path)
     _make_build(tmp_path / "artifacts" / "v2")
     monkeypatch.setenv("CINEWHY_ARTIFACTS", str(tmp_path / "elsewhere"))

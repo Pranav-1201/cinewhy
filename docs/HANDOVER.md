@@ -163,7 +163,11 @@ Watch out for:     The hybrid is slightly WORSE than similar-taste alone (D-018)
                    into chat on 2026-10-25: regenerate it. Static files are served without a
                    cache-busting name, so a browser can run stale JS after a deploy. Junk 0-byte
                    files appear at the repo root: sweep with git status. 9.7 GB of Amazon files
-                   in Data/raw/amazon2023 are unused and can be deleted.
+                   in Data/raw/amazon2023 were deleted on 2026-10-26 at Pranav's request.
+                   Teammate onboarding: README "Set up on a new machine". The served build
+                   (artifacts/v2, manifest 2ef0f79b1034) is NOT in git: it travels as
+                   cinewhy-artifacts-v2.zip (365 MB, SHA-256 9879A3CB...512C). MovieLens-1M
+                   download is still pending (GroupLens site was down).
 
 Session date:      2026-10-25 (session "nlp 1", continued)
 Model:             Claude Sonnet 5.5

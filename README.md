@@ -23,41 +23,157 @@ Everything below runs on a laptop with `start.bat`. Nothing is deployed to the i
 | **API** | FastAPI. Verifies SHA-256 hashes of every artifact at boot and refuses to start on a mismatch. Serves posters from TMDB (nothing is stored here). |
 | **Web UI** | A poster wall: a spotlight pick, shelves (tonight's picks, new and now, Hindi picks, classics), a film drawer with the full "receipt", taste dials, an optional first-visit sheet, and a *How it works* page whose every number comes from `eval.json`. Plain ES modules, no build step. |
 
-## Run it
+## Set up on a new machine (start here if you are joining the project)
 
-**Requirements:** Windows, Python 3.13, about 1 GB free disk for the served build (the raw datasets
-are about 8 GB more, only needed to rebuild), internet for posters.
+You can work on the website and the API **without downloading any dataset**: you only need the
+ready-made build (`artifacts\v2`) from Pranav. Datasets are needed only to rebuild that build.
+The commands below are for Windows; for macOS or Linux use `source venv/bin/activate` instead of
+`venv\Scripts\activate` and `python3` for `python`.
+
+### 1. Install the tools (once)
+
+| Tool | Version | Get it | Check it |
+|---|---|---|---|
+| Git | any recent | <https://git-scm.com/downloads> | `git --version` |
+| Python | **3.13** (the project needs 3.13 or newer) | <https://www.python.org/downloads/> (on Windows tick *Add python.exe to PATH*) | `python --version` |
+| Node.js | 20 or newer (24 was used) | <https://nodejs.org> (LTS) | `node --version` |
+| A code editor | any | VS Code, Cursor or Antigravity | |
+
+Node is used for one thing only: the tests of the browser-side helpers (`node --test`, built into
+Node). **There is no `npm install` and no `node_modules` folder**: the front end has no packages
+and no build step.
+
+You also need a GitHub account that Pranav has added as a collaborator on
+`Pranav-1201/cinewhy` (repository *Settings, Collaborators*), and a Kaggle account only if you
+plan to rebuild the data.
+
+### 2. Get the code
 
 ```bat
-setup.bat      rem once: creates venv\ and installs requirements.txt
+git clone https://github.com/Pranav-1201/cinewhy.git
+cd cinewhy
+git config user.name "Your Name"
+git config user.email "you@example.com"
+```
+
+Later, every time you sit down to work, **before anything else**:
+
+```bat
+git fetch
+git status
+git pull --ff-only
+```
+
+If `git pull --ff-only` refuses, stop and ask: it means your copy and the remote have diverged.
+
+### 3. Create the Python environment (once, and again if `requirements.txt` changes)
+
+```bat
+python -m venv venv
+venv\Scripts\activate
+pip install -r requirements.txt
+pip install -e ".[dev]"
+set PYTHONUTF8=1
+```
+
+`requirements.txt` pins every runtime package to the exact version the results were produced with;
+`.[dev]` adds pytest, ruff and mypy. (`setup.bat` does steps 3 in one go.) `set PYTHONUTF8=1`
+must be repeated in each new terminal (Windows prints with cp1252 otherwise and scripts that print
+quotes crash with `UnicodeEncodeError`).
+
+### 4. Check that everything works
+
+```bat
+python -m pytest -p no:cacheprovider
+python -m ruff check cinewhy api tests
+python -m mypy
+```
+
+Expected: `409 passed` (or more as tests are added), `All checks passed!`, and
+`Success: no issues found`. The tests need no data and no internet. If the count is lower, or
+anything fails on a fresh clone, stop and tell Pranav before changing anything.
+
+### 5. Get the ready-made build and run the site
+
+Ask Pranav for **`cinewhy-artifacts-v2.zip`** (365 MB, SHA-256
+`9879A3CBA169B771EBDF9FF1A160D352F2A350CB3315B7BF1D147F539437512C`; check it with
+`certutil -hashfile cinewhy-artifacts-v2.zip SHA256`). Unzip it **into** `artifacts\v2\` so that
+this file exists: `artifacts\v2\manifest.json`. The folder `artifacts\` is git-ignored, so it never
+gets committed. Then:
+
+```bat
+start.bat
+```
+
+It opens <http://localhost:8000/>. The server checks the SHA-256 of every artifact file at start
+and refuses to boot if one is missing or changed (`ManifestMismatchError`): unzip again if that
+happens. The film posters load from `image.tmdb.org`, so you need internet for them.
+
+Without `start.bat`: `python -m uvicorn api.main:app --port 8000` (add `--reload` while editing
+Python). The server loads `$CINEWHY_ARTIFACTS` if set, else `artifacts\v2` when it has a manifest,
+else `artifacts\`. Editing `web\` files needs no restart: refresh the browser.
+
+### 6. Rebuilding the data (only if you change the data pipeline)
+
+Skip this unless you are changing `cinewhy\data`, `cinewhy\absa` or `cinewhy\build.py`. You need
+**about 15 GB free disk, 5 GB free RAM, and about an hour**. The raw files are git-ignored. Put
+them exactly here (create the folders). Kaggle needs you to be logged in; use the *Download*
+button in the browser (the Kaggle command-line and `kagglehub` have been unreliable for the TMDB
+file: they hang at "awaiting compression").
+
+| Save it as | Size | Where to get it |
+|---|---|---|
+| `Data\raw\tmdb1m\TMDB_all_movies.csv` | 0.8 GB | <https://www.kaggle.com/datasets/alanvourch/tmdb-movies-daily-updates> (the file `TMDB_all_movies.csv` inside the download) |
+| `Data\raw\rt_mother\rt_mother.zip` | 4.3 GB | <https://www.kaggle.com/datasets/bwandowando/rotten-tomatoes-9800-movie-critic-and-user-reviews> (the downloaded `archive.zip`, renamed; do **not** unzip it) |
+| `Data\raw\imdb_ebd\imdb_ebd.zip` | 2.9 GB | <https://www.kaggle.com/datasets/ebiswas/imdb-review-dataset> (the downloaded `archive.zip`, renamed; do **not** unzip it) |
+| `Data\raw\aclImdb_v1.tar.gz` | 84 MB | <https://ai.stanford.edu/~amaas/data/sentiment/aclImdb_v1.tar.gz> (do not unpack) |
+| `Data\raw\ml32m\ml-32m.zip` | 239 MB | <https://files.grouplens.org/datasets/movielens/ml-32m.zip> (do not unzip) |
+
+If a download is slow, blocked or Kaggle misbehaves, ask Pranav to send the file from his
+`Data\raw\` folder instead. Licences and what each file supplies: [`docs/DATASET.md`](docs/DATASET.md).
+
+```bat
+python -m cinewhy.absa.polarity --out artifacts\v2\polarity.joblib
+python -m cinewhy.build --out artifacts\v2          rem about an hour the first time, 5 GB RAM
+python -m cinewhy.absa.domain_check                 rem polarity on RT and IMDb text (about 15 minutes)
+python -m cinewhy.recsys.recency_check              rem recency cost; needs 5 GB free RAM
+```
+
+The first build caches its slow gathering step in `Data\raw\_cache\`; later builds take about 35
+minutes. A TMDB token is **not** needed for any of this (posters load straight from TMDB). Never
+put a token or key in a file or in a commit; if one is ever needed use an environment variable.
+
+### 7. Working together
+
+* Work on a branch (`git switch -c your-topic`), not on `main`; open a pull request on GitHub.
+* Before every push run the three checks in step 4. CI runs the same ones.
+* Stage files by name (`git add path\to\file`), never `git add -A`: stray files and data would
+  slip in. Never commit anything from `Data\` or `artifacts\`.
+* Rules, the Pranav / Lakshay split and the contract in `cinewhy\schemas.py` (changing it is a
+  two-person decision): [`CONTRIBUTING.md`](CONTRIBUTING.md). Where things stand and what is left:
+  [`docs\HANDOVER.md`](docs/HANDOVER.md). Why things are the way they are:
+  [`docs\DECISIONS.md`](docs/DECISIONS.md).
+
+### 8. If something goes wrong
+
+| Symptom | Cause and fix |
+|---|---|
+| `python` is not recognised, or is 3.11 | Install Python 3.13 and reopen the terminal; try `py -3.13 -m venv venv`. |
+| `UnicodeEncodeError` | `set PYTHONUTF8=1` in that terminal. |
+| `ManifestMismatchError` at start | `artifacts\v2` is incomplete or edited: unzip the build again. |
+| `start.bat` says no artifacts found | The zip is not unpacked into `artifacts\v2\` (check `artifacts\v2\manifest.json` exists). |
+| Port 8000 is busy | Another copy is running: close it, or use `--port 8001`. |
+| Posters are grey boxes | No internet, or `image.tmdb.org` is blocked by a network filter. The site still works. |
+| Build runs out of memory | Needs 5 GB free; close Chrome and other programs. |
+
+## Run it (short version)
+
+```bat
 start.bat      rem serves artifacts\v2 (else artifacts\) at http://localhost:8000/
 ```
 
-The server loads `$CINEWHY_ARTIFACTS` if set, else `artifacts\v2` when it has a manifest, else
-`artifacts\`.
-
-### Build the data
-
-The data build is **not** automatic: Kaggle and GroupLens downloads need your accounts. Put these
-under `Data\raw\` (full inventory, sizes and licences in [`docs/DATASET.md`](docs/DATASET.md)):
-
-| File | From |
-|---|---|
-| `tmdb1m\TMDB_all_movies.csv` | Kaggle, alanvourch, "The Ultimate 1Million Movies Dataset (TMDB + IMDb)" |
-| `rt_mother\rt_mother.zip` | Kaggle, bwandowando, "Mother of all movie review datasets" |
-| `imdb_ebd\imdb_ebd.zip` | Kaggle, ebiswas, "IMDb Review Dataset - ebD" |
-| `aclImdb_v1.tar.gz` | Stanford, Maas et al. (`python -m cinewhy.data.fetch` also downloads it, hash-checked) |
-| `ml32m\ml-32m.zip` | GroupLens, MovieLens 32M |
-
-```bat
-venv\Scripts\python.exe -m cinewhy.absa.polarity --out artifacts\v2\polarity.joblib
-venv\Scripts\python.exe -m cinewhy.build --out artifacts\v2          rem about an hour the first time, 5 GB RAM
-venv\Scripts\python.exe -m cinewhy.absa.domain_check                 rem polarity on RT and IMDb text
-venv\Scripts\python.exe -m cinewhy.recsys.recency_check              rem recency cost; needs 5 GB free RAM
-```
-
-Posters need no key: the front end loads `image.tmdb.org` URLs directly. A TMDB token is needed
-only to refresh the film list; keep it in the `TMDB_TOKEN` environment variable, never in a file.
+Everything else is in the setup guide above. Posters need no key: the front end loads
+`image.tmdb.org` URLs directly.
 
 ## Test it yourself
 

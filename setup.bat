@@ -1,33 +1,35 @@
 @echo off
+rem One-time Python setup. Full guide, including the ready-made build and the datasets:
+rem README.md, "Set up on a new machine".
 echo ====================================
-echo   NLP Project Setup Script
+echo   CineWhy setup
 echo ====================================
 
-REM Create virtual environment
-echo [1/4] Creating virtual environment...
-python -m venv venv
+echo [1/3] Creating virtual environment...
+python -m venv venv || goto :fail
 
-REM Activate venv
-echo [2/4] Activating virtual environment...
+echo [2/3] Installing pinned packages...
 call venv\Scripts\activate.bat
+pip install -r requirements.txt || goto :fail
 
-REM Install packages
-echo [3/4] Installing required packages...
-pip install -r requirements.txt
-
-REM Download NLTK data
-echo [4/4] Downloading NLTK stopwords...
-python -c "import nltk; nltk.download('stopwords')"
+echo [3/3] Installing the project and its test tools...
+pip install -e ".[dev]" || goto :fail
 
 echo.
 echo ====================================
-echo   Setup Complete!
+echo   Setup complete
 echo ====================================
 echo.
-echo To run the notebook:
-echo   1. Activate venv:  venv\Scripts\activate
-echo   2. Launch Jupyter: jupyter notebook
-echo   3. Open:  Copy_of_Movie_sentimental_analysis.ipynb
-echo   4. Make sure IMDB Dataset.csv is in the Data\ folder
+echo Next:
+echo   1. Put the ready-made build in artifacts\v2  (see README.md step 5)
+echo   2. start.bat
+echo   Checks:  venv\Scripts\python.exe -m pytest -p no:cacheprovider
 echo.
 pause
+exit /b 0
+
+:fail
+echo.
+echo Setup failed: read the message above. Python 3.13 or newer is required.
+pause
+exit /b 1
