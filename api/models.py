@@ -54,6 +54,14 @@ class MovieDetail(_Out):
     mean_rating: float
     review_count: int
     aspects: tuple[AspectDetail, ...]
+    # TMDB details from `meta.json`; all optional so an artifact set built without it still serves.
+    overview: str | None = None
+    language: str | None = None
+    release_date: str | None = None
+    runtime_minutes: int | None = None
+    rt_url: str | None = None
+    # How many of the film's reviews each source (acl, ebd, rt) contributed.
+    reviews_by_source: dict[str, int] = Field(default_factory=dict)
 
 
 class AnalyzeRequest(BaseModel):

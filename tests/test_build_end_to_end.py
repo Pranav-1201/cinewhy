@@ -12,16 +12,21 @@ The fixture is built to contain the cases that differ from the happy path:
 
 from __future__ import annotations
 
+import gc
 import json
 from collections import Counter
 from pathlib import Path
+from typing import Any
 
 import numpy as np
+import pytest
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
 
 from cinewhy.absa.polarity import PolarityModel
 from cinewhy.build import BuildConfig, build_artifacts
+from cinewhy.data.catalogue_sources import Gathered
+from cinewhy.data.sources import load_ratings
 from cinewhy.recsys.catalogue import load_catalogue
 from tests.dumps import movielens_zip, source_paths, tmdb_row
 
@@ -157,6 +162,24 @@ def test_the_build_writes_a_gather_cache_when_asked_and_not_otherwise(tmp_path: 
     out = _build(again, cache_file=cache_file)
     first = json.loads((cached / "artifacts" / "meta.json").read_text(encoding="utf-8"))
     assert json.loads((out / "meta.json").read_text(encoding="utf-8")) == first
+
+
+def test_the_review_text_is_released_before_ratings_are_loaded(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # On the real dumps the review text is about 2 GB, and the stages after profiling (ratings,
+    # three-way similarity evaluation) are the memory-hungry ones. The text is only needed to
+    # build the profiles, so it must be gone by the time ratings are read.
+    seen: dict[str, bool] = {}
+
+    def spy(*args: Any, **kwargs: Any) -> Any:
+        gc.collect()
+        seen["text_still_held"] = any(isinstance(o, Gathered) for o in gc.get_objects())
+        return load_ratings(*args, **kwargs)
+
+    monkeypatch.setattr("cinewhy.build.load_ratings", spy)
+    _build(tmp_path)
+    assert seen["text_still_held"] is False
 
 
 def test_a_domain_check_next_to_the_model_is_carried_into_eval_json(tmp_path: Path) -> None:

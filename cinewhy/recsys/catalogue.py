@@ -8,10 +8,11 @@ every hash. Nothing in this module trains or fits anything (CONSTRAINTS.md #5).
 from __future__ import annotations
 
 import json
+import re
 from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Final
+from typing import Any, Final
 
 import numpy as np
 import numpy.typing as npt
@@ -22,6 +23,23 @@ CATALOGUE_FILE: Final[str] = "catalogue.json"
 PROFILES_FILE: Final[str] = "profiles.json"
 EVIDENCE_FILE: Final[str] = "evidence.json"
 SIMILARITY_FILE: Final[str] = "item_sim.npy"
+META_FILE: Final[str] = "meta.json"
+
+# Where TMDB serves poster images, at a width that suits a card (342 px). TMDB's terms require
+# attribution wherever these are shown (docs/FEATURE-004.md, step 2).
+POSTER_BASE: Final[str] = "https://image.tmdb.org/t/p/w342"
+# A poster path lands inside a URL the browser loads, so only the shape TMDB actually uses is
+# accepted: one segment of letters, digits, `_` and `-`, then an image extension. Anything else
+# (a `..`, a second slash, a query string) is dropped, not repaired.
+_POSTER_PATH: Final[re.Pattern[str]] = re.compile(r"/[A-Za-z0-9_-]+\.(?:jpg|jpeg|png|webp)")
+
+
+def poster_url(path: object) -> str | None:
+    """The browser URL for a TMDB poster path, or None when there is no safe one."""
+    if isinstance(path, str) and _POSTER_PATH.fullmatch(path):
+        return POSTER_BASE + path
+    return None
+
 
 # An aspect score from 3 sentences is a hint, from 300 a measurement. Shrinking by
 # `support / (support + K)` keeps a lightly-supported +0.9 from outranking a well-supported
@@ -53,6 +71,9 @@ class Catalogue:
     # Values chosen by the offline build (e.g. "inferred_fit_weight"), carried with the data
     # they were tuned on so a rollback restores both together.
     settings: dict[str, float] = field(default_factory=dict)
+    # TMDB fields per movie id (overview, language, runtime, ...), read from the verified
+    # `meta.json`. Empty when the artifact set has none.
+    meta: dict[str, dict[str, Any]] = field(default_factory=dict)
     index: dict[str, int] = field(init=False)
     # (n_films, n_aspects): support-shrunk aspect score, 0.0 where an aspect was not reported.
     aspect_matrix: npt.NDArray[np.float32] = field(init=False)
@@ -121,12 +142,15 @@ def _dumps(obj: object) -> str:
     return json.dumps(obj, sort_keys=True, ensure_ascii=False)
 
 
-def load_catalogue(directory: Path) -> Catalogue:
+def load_catalogue(directory: Path, *, with_meta: bool = False) -> Catalogue:
     """Read a catalogue from a verified artifact directory.
 
     Args:
         directory: Directory holding the four catalogue files. The caller must have run
             `artifacts.verify` on it first.
+        with_meta: Also read `meta.json` and give each film its poster URL. The caller passes
+            True only when the verified manifest lists that file: a `meta.json` that is merely
+            sitting in the directory is unverified and must not change what browsers are told.
 
     Returns:
         The catalogue.
@@ -138,12 +162,16 @@ def load_catalogue(directory: Path) -> Catalogue:
     document = json.loads((directory / CATALOGUE_FILE).read_text(encoding="utf-8"))
     raw = document["movies"]
     settings = {k: float(v) for k, v in document.get("settings", {}).items()}
+    meta: dict[str, dict[str, Any]] = (
+        json.loads((directory / META_FILE).read_text(encoding="utf-8")) if with_meta else {}
+    )
     movies = tuple(
         Movie(
             movie_id=r["movie_id"],
             title=r["title"],
             year=r["year"],
             genres=tuple(r["genres"]),
+            poster_url=poster_url(meta.get(r["movie_id"], {}).get("poster_path")),
         )
         for r in raw
     )
@@ -172,4 +200,4 @@ def load_catalogue(directory: Path) -> Catalogue:
     if stray:
         raise ValueError(f"profiles/evidence for films not in the catalogue: {sorted(stray)[:3]}")
     similarity = np.load(directory / SIMILARITY_FILE, allow_pickle=False)
-    return Catalogue(movies, stats, profiles, evidence, similarity, settings)
+    return Catalogue(movies, stats, profiles, evidence, similarity, settings, meta)

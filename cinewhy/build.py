@@ -275,6 +275,18 @@ def build_artifacts(config: BuildConfig) -> ArtifactManifest:
         if n % 250 == 0:
             _log(f"profiled {n}/{len(imdb_ids)} films")
 
+    # The review text (about 2 GB on the real dumps) was only needed to build the profiles above.
+    # Keep the few numbers later stages want and release the text before the ratings and the
+    # evaluation, which are the memory-hungry part: three n x n matrices and their temporaries.
+    review_counts = {i: len(reviews[i]) for i in imdb_ids}
+    n_reviews = sum(review_counts.values())
+    meta = {
+        movie_id_for(i): film_meta(films[i], reviews[i], gathered.rt_url.get(i), rating_count=0)
+        for i in imdb_ids
+    }
+    gather_report = gathered.report
+    del reviews, gathered
+
     _log("loading ratings for catalogue films")
     links = load_movielens_links(config.ml_archive, config.ml_prefix)
     movielens_of = {i: links[i][0] for i in imdb_ids if i in links}
@@ -316,7 +328,7 @@ def build_artifacts(config: BuildConfig) -> ArtifactManifest:
     similarity = build_item_similarity(users, items, stars, n_films, shrink=shrink)
     bayes, counts = bayesian_popularity(items, stars, n_films)
     stats = tuple(
-        FilmStats(i, int(counts[p]), float(bayes[p]), len(reviews[i]))
+        FilmStats(i, int(counts[p]), float(bayes[p]), review_counts[i])
         for p, i in enumerate(imdb_ids)
     )
     catalogue = Catalogue(
@@ -330,10 +342,8 @@ def build_artifacts(config: BuildConfig) -> ArtifactManifest:
     write_catalogue(out, catalogue)
     # TMDB fields the API merges later (posters, language, overview). Kept out of catalogue.json
     # so the shared `Movie` contract in schemas.py does not change with this feature.
-    meta = {
-        movie_id_for(i): film_meta(films[i], reviews[i], gathered.rt_url.get(i), int(counts[p]))
-        for p, i in enumerate(imdb_ids)
-    }
+    for p, i in enumerate(imdb_ids):
+        meta[movie_id_for(i)]["rating_count"] = int(counts[p])
     (out / "meta.json").write_text(
         json.dumps(meta, sort_keys=True, ensure_ascii=False), encoding="utf-8"
     )
@@ -363,7 +373,6 @@ def build_artifacts(config: BuildConfig) -> ArtifactManifest:
     # Written by `python -m cinewhy.absa.domain_check`: how the model does on RT and ebD text,
     # which it was not trained on. A separate command because the scan takes about 15 minutes.
     domain_path = out / "polarity_domain.json"
-    n_reviews = sum(len(v) for v in reviews.values())
     eval_blob = {
         "built_at": datetime.now(UTC).isoformat(timespec="seconds"),
         "sources": {
@@ -375,7 +384,7 @@ def build_artifacts(config: BuildConfig) -> ArtifactManifest:
             "join": "aclImdb and MovieLens by exact IMDb number; RT and ebD by title and year "
             "with a runtime check (docs/FEATURE-004.md)",
         },
-        "gather": gathered.report,
+        "gather": gather_report,
         "movielens": {
             "catalogue_films_linked": len(movielens_of),
             "tmdb_id_disagreements": tmdb_disagreements,

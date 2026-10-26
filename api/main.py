@@ -113,7 +113,10 @@ def load_artifacts(directory: Path | None = None) -> ArtifactManifest:
         if "polarity.joblib" in manifest.files
         else None
     )
-    _state = _State(manifest, load_catalogue(root), metrics, polarity)
+    # `meta.json` is read only when the verified manifest lists it: a stray file on disk is
+    # unverified, and its poster paths end up in URLs the browser loads.
+    catalogue = load_catalogue(root, with_meta="meta.json" in manifest.files)
+    _state = _State(manifest, catalogue, metrics, polarity)
     log.info(
         "artifacts verified: manifest=%s films=%d",
         manifest.manifest_hash[:12],
@@ -170,6 +173,14 @@ def get_movie(movie_id: str) -> tuple[Movie, MovieAspectProfile]:
     return movie, profile
 
 
+_RT_PREFIX = "https://www.rottentomatoes.com/m/"
+
+
+def _rotten_tomatoes_url(value: object) -> str | None:
+    """A Rotten Tomatoes film page, or None: only that address may become a link in the UI."""
+    return value if isinstance(value, str) and value.startswith(_RT_PREFIX) else None
+
+
 def movie_detail(movie_id: str) -> MovieDetail:
     """The movie page: the film, its stats, and every reported aspect with its quotes.
 
@@ -179,12 +190,20 @@ def movie_detail(movie_id: str) -> MovieDetail:
     state = _loaded()
     movie, profile, evidence = rank.movie_detail(state.catalogue, movie_id)
     stats = state.catalogue.stats[state.catalogue.index[movie_id]]
+    extra = state.catalogue.meta.get(movie_id, {})
+    runtime = extra.get("runtime")
     return MovieDetail(
         movie=movie,
         imdb_url=f"https://www.imdb.com/title/tt{stats.imdb_id:07d}/",
         rating_count=stats.rating_count,
         mean_rating=round(stats.bayes_mean, 2),
         review_count=stats.review_count,
+        overview=extra.get("overview") or None,
+        language=extra.get("language") or None,
+        release_date=extra.get("release_date") or None,
+        runtime_minutes=int(runtime) if isinstance(runtime, int | float) and runtime > 0 else None,
+        rt_url=_rotten_tomatoes_url(extra.get("rt_url")),
+        reviews_by_source=dict(extra.get("reviews_by_source", {})),
         aspects=tuple(
             AspectDetail(
                 aspect=s.aspect,
@@ -314,7 +333,8 @@ def create_app(artifacts: Path | None = None, *, rate_limit: int = _RATE_LIMIT) 
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["Referrer-Policy"] = "no-referrer"
         response.headers["Content-Security-Policy"] = (
-            "default-src 'self'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'none'"
+            "default-src 'self'; img-src 'self' data: https://image.tmdb.org; "
+            "frame-ancestors 'none'; base-uri 'none'"
         )
         return response
 
