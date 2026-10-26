@@ -49,6 +49,12 @@ export function icon(name, filled = false) {
 
 export const clear = (el) => el.replaceChildren();
 
+/** Replace an element's children, leaving out null, undefined and false. A bare `replaceChildren(null)`
+    would print the word "null" on the page, which is what a missing optional part would otherwise do. */
+export function fill(el, ...kids) {
+  el.replaceChildren(...kids.flat(Infinity).filter((kid) => kid !== null && kid !== undefined && kid !== false));
+}
+
 export function debounce(fn, ms) {
   let t;
   return (...args) => {

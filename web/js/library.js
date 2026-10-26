@@ -4,7 +4,7 @@
    draws at once from the titles the profile remembers, so a slow network never leaves it empty. */
 
 import { api } from "./api.js";
-import { $, h } from "./dom.js";
+import { $, fill, h } from "./dom.js";
 import { starRow } from "./stars.js";
 import { counts, rate, setOpinion, setWant, setWatched, state } from "./state.js";
 
@@ -74,7 +74,7 @@ function draw() {
   const more = ids.length > shown
     ? h("button", { class: "btn", type: "button", text: `Show ${Math.min(PAGE, ids.length - shown)} more`, onclick: () => { shown += PAGE; draw(); } })
     : null;
-  box.replaceChildren(h("ul", { class: "lib-list" }, ids.slice(0, shown).map((id) => row(current, id, draw))), more);
+  fill(box, h("ul", { class: "lib-list" }, ids.slice(0, shown).map((id) => row(current, id, draw))), more);
 }
 
 /** Open the library, on `which` ("watched", "want", "liked" or "disliked") if given. */

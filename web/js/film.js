@@ -1,7 +1,7 @@
 /* The film drawer: poster, facts, the full receipt, and where to read the real reviews. */
 
 import { api } from "./api.js";
-import { $, clear, h } from "./dom.js";
+import { $, clear, fill, h } from "./dom.js";
 import { languageName, runtimeLabel } from "./format.js";
 import { linesFromAspects, receipt } from "./receipt.js";
 import { isWanted, isWatched, opinionOf, setOpinion, setWant, setWatched } from "./state.js";
@@ -71,7 +71,7 @@ export async function openFilm(id) {
   target.append(h("div", { class: "skeleton tall", role: "status", "aria-label": "Loading the film" }));
   if (!dialog.open) dialog.showModal();
   try {
-    target.replaceChildren(...body(await api(`/movie/${encodeURIComponent(id)}`)));
+    fill(target, body(await api(`/movie/${encodeURIComponent(id)}`)));
   } catch (err) {
     target.replaceChildren(h("p", { class: "film-overview", text: err.message }));
   }

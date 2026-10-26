@@ -63,6 +63,25 @@ def test_a_watched_film_leaves_the_shelves_and_is_kept_in_the_library(
     assert _profile(page)["watched"] == []
 
 
+def test_no_screen_prints_the_word_null(open_page: Callable[..., Any]) -> None:
+    """A missing optional part (no film description, no "show more" button) must leave no trace.
+
+    Handing null to replaceChildren writes the text "null" on the page; both the film page and the
+    library did that once.
+    """
+    page = open_page(1024)
+    tile, _ = _first_shelf_film(page)
+    tile.hover()
+    tile.locator(".tile-act.seen").click()
+    page.click("#library-btn")
+    page.wait_for_selector("#library-list .lib-row")
+    assert "null" not in page.inner_text("#library-list").split()
+    page.keyboard.press("Escape")
+    page.locator("#rails .tile-btn").first.click()
+    page.wait_for_selector("#film-body h2")
+    assert "null" not in page.inner_text("#film-body").split()
+
+
 def test_watched_films_come_back_when_the_visitor_asks_to_see_them(
     open_page: Callable[..., Any],
 ) -> None:
