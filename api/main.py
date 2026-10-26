@@ -254,6 +254,7 @@ def discover_films(request: DiscoverRequest) -> DiscoverResult:
         languages=request.languages,
         genres=request.genres,
         from_year=request.from_year,
+        to_year=request.to_year,
         exclude=request.exclude_movie_ids,
         manifest=state.manifest.manifest_hash,
     )

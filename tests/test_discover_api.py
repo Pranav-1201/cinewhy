@@ -86,6 +86,11 @@ def test_the_from_year_filter_uses_the_release_date_when_a_film_has_no_year(
     assert newest["cw-5"] is False  # 2012 is more than seven years before it
 
 
+def test_to_year_gives_the_classics_shelf(client: TestClient) -> None:
+    body = client.post("/discover", json={"to_year": 2005}).json()
+    assert set(_ids(body)) == {"cw-1", "cw-6"}
+
+
 def test_a_genre_filter_that_matches_nothing_returns_nothing(client: TestClient) -> None:
     assert client.post("/discover", json={"genres": ["Nonexistent"]}).json()["items"] == []
 
@@ -115,6 +120,8 @@ def test_the_same_request_gives_the_same_list(client: TestClient) -> None:
         {"recency": -0.1},
         {"from_year": 1500},
         {"from_year": 3000},
+        {"to_year": 1500},
+        {"to_year": 3000},
         {"limit": 0},
         {"limit": 101},
         {"genres": ["x"] * 11},

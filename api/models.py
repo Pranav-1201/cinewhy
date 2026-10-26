@@ -80,6 +80,7 @@ class DiscoverRequest(BaseModel):
         default=(), max_length=10
     )
     from_year: int | None = Field(default=None, ge=1880, le=2100)
+    to_year: int | None = Field(default=None, ge=1880, le=2100)
     exclude_movie_ids: tuple[str, ...] = Field(default=(), max_length=500)
 
 

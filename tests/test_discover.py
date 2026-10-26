@@ -138,6 +138,27 @@ def test_from_year_narrows_the_list_and_never_the_catalogue() -> None:
     assert len(world.movies) == 6
 
 
+def test_to_year_keeps_older_films_and_is_inclusive() -> None:
+    # The classics shelf: everything up to and including a year.
+    result = discover(_world(), TasteProfile(), limit=6, to_year=1995, manifest="m")
+    assert set(_titles(result)) == {"Old Classic", "Mid Nineties"}
+
+
+def test_a_film_of_unknown_year_is_not_passed_off_as_a_classic() -> None:
+    world = _world()
+    movies = list(world.movies)
+    movies[5] = movies[5].model_copy(update={"year": None})  # No Scores: no year, no date
+    world.movies = tuple(movies)
+    world.meta["cw-6"]["release_date"] = ""
+    result = discover(world, TasteProfile(), limit=6, to_year=1999, manifest="m")
+    assert "No Scores" not in _titles(result)
+
+
+def test_from_year_and_to_year_make_a_window() -> None:
+    result = discover(_world(), TasteProfile(), limit=6, from_year=2019, to_year=2020, manifest="m")
+    assert set(_titles(result)) == {"Hindi Hit", "No Scores"}
+
+
 def test_genre_filter_is_any_of() -> None:
     result = discover(_world(), TasteProfile(), limit=6, genres=("Comedy", "Crime"), manifest="m")
     assert set(_titles(result)) == {"Hindi Obscure", "Mid Nineties"}

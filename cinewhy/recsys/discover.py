@@ -160,6 +160,7 @@ def discover(
     languages: Sequence[str] = (),
     genres: Sequence[str] = (),
     from_year: int | None = None,
+    to_year: int | None = None,
     exclude: Sequence[str] = (),
     manifest: str,
 ) -> DiscoverResult:
@@ -179,6 +180,8 @@ def discover(
         languages: Keep only films whose original language is one of these (empty keeps all).
         genres: Keep only films with at least one of these genres (empty keeps all).
         from_year: Keep only films released in or after this year.
+        to_year: Keep only films released in or before this year (films with no known year are
+            left out).
         exclude: Film ids never to return.
         manifest: Hash of the artifact set, echoed so a result can be traced to its build.
 
@@ -193,6 +196,10 @@ def discover(
     allowed = np.ones(n, dtype=bool)
     if from_year is not None:
         allowed &= years >= from_year
+    if to_year is not None:
+        # A film of unknown year (0) is not "older than" anything: keep it out of a shelf of
+        # classics rather than let a missing date pass for a very old film.
+        allowed &= (years > 0) & (years <= to_year)
     if languages:
         allowed &= np.array([lang in languages for lang in language_of], dtype=bool)
     if genres:
