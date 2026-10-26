@@ -6,7 +6,10 @@ import { $, clear, debounce, h, reducedMotion } from "./dom.js";
 import { renderAbout } from "./about.js";
 import { initDialogs, openOnboarding, openTaste } from "./dialogs.js";
 import { openFilm } from "./film.js";
+import { openLibrary } from "./library.js";
+import { openProfile, initProfile } from "./profilesheet.js";
 import { renderAll } from "./rails.js";
+import { openRate } from "./rate.js";
 import { aspectLabels, initTheme, load, save, state, toggleTheme } from "./state.js";
 import { poster } from "./tile.js";
 
@@ -25,6 +28,10 @@ function renderFilters() {
     state.languages = state.languages.includes(v) ? state.languages.filter((x) => x !== v) : [...state.languages, v];
     save(); renderFilters(); ctx.refresh();
   })));
+  $("#seen-chips").replaceChildren(h("span", { class: "chip-label", text: "Seen" }), chip("Hide films I've watched", state.hideWatched, () => {
+    state.hideWatched = !state.hideWatched;
+    save(); renderFilters(); ctx.refresh();
+  }));
   const top = Object.keys(ctx.facets.genres || {}).slice(0, 8);
   genre.replaceChildren(h("span", { class: "chip-label", text: "Genre" }), ...top.map((g) => chip(g, state.genres.includes(g), () => {
     state.genres = state.genres.includes(g) ? state.genres.filter((x) => x !== g) : [...state.genres, g];
@@ -82,24 +89,25 @@ async function boot() {
   renderFilters();
   initDialogs(ctx);
   wireSearch();
-  // The same three tools are reachable from the top bar (wide screens) and the Profile sheet
-  // (phones), so each is defined once here.
+  initProfile(ctx);
+  // The tools that used to sit in the top bar now live in the Profile sheet; the sheet's buttons
+  // and the places that open things are all defined once here.
   const tools = {
     taste: () => openTaste(ctx),
     review: () => $("#review-dialog").showModal(),
     about: () => { renderAbout(); $("#about-dialog").showModal(); },
     theme: toggleTheme,
   };
-  $("#taste-btn").addEventListener("click", tools.taste);
-  $("#review-btn").addEventListener("click", tools.review);
-  $("#about-btn").addEventListener("click", tools.about);
+  const opens = { library: () => openLibrary(ctx), rate: () => openRate(), profile: () => openProfile() };
+  for (const [name, open] of Object.entries(opens)) {
+    for (const id of [`#${name}-btn`, `#nav-${name}`]) $(id)?.addEventListener("click", open);
+  }
   $("#nav-home").addEventListener("click", () => window.scrollTo({ top: 0, behavior: reducedMotion() ? "auto" : "smooth" }));
   $("#nav-search").addEventListener("click", () => { window.scrollTo({ top: 0 }); $("#q").focus(); });
-  $("#nav-profile").addEventListener("click", () => $("#profile-dialog").showModal());
-  for (const button of document.querySelectorAll("#profile-dialog [data-tool]")) {
+  for (const button of document.querySelectorAll("#profile-dialog [data-tool], #profile-dialog [data-open]")) {
     button.addEventListener("click", () => {
       $("#profile-dialog").close();
-      tools[button.dataset.tool]();
+      (button.dataset.tool ? tools[button.dataset.tool] : opens[button.dataset.open])();
     });
   }
   // A like or skip changes the ranking, but not while the visitor is still browsing the rails.

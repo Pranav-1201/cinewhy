@@ -16,8 +16,9 @@ import sys
 import time
 import urllib.error
 import urllib.request
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -64,3 +65,40 @@ def server_url(tmp_path_factory: pytest.TempPathFactory) -> Iterator[str]:
             process.wait(timeout=10)
         except subprocess.TimeoutExpired:
             process.kill()
+
+
+@pytest.fixture(scope="session")
+def browser() -> Iterator[Any]:
+    """One Chromium for the whole run; tests skip themselves when playwright is not installed."""
+    sync_api = pytest.importorskip("playwright.sync_api")
+    with sync_api.sync_playwright() as playwright:
+        chromium = playwright.chromium.launch()
+        yield chromium
+        chromium.close()
+
+
+@pytest.fixture
+def open_page(browser: Any, server_url: str) -> Iterator[Callable[..., Any]]:
+    """`open_page(width=1024, skip_questions=True)` gives a page in a fresh browser profile.
+
+    Each call is a new profile (no saved answers), so a test starts from a first visit. The
+    first-visit sheet is dismissed with Skip unless `skip_questions=False`.
+    """
+    contexts: list[Any] = []
+
+    def make(width: int = 1024, *, skip_questions: bool = True, height: int = 800) -> Any:
+        context = browser.new_context(
+            viewport={"width": width, "height": height}, accept_downloads=True
+        )
+        contexts.append(context)
+        page = context.new_page()
+        page.goto(server_url)
+        page.wait_for_selector("#onboard-dialog[open]", timeout=20_000)
+        if skip_questions:
+            page.click("#onboard-form button[value=skip]")
+            page.wait_for_selector("#onboard-dialog:not([open])", state="attached")
+        return page
+
+    yield make
+    for context in contexts:
+        context.close()
