@@ -12,8 +12,8 @@ import { renderAll } from "./rails.js";
 import { openRate } from "./rate.js";
 import { aspectLabels, initTheme, load, save, state, toggleTheme } from "./state.js";
 import { poster } from "./tile.js";
+import { activePreset, describeYears, normaliseYears, presetYears } from "./years.js";
 
-const ERAS = [["any", "Any year"], ["new", "New and now"], ["2012", "Since 2012"], ["2000", "Since 2000"]];
 const LANGS = [["en", "English"], ["hi", "Hindi"]];
 const ctx = { facets: null, aspects: [], open: openFilm, refresh: null, syncFilters: null };
 
@@ -21,9 +21,55 @@ function chip(text, pressed, onclick) {
   return h("button", { class: "chip", type: "button", "aria-pressed": String(pressed), onclick, text });
 }
 
+/** The year-range bar: two presets and two sliders. "Any year" is simply the bar left at both ends,
+    so it is not a highlighted choice. Dragging updates the label and chips in place (the sliders keep
+    focus) and the shelves refresh a moment after the last move. */
+function renderYears() {
+  const { oldest_year: oldest, newest_year: newest } = ctx.facets;
+  const box = $("#era-chips");
+  if (!oldest || !newest) { box.replaceChildren(); return; }
+  const first = normaliseYears(state.yearFrom, state.yearTo, oldest, newest);
+  const low = h("input", { type: "range", min: String(oldest), max: String(newest), step: "1", value: String(first.from ?? oldest), "aria-label": "Earliest release year" });
+  const high = h("input", { type: "range", min: String(oldest), max: String(newest), step: "1", value: String(first.to ?? newest), "aria-label": "Latest release year" });
+  const readout = h("output", { class: "range-out" });
+  const oldChip = chip("Old school", false, () => pick("old"));
+  const newChip = chip("New", false, () => pick("new"));
+  const bar = h("div", { class: "range", role: "group", "aria-label": "Release years" }, low, high);
+
+  const paint = () => {
+    const { from, to } = normaliseYears(Number(low.value), Number(high.value), oldest, newest);
+    const preset = activePreset(from, to, oldest, newest);
+    oldChip.setAttribute("aria-pressed", String(preset === "old"));
+    newChip.setAttribute("aria-pressed", String(preset === "new"));
+    readout.textContent = describeYears(from, to, oldest, newest);
+    readout.classList.toggle("quiet", from === null && to === null);
+    bar.style.setProperty("--from", String(((Number(low.value) - oldest) / (newest - oldest)) * 100));
+    bar.style.setProperty("--to", String(((Number(high.value) - oldest) / (newest - oldest)) * 100));
+  };
+  const store = () => {
+    const { from, to } = normaliseYears(Number(low.value), Number(high.value), oldest, newest);
+    state.yearFrom = from;
+    state.yearTo = to;
+    save();
+    paint();
+    ctx.refresh();
+  };
+  function pick(name) {
+    const same = activePreset(state.yearFrom, state.yearTo, oldest, newest) === name;
+    const { from, to } = same ? { from: null, to: null } : presetYears(name);
+    low.value = String(from ?? oldest);
+    high.value = String(to ?? newest);
+    store();
+  }
+  low.addEventListener("input", () => { if (Number(low.value) > Number(high.value)) low.value = high.value; store(); });
+  high.addEventListener("input", () => { if (Number(high.value) < Number(low.value)) high.value = low.value; store(); });
+  box.replaceChildren(h("span", { class: "chip-label", text: "When" }), oldChip, newChip, bar, readout);
+  paint();
+}
+
 function renderFilters() {
-  const era = $("#era-chips"), lang = $("#lang-chips"), genre = $("#genre-chips");
-  era.replaceChildren(h("span", { class: "chip-label", text: "When" }), ...ERAS.map(([v, t]) => chip(t, state.era === v, () => { state.era = v; save(); renderFilters(); ctx.refresh(); })));
+  const lang = $("#lang-chips"), genre = $("#genre-chips");
+  renderYears();
   lang.replaceChildren(h("span", { class: "chip-label", text: "Language" }), ...LANGS.map(([v, t]) => chip(t, state.languages.includes(v), () => {
     state.languages = state.languages.includes(v) ? state.languages.filter((x) => x !== v) : [...state.languages, v];
     save(); renderFilters(); ctx.refresh();

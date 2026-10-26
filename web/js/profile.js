@@ -18,12 +18,13 @@ const AGES = ["under-18", "18-24", "25-34", "35-44", "45+"];
 const REGIONS = ["india", "north-america", "europe", "elsewhere"];
 const SEXES = ["female", "male", "other"];
 const LANGUAGES = ["en", "hi"];
-const ERAS = ["any", "new", "2012", "2000"];
+// Profiles saved before the year-range bar stored one of four fixed choices; each becomes a start year.
+const LEGACY_ERA_FROM = { new: 2021, 2012: 2012, 2000: 2000 };
 
 export const defaultProfile = () => ({
   version: PROFILE_VERSION,
   weights: {}, liked: [], disliked: [], watched: [], want: [], ratings: {}, titles: {},
-  languages: [], favouriteGenres: [], genres: [], era: "any",
+  languages: [], favouriteGenres: [], genres: [], yearFrom: null, yearTo: null,
   recency: 0.5, recencyTouched: false,
   age: null, region: null, sex: null, hindiFirst: false, onboarded: false,
   hideWatched: true,
@@ -70,7 +71,13 @@ export function migrate(raw) {
   p.languages = stringList(raw.languages, LANGUAGES);
   p.favouriteGenres = stringList(raw.favouriteGenres, null, 12);
   p.genres = stringList(raw.genres, null, 10);
-  p.era = ERAS.includes(raw.era) ? raw.era : "any";
+  const year = (v) => (Number.isInteger(v) && v >= 1880 && v <= 2100 ? v : null);
+  p.yearFrom = year(raw.yearFrom);
+  p.yearTo = year(raw.yearTo);
+  if (p.yearFrom === null && p.yearTo === null && typeof raw.era === "string" && Object.hasOwn(LEGACY_ERA_FROM, raw.era)) {
+    p.yearFrom = LEGACY_ERA_FROM[raw.era];
+  }
+  if (p.yearFrom !== null && p.yearTo !== null && p.yearFrom > p.yearTo) [p.yearFrom, p.yearTo] = [p.yearTo, p.yearFrom];
   if (typeof raw.recency === "number" && raw.recency >= 0 && raw.recency <= 1) p.recency = raw.recency;
   p.recencyTouched = raw.recencyTouched === true;
   p.age = oneOf(raw.age, AGES);

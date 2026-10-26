@@ -46,7 +46,7 @@ test("a version 2 profile (no version field) keeps everything it had", () => {
   assert.deepEqual(p.disliked, ["cw-2"]);
   assert.equal(p.titles["cw-1"], "A (2000)");
   assert.equal(p.weights.pacing, 0.5);
-  assert.deepEqual([p.languages, p.genres, p.era, p.recency], [["en"], ["Drama"], "2012", 0.4]);
+  assert.deepEqual([p.languages, p.genres, p.yearFrom, p.yearTo, p.recency], [["en"], ["Drama"], 2012, null, 0.4]);
   assert.deepEqual([p.age, p.region, p.hindiFirst, p.onboarded, p.recencyTouched], ["18-24", "india", true, true, true]);
   assert.deepEqual([p.watched, p.want], [[], []]);
   assert.equal(p.hideWatched, true);
@@ -64,7 +64,7 @@ test("migrate drops malformed ids, duplicates and values outside their allowed s
   });
   assert.deepEqual(p.liked, ["cw-1", "cw-2"]);
   assert.deepEqual(p.languages, ["en"]);
-  assert.deepEqual([p.age, p.region, p.sex, p.era, p.recency], [null, null, null, "any", 0.5]);
+  assert.deepEqual([p.age, p.region, p.sex, p.yearFrom, p.yearTo, p.recency], [null, null, null, null, null, 0.5]);
   assert.deepEqual(p.weights, { plot: 0.5 });
 });
 
@@ -83,6 +83,25 @@ test("titles are kept only for films the profile mentions and are length-capped"
   const p = migrate({ liked: ["cw-1"], titles: { "cw-1": "T".repeat(500), "cw-9": "Other" } });
   assert.equal(p.titles["cw-1"].length, 200);
   assert.equal("cw-9" in p.titles, false);
+});
+
+test("the four old era choices each become a start year, and any becomes no limit", () => {
+  assert.equal(migrate({ era: "new" }).yearFrom, 2021);
+  assert.equal(migrate({ era: "2012" }).yearFrom, 2012);
+  assert.equal(migrate({ era: "2000" }).yearFrom, 2000);
+  assert.deepEqual([migrate({ era: "any" }).yearFrom, migrate({ era: "any" }).yearTo], [null, null]);
+  assert.deepEqual([migrate({ era: "constructor" }).yearFrom, migrate({ era: 5 }).yearFrom], [null, null]);
+});
+
+test("a stored year range wins over an old era, bad years are dropped and a reversed pair is turned round", () => {
+  assert.deepEqual(
+    [migrate({ era: "2012", yearFrom: 1990, yearTo: 2005 }).yearFrom, migrate({ era: "2012", yearFrom: 1990, yearTo: 2005 }).yearTo],
+    [1990, 2005],
+  );
+  const bad = migrate({ yearFrom: "1990", yearTo: 3000 });
+  assert.deepEqual([bad.yearFrom, bad.yearTo], [null, null]);
+  const reversed = migrate({ yearFrom: 2010, yearTo: 1990 });
+  assert.deepEqual([reversed.yearFrom, reversed.yearTo], [1990, 2010]);
 });
 
 test("hideWatched is on unless it was explicitly switched off", () => {

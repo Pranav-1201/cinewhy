@@ -23,6 +23,19 @@ def write_smoke_artifacts(out: Path) -> Path:
     """Write the six-film artifact set into `out` (created if missing) and return it."""
     out.mkdir(parents=True, exist_ok=True)
     write_catalogue(out, make_catalogue())
+    # Years and languages like the real build's meta.json, so the page's year bar, language shelves
+    # and filters have something to work with. Written before the manifest, which hashes every file.
+    years = (1975, 1988, 1995, 2004, 2012, 2023)
+    meta = {
+        f"cw-{n}": {
+            "language": "hi" if n % 3 == 0 else "en",
+            "release_date": f"{year}-06-01",
+            "imdb_rating": 6.5 + n / 4,
+            "imdb_votes": 20_000 * n,
+        }
+        for n, year in enumerate(years, start=1)
+    }
+    (out / "meta.json").write_text(json.dumps(meta), encoding="utf-8")
     _toy_polarity_model().save(out / "polarity.joblib")
     (out / "eval.json").write_text(json.dumps({"catalogue": {"films": 6}}), encoding="utf-8")
     build_manifest(out)

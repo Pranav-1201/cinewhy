@@ -32,14 +32,6 @@ export function recencyForAge(band) {
   return table[band] ?? 0.5;
 }
 
-/** The year window an era chip stands for. `newest` is the latest year in the catalogue. */
-export function eraRange(era, newest) {
-  if (era === "new") return { from_year: newest - 7 };
-  if (era === "2012") return { from_year: 2012 };
-  if (era === "2000") return { from_year: 2000 };
-  return {};
-}
-
 /** "2h 41m" from minutes; empty when the runtime is unknown. */
 export function runtimeLabel(minutes) {
   if (!minutes || minutes <= 0) return "";

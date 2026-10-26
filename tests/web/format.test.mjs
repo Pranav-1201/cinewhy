@@ -5,7 +5,6 @@ import { test } from "node:test";
 
 import {
   clamp,
-  eraRange,
   hueOf,
   languageName,
   pct,
@@ -71,14 +70,6 @@ test("age sets a default for how much to favour new films, and unknown is neutra
   assert.equal(recencyForAge(null), 0.5);
   assert.equal(recencyForAge(undefined), 0.5);
   assert.equal(recencyForAge("prefer-not"), 0.5);
-});
-
-test("era chips map to year windows", () => {
-  assert.deepEqual(eraRange("new", 2025), { from_year: 2018 });
-  assert.deepEqual(eraRange("2012", 2025), { from_year: 2012 });
-  assert.deepEqual(eraRange("2000", 2025), { from_year: 2000 });
-  assert.deepEqual(eraRange("any", 2025), {});
-  assert.deepEqual(eraRange(undefined, 2025), {});
 });
 
 test("runtimeLabel", () => {
