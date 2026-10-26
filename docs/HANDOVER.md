@@ -140,6 +140,32 @@ permanently by `unique_review_indices` and `test_no_review_text_appears_in_both_
 ## Five-line handoff ritual (fill in each session)
 
 ```
+Session date:      2026-10-26 (session "nlp 2")
+Model:             Claude Sonnet 5.5
+What we did:       FEATURE-004 data layer (docs/FEATURE-004.md has the design and every measured
+                   number). New: spine.py (14,620 films from TMDB, quotas per language/year),
+                   linking.py (title+year join rules), reviews.py (RT and ebD readers),
+                   catalogue_sources.py (gather + merge + cache), meta.json artifact. Changed:
+                   cf.py (memory: works on rated films only), evaluate.py (one candidate matrix
+                   alive at a time), build.py (TMDB + MovieLens 32M + aclImdb + RT + ebD),
+                   extract.py (per-review source link). Commits 0db2b0d..c452c0d, 320 tests.
+What's left:       1) Run the REAL build into artifacts/v2 (copy polarity.joblib and
+                   polarity_report.json there first; the gather result is cached at
+                   Data/raw/_cache/gathered.jsonl once scratchpad warm_cache.py finishes; the
+                   evaluation needs about 5 GB free RAM). 2) Measure the polarity model on RT and
+                   ebD text (trained on 2011-era aclImdb only). 3) Re-run the evaluation and
+                   replace the old figures (4,164 films, 2,355 etc.) in README and docs; write
+                   D-016 and docs/DATASET.md. 4) Plan steps 2-5: posters (poster_path is already
+                   in meta.json; TMDB attribution needed), recency in ranking and search,
+                   optional demographics, UI redesign with a self-hosted font.
+Watch out for:     Free RAM was 3.4 GB (120 node processes held ~8 GB, Chrome ~4 GB): free
+                   memory before the real build. TMDB_TOKEN is not set in sessions (setx needs a
+                   restart) and the token was pasted into a chat on 2026-10-25: consider
+                   regenerating it. Raw data live in Data/raw/{rt_mother,imdb_ebd,tmdb1m,ml32m};
+                   amazon2023 was measured and dropped. Hindi: 576 films with 20+ reviews but
+                   only ~50 with 50+ MovieLens ratings, so Hindi leans on aspects. Junk 0-byte
+                   files appear at the repo root every few commands: sweep with git status.
+
 Session date:      2026-10-25 (session "nlp 1", continued)
 Model:             Claude Sonnet 5.5
 What we did:       Pushed the demo (3 commits). Then fixed quality gaps: measured aspect-finder

@@ -95,7 +95,7 @@ def _build(
     gold = tmp_path / "gold"
     gold.mkdir()
     out = tmp_path / "artifacts"
-    out.mkdir()
+    out.mkdir(exist_ok=True)  # a test may already have put a file there
     _toy_polarity(out / "polarity.joblib")
     config = BuildConfig(
         sources=sources,
@@ -157,6 +157,21 @@ def test_the_build_writes_a_gather_cache_when_asked_and_not_otherwise(tmp_path: 
     out = _build(again, cache_file=cache_file)
     first = json.loads((cached / "artifacts" / "meta.json").read_text(encoding="utf-8"))
     assert json.loads((out / "meta.json").read_text(encoding="utf-8")) == first
+
+
+def test_a_domain_check_next_to_the_model_is_carried_into_eval_json(tmp_path: Path) -> None:
+    out_dir = tmp_path / "artifacts"
+    out_dir.mkdir()
+    marker = {"by_source": {"rt": {"n": 6000, "accuracy": 0.8}}}
+    (out_dir / "polarity_domain.json").write_text(json.dumps(marker), encoding="utf-8")
+    out = _build(tmp_path)
+    blob = json.loads((out / "eval.json").read_text(encoding="utf-8"))
+    assert blob["polarity_domain"] == marker
+
+
+def test_without_a_domain_check_eval_json_says_none_was_run(tmp_path: Path) -> None:
+    blob = json.loads((_build(tmp_path) / "eval.json").read_text(encoding="utf-8"))
+    assert blob["polarity_domain"] is None
 
 
 def test_a_disagreement_between_movielens_and_tmdb_ids_is_counted(tmp_path: Path) -> None:

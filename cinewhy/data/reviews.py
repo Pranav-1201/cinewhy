@@ -35,7 +35,7 @@ MIN_TEXT_CHARS: Final[int] = 40
 MAX_REVIEWS_PER_SOURCE: Final[int] = 150
 
 _RT_MOVIES_MEMBER: Final[str] = "movies.csv/movies.csv"
-_RT_REVIEWS_MEMBER: Final[str] = "user_reviews.csv/user_reviews.csv"
+RT_REVIEWS_MEMBER: Final[str] = "user_reviews.csv/user_reviews.csv"
 _RT_VERDICT: Final[re.Pattern[str]] = re.compile(r"^\s*:(?:fresh|rotten):\s*")
 # Reviewers edited old reviews years later: "[2004: pretty good is a 7.]". Not part of the review.
 _RT_EDIT_NOTE: Final[re.Pattern[str]] = re.compile(r"\[\d{4}:[^\]]*\]")
@@ -125,7 +125,7 @@ def iter_rt_reviews(archive: Path, imdb_of: Mapping[str, int]) -> Iterator[Sourc
         film, user and date, which is unique for one user's review of one film.
     """
     csv.field_size_limit(10**9)
-    with zipfile.ZipFile(archive) as z, z.open(_RT_REVIEWS_MEMBER) as raw:
+    with zipfile.ZipFile(archive) as z, z.open(RT_REVIEWS_MEMBER) as raw:
         reader = csv.reader(io.TextIOWrapper(raw, encoding="utf-8", newline=""))
         header = next(reader)
         col = {name: header.index(name) for name in header}
@@ -209,6 +209,22 @@ def _iter_json_array(handle: io.TextIOBase) -> Iterator[dict[str, object]]:
         raise ValueError("ebD part ends inside a record: the file looks truncated")
 
 
+def iter_ebd_records(archive: Path) -> Iterator[dict[str, object]]:
+    """Every record of every ebD part, unfiltered, as the parsed JSON objects.
+
+    Args:
+        archive: Path to `imdb_ebd.zip`.
+
+    Raises:
+        ValueError: If a part ends inside a record (a truncated download).
+    """
+    with zipfile.ZipFile(archive) as z:
+        for name in _ebd_parts(z):
+            with z.open(name) as raw:
+                text_stream = io.TextIOWrapper(raw, encoding="utf-8", errors="replace")
+                yield from _iter_json_array(text_stream)
+
+
 def iter_ebd_reviews(archive: Path, imdb_of_key: Mapping[str, int]) -> Iterator[SourceReview]:
     """Stream ebD reviews of the wanted films that are safe and long enough to quote.
 
@@ -216,18 +232,14 @@ def iter_ebd_reviews(archive: Path, imdb_of_key: Mapping[str, int]) -> Iterator[
         archive: Path to `imdb_ebd.zip`.
         imdb_of_key: `film_key` -> IMDb number for the films the catalogue wants.
     """
-    with zipfile.ZipFile(archive) as z:
-        for name in _ebd_parts(z):
-            with z.open(name) as raw:
-                text_stream = io.TextIOWrapper(raw, encoding="utf-8", errors="replace")
-                for record in _iter_json_array(text_stream):
-                    movie = parse_ebd_movie(str(record.get("movie") or ""))
-                    if movie is None or record.get("spoiler_tag"):
-                        continue
-                    imdb_id = imdb_of_key.get(film_key(*movie))
-                    text = clean_ebd_text(str(record.get("review_detail") or ""))
-                    if imdb_id is not None and text:
-                        yield SourceReview(imdb_id, f"ebd/{record['review_id']}", text)
+    for record in iter_ebd_records(archive):
+        movie = parse_ebd_movie(str(record.get("movie") or ""))
+        if movie is None or record.get("spoiler_tag"):
+            continue
+        imdb_id = imdb_of_key.get(film_key(*movie))
+        text = clean_ebd_text(str(record.get("review_detail") or ""))
+        if imdb_id is not None and text:
+            yield SourceReview(imdb_id, f"ebd/{record['review_id']}", text)
 
 
 class Capped:

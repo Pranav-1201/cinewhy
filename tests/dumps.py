@@ -79,16 +79,23 @@ _RT_REVIEWS_HEADER = (
 
 
 def rt_zip(
-    path: Path, films: list[tuple[str, int, str, str]], reviews: list[tuple[str, str]]
+    path: Path,
+    films: list[tuple[str, int, str, str]],
+    reviews: list[tuple[str, str]] | list[tuple[str, str, float]],
 ) -> Path:
-    """The Rotten Tomatoes zip. films: (movie id, year, title, runtime); reviews: (id, quote)."""
+    """The Rotten Tomatoes zip.
+
+    films: (movie id, year, title, runtime). reviews: (movie id, quote) or, to set the star
+    rating, (movie id, quote, stars); the default is 4.0 stars.
+    """
     movies = "".join(
         f"{mid},{year},https://www.rottentomatoes.com/m/{mid},{title},,,,,,,,English,{rt}\n"
         for mid, year, title, rt in films
     )
     rows = "".join(
-        f'{mid},4.0,"{quote}",,False,False,False,False,4.0,2020-01-01,,RT,user{i}\n'
-        for i, (mid, quote) in enumerate(reviews)
+        f'{review[0]},{review[2] if len(review) > 2 else 4.0},"{review[1]}",,False,False,'
+        f"False,False,4.0,2020-01-01,,RT,user{i}\n"
+        for i, review in enumerate(reviews)
     )
     with zipfile.ZipFile(path, "w") as z:
         z.writestr("movies.csv/movies.csv", _RT_MOVIES_HEADER + movies)

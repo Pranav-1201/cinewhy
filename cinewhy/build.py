@@ -360,6 +360,9 @@ def build_artifacts(config: BuildConfig) -> ArtifactManifest:
         random_gold["clean_pooled_b_c"] = asdict(evaluate_random(clean_pool, model))
     slider = slider_response(catalogue)
     polarity_path = out / "polarity_report.json"
+    # Written by `python -m cinewhy.absa.domain_check`: how the model does on RT and ebD text,
+    # which it was not trained on. A separate command because the scan takes about 15 minutes.
+    domain_path = out / "polarity_domain.json"
     n_reviews = sum(len(v) for v in reviews.values())
     eval_blob = {
         "built_at": datetime.now(UTC).isoformat(timespec="seconds"),
@@ -396,6 +399,9 @@ def build_artifacts(config: BuildConfig) -> ArtifactManifest:
         "join_check": join_check,
         "polarity": json.loads(polarity_path.read_text(encoding="utf-8"))
         if polarity_path.is_file()
+        else None,
+        "polarity_domain": json.loads(domain_path.read_text(encoding="utf-8"))
+        if domain_path.is_file()
         else None,
         "gold": gold,
         "random_gold": random_gold,
