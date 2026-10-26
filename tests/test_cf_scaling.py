@@ -8,10 +8,14 @@ only and writes the result into the n x n output needs about the size of that ou
 
 from __future__ import annotations
 
+import gc
 import tracemalloc
+import weakref
 
 import numpy as np
+import pytest
 
+import cinewhy.recsys.evaluate as evaluate_module
 from cinewhy.recsys.cf import build_item_similarity
 
 
@@ -36,6 +40,66 @@ def test_unrated_films_get_zero_rows_and_leave_the_rest_unchanged() -> None:
     unrated = np.setdiff1d(np.arange(12), positions)
     assert not wide[unrated].any()
     assert not wide[:, unrated].any()
+
+
+def test_the_evaluation_keeps_only_one_candidate_similarity_alive(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # The protocol tries three shrinkage values and keeps the best. Holding all three at once
+    # triples the footprint (about 475 MB each at 10,000 films); one best-so-far plus the one
+    # being scored is enough.
+    alive: list[weakref.ref[np.ndarray]] = []
+    most_alive = 0
+    real = build_item_similarity
+
+    def counting(*args: object, **kwargs: object) -> np.ndarray:
+        nonlocal most_alive
+        sim: np.ndarray = real(*args, **kwargs)  # type: ignore[arg-type]
+        alive.append(weakref.ref(sim))
+        gc.collect()
+        most_alive = max(most_alive, sum(1 for r in alive if r() is not None))
+        return sim
+
+    monkeypatch.setattr(evaluate_module, "build_item_similarity", counting)
+    rng = np.random.default_rng(3)
+    n_items, n_users = 40, 400
+    users = np.repeat(np.arange(n_users, dtype=np.int32), 16)
+    items = np.concatenate(
+        [rng.choice(n_items, size=16, replace=False) for _ in range(n_users)]
+    ).astype(np.int32)
+    stars = rng.choice([3.0, 4.0, 4.5, 5.0], size=users.size, p=[0.2, 0.3, 0.3, 0.2]).astype(
+        np.float32
+    )
+    report, _ = evaluate_module.evaluate_recommenders(
+        users, items, stars, n_items, np.zeros((n_items, 7), dtype=np.float32), seed=1
+    )
+    assert len(alive) == 3  # all three shrink values were still tried
+    assert most_alive <= 2, f"{most_alive} similarity matrices alive at once"
+    assert set(report.shrink_candidates_validation_hit20) == {10.0, 50.0, 200.0}
+
+
+def test_a_tie_between_shrink_values_goes_to_the_larger_shrinkage(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Every candidate gets the same matrix, so all three score identically. The documented rule
+    # (more shrinkage is the safer choice) must still pick 200, as the old `max` did.
+    n_items, n_users = 40, 400
+    monkeypatch.setattr(
+        evaluate_module,
+        "build_item_similarity",
+        lambda *a, **k: np.zeros((n_items, n_items), dtype=np.float32),
+    )
+    rng = np.random.default_rng(3)
+    users = np.repeat(np.arange(n_users, dtype=np.int32), 16)
+    items = np.concatenate(
+        [rng.choice(n_items, size=16, replace=False) for _ in range(n_users)]
+    ).astype(np.int32)
+    stars = np.full(users.size, 4.5, dtype=np.float32)
+    report, chosen = evaluate_module.evaluate_recommenders(
+        users, items, stars, n_items, np.zeros((n_items, 7), dtype=np.float32), seed=1
+    )
+    assert chosen == 200.0 == report.chosen_shrink
+    assert len(set(report.shrink_candidates_validation_hit20.values())) == 1  # a real tie
 
 
 def test_memory_follows_the_rated_films_not_the_catalogue_size() -> None:

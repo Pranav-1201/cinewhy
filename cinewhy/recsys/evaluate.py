@@ -221,13 +221,6 @@ def evaluate_recommenders(
     mean_rating, _ = bayesian_popularity(items[train_mask], ratings[train_mask], n_items)
     popularity = _unit(mean_rating.astype(np.float64))
 
-    sims = {}
-    for shrink in shrinks:
-        sims[shrink] = build_item_similarity(
-            users[train_mask], items[train_mask], ratings[train_mask], n_items, shrink=shrink
-        )
-        on_progress(f"built similarity (shrink={shrink:g})")
-
     def hit20(sim: npt.NDArray[np.float32], cases: list[tuple[int, list[int]]]) -> float:
         hits = [
             _rank_of_target(
@@ -242,15 +235,30 @@ def evaluate_recommenders(
         return float(np.mean(hits))
 
     val_cases = _user_cases(users, items, ratings, val_users, n_seeds, rng)
-    val_scores = {s: hit20(sims[s], val_cases) for s in shrinks}
-    # max() keeps the first of equals; iterate largest-first so ties go to more shrinkage.
-    chosen = max(sorted(shrinks, reverse=True), key=lambda s: val_scores[s])
+    # One candidate matrix at a time, keeping only the best so far: three at once triple the
+    # footprint (about 475 MB each at 10,000 films) for no benefit. Largest shrink first and a
+    # candidate must score strictly higher to replace the holder, so ties go to more shrinkage.
+    scores: dict[float, float] = {}
+    chosen: float | None = None
+    chosen_sim: npt.NDArray[np.float32] | None = None
+    for shrink in sorted(shrinks, reverse=True):
+        candidate = build_item_similarity(
+            users[train_mask], items[train_mask], ratings[train_mask], n_items, shrink=shrink
+        )
+        scores[shrink] = hit20(candidate, val_cases)
+        on_progress(f"built similarity (shrink={shrink:g}): validation hit@20 {scores[shrink]:.3f}")
+        if chosen is None or scores[shrink] > scores[chosen]:
+            chosen, chosen_sim = shrink, candidate
+        del candidate  # release it now: the loop variable would otherwise keep it alive
+    if chosen is None or chosen_sim is None:
+        raise ValueError("shrinks must not be empty")
+    val_scores = {s: scores[s] for s in shrinks}  # report in the order the caller gave
     on_progress(f"validation hit@20 by shrink: {val_scores}; chosen {chosen:g}")
 
     # Choose the aspect-fit share on VALIDATION users, by a rule fixed before looking: the
     # largest share whose hit@20 is within one standard error of pure collaborative
     # filtering. Aspect fit buys explainability, and this bounds what it may cost.
-    val_sim = sims[chosen]
+    val_sim = chosen_sim
     cf_val = hit20(val_sim, val_cases)
     standard_error = float(np.sqrt(cf_val * (1.0 - cf_val) / max(1, len(val_cases))))
 
@@ -281,7 +289,7 @@ def evaluate_recommenders(
     )
 
     test_cases = [c for c in _user_cases(users, items, ratings, test_users, n_seeds, rng) if c[1]]
-    sim = sims[chosen]
+    sim = chosen_sim
     names = ("popularity", "cf", "aspect", "hybrid")
     ranks: dict[str, list[int]] = {n: [] for n in names}
     for target, seeds in test_cases:
