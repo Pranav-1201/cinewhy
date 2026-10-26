@@ -8,6 +8,7 @@ JavaScript from before a change (seen once while checking the new front end).
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -74,10 +75,25 @@ def test_static_files_must_be_revalidated(client: TestClient) -> None:
 
 
 def test_a_conditional_request_gets_a_304(client: TestClient) -> None:
-    first = client.get("/styles.css")
-    again = client.get("/styles.css", headers={"if-none-match": first.headers["etag"]})
+    first = client.get("/cinewhy.css")
+    again = client.get("/cinewhy.css", headers={"if-none-match": first.headers["etag"]})
     assert again.status_code == 304
 
 
 def test_api_answers_are_not_cached_either(client: TestClient) -> None:
     assert client.get("/health").headers["cache-control"] == "no-cache"
+
+
+def test_every_file_the_page_loads_is_served_with_the_right_type(client: TestClient) -> None:
+    # A page whose stylesheet or script is missing or served as the wrong type does not fail
+    # loudly: it renders unstyled, which is exactly how a stale or renamed asset looked broken.
+    html = client.get("/").text
+    assets = re.findall(r'(?:href|src)="([^"#:]+\.[a-z0-9]+)"', html)
+    assert "cinewhy.css" in assets and "js/main.js" in assets
+    expected = {"css": "text/css", "js": "javascript", "html": "text/html"}
+    for asset in assets:
+        response = client.get("/" + asset.lstrip("/"))
+        assert response.status_code == 200, asset
+        kind = asset.rsplit(".", 1)[1]
+        if kind in expected:
+            assert expected[kind] in response.headers["content-type"], asset

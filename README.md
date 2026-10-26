@@ -305,7 +305,7 @@ cinewhy/
                 (artifact I/O), evaluate.py, recency_check.py
   artifacts/    manifest.py (hash, build, verify)
   build.py      the whole offline pipeline
-web/            index.html, styles.css, js/ (ES modules, no build step), fonts/
+web/            index.html, cinewhy.css, js/ (ES modules, no build step), fonts/
 tests/          pytest suite (plus tests/web for the browser helpers); tests/data holds the
                 hand-labelled gold clauses
 docs/           HANDOVER, DECISIONS, DATASET, FEATURE-004/005, ARCHITECTURE, MODEL_CARD, ...
