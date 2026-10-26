@@ -487,10 +487,11 @@ Change in hit@20 against the hybrid without the lift, mean [95% paired interval]
 
 Baseline hybrid 18.85% [17.05, 20.65]. First-page mix for an unknown visitor (same file, `cold_start`):
 6 of 20 films from 2000 on at no preference, 13 at 25%, 18 at 50%, 20 at 80% and 100%.
-**Decision.** Keep the lift and the age-based defaults, because recency is what the user asked for
-and the cost of 80% is a visible, stated number, not a hidden one. The *How it works* page prints
-the table, so a visitor choosing 100% can see what it costs. **Open:** lowering the under-25 default
-from 80% to about 50% would keep an 18-of-20 recent first page at no measured cost; not changed
-without Pranav's say. **Caveat:** the evaluated hybrid ranks with MovieLens popularity, not the IMDb
+**Decision.** Keep the lift, and cap the age-based default at 50%, the highest setting measured as
+free: under-18, 18 to 24 and 25 to 34 start at 50% (they used to start at 80%, 80% and 60%), 35 to 44
+at 40%, 45 and over at 25%. The first page still has 18 of 20 films from 2000 on. A visitor can raise
+the slider to 80% or 100% and the *How it works* page prints what that costs. (Changed after
+Pranav asked for everything outside deployment to be finished; the one test that pinned the old
+values was updated to the new ones on purpose.) **Caveat:** the evaluated hybrid ranks with MovieLens popularity, not the IMDb
 scores the live list uses, and MovieLens users rated films of every year, so this is the cost for
 people who rate old and new films alike.

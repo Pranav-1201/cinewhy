@@ -21,9 +21,14 @@ export function hueOf(id) {
   return h % 360;
 }
 
-/** Default "how much to favour new films" from an optional age band; 0.5 when unknown. */
+/**
+ * Default "how much to favour new films" from an optional age band; 0.5 when unknown.
+ * Never above 0.5: on held-out users 50% cost nothing in hit rate while 80% cost 2.5 points
+ * (DECISIONS D-020), so younger visitors start at the highest setting measured as free and can
+ * raise it themselves, seeing its cost on the How it works page.
+ */
 export function recencyForAge(band) {
-  const table = { "under-18": 0.8, "18-24": 0.8, "25-34": 0.6, "35-44": 0.4, "45+": 0.25 };
+  const table = { "under-18": 0.5, "18-24": 0.5, "25-34": 0.5, "35-44": 0.4, "45+": 0.25 };
   return table[band] ?? 0.5;
 }
 

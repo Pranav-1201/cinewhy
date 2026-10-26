@@ -61,9 +61,11 @@ test("hueOf is stable, in range, and spreads different ids apart", () => {
 });
 
 test("age sets a default for how much to favour new films, and unknown is neutral", () => {
-  assert.equal(recencyForAge("18-24"), 0.8);
-  assert.equal(recencyForAge("under-18"), 0.8);
-  assert.equal(recencyForAge("25-34"), 0.6);
+  // Younger bands used to start at 0.8 and 0.6; D-020 measured 0.8 as costing hit rate, so
+  // every band is capped at the 0.5 that was measured as free.
+  assert.equal(recencyForAge("18-24"), 0.5);
+  assert.equal(recencyForAge("under-18"), 0.5);
+  assert.equal(recencyForAge("25-34"), 0.5);
   assert.equal(recencyForAge("35-44"), 0.4);
   assert.equal(recencyForAge("45+"), 0.25);
   assert.equal(recencyForAge(null), 0.5);
