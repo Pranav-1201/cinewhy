@@ -23,6 +23,7 @@ from cinewhy.absa.polarity_mixed import (
     balanced_cap,
     compare,
     decide,
+    domain_document,
     film_side,
     paired_difference,
     read_cache,
@@ -181,3 +182,17 @@ def test_the_sample_cache_round_trips_and_is_discarded_for_other_sampling_rates(
     write_cache(path, {"rt": 40, "ebd": 20}, reviews)
     assert read_cache(path, {"rt": 40, "ebd": 20}) == reviews
     assert read_cache(path, {"rt": 400, "ebd": 20}) is None  # made at another rate: not reusable
+
+
+def test_the_domain_document_scores_both_models_on_the_same_held_out_reviews() -> None:
+    old, new = _model(_CLASSIC), _model(_CLASSIC + _SLANG)
+    held_out = {"rt": _set("rt", _SLANG), "ebd": _set("ebd", _CLASSIC)}
+    document = domain_document(old, new, held_out)
+    assert set(document["by_source"]) == set(document["before_retraining"]) == {"rt", "ebd"}
+    for source in ("rt", "ebd"):  # same reviews for both models: same n, class-balanced
+        assert (
+            document["by_source"][source]["n"] == document["before_retraining"][source]["n"] == 20
+        )
+    assert document["by_source"]["rt"]["accuracy"] == 1.0
+    assert document["before_retraining"]["rt"]["accuracy"] < 0.8
+    assert "held out" in document["note"] and document["held_out_film_modulus"] == 5

@@ -40,7 +40,13 @@ from typing import Any, Final
 import numpy as np
 import numpy.typing as npt
 
-from cinewhy.absa.domain_check import LabelledReview, sample_ebd, sample_rt, wilson_interval
+from cinewhy.absa.domain_check import (
+    LabelledReview,
+    accuracy_report,
+    sample_ebd,
+    sample_rt,
+    wilson_interval,
+)
 from cinewhy.absa.polarity import (
     PolarityModel,
     format_polarity_report,
@@ -179,6 +185,35 @@ def compare(
     return report
 
 
+def domain_document(
+    old: PolarityModel,
+    new: PolarityModel,
+    test_sets: Mapping[str, Sequence[LabelledReview]],
+) -> dict[str, Any]:
+    """The `polarity_domain.json` for a model trained on the mix: held-out films only.
+
+    `domain_check` samples reviews by review hash, which for this model would include films it
+    trained on. This version scores only the film-disjoint test samples, and puts the earlier
+    (aclImdb-only) model's score on the very same reviews beside it.
+
+    Args:
+        old: The previously shipped model.
+        new: The mixed-source model.
+        test_sets: Held-out reviews per source ('rt' and 'ebd'), class-balanced.
+    """
+    pooled = [review for source in ("rt", "ebd") for review in test_sets[source]]
+    return {
+        "note": "model trained on aclImdb plus Rotten Tomatoes and IMDb (ebD) reviews; scored "
+        "only on films held out of training by hash (one in "
+        f"{TEST_FILM_MODULUS}); labels from each source's own star rating (aclImdb "
+        "convention, middle left out); class-balanced; deterministic sample",
+        "held_out_film_modulus": TEST_FILM_MODULUS,
+        "per_class_cap": TEST_PER_CLASS,
+        "by_source": accuracy_report(new, pooled, TEST_PER_CLASS),
+        "before_retraining": accuracy_report(old, pooled, TEST_PER_CLASS),
+    }
+
+
 def write_cache(path: Path, modulus: dict[str, int], reviews: Sequence[LabelledReview]) -> None:
     """Keep the sampled reviews: scanning both dumps takes about half an hour."""
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -211,6 +246,11 @@ def main() -> None:
     parser.add_argument("--rt-modulus", type=int, default=40)
     parser.add_argument("--ebd-modulus", type=int, default=20)
     parser.add_argument("--cache", type=Path, default=Path("Data/raw/_cache/polarity_mixed.jsonl"))
+    parser.add_argument(
+        "--domain-only",
+        action="store_true",
+        help="write polarity_domain.json for the model already saved in --out-dir, from the cache",
+    )
     args = parser.parse_args()
 
     modulus = {"rt": args.rt_modulus, "ebd": args.ebd_modulus}
@@ -220,6 +260,24 @@ def main() -> None:
         sampled = [*sample_rt(args.rt, args.rt_modulus), *sample_ebd(args.ebd, args.ebd_modulus)]
         write_cache(args.cache, modulus, sampled)
     print(f"{len(sampled)} labelled reviews sampled", flush=True)
+
+    if args.domain_only:
+        held_out = {
+            source: balanced_cap(
+                split_by_film(r for r in sampled if r.source == source)["test"], TEST_PER_CLASS
+            )
+            for source in ("rt", "ebd")
+        }
+        document = domain_document(
+            PolarityModel.load(args.old_model),
+            PolarityModel.load(args.out_dir / "polarity.joblib"),
+            held_out,
+        )
+        (args.out_dir / "polarity_domain.json").write_text(
+            json.dumps(document, indent=2, sort_keys=True), encoding="utf-8"
+        )
+        print(json.dumps(document, indent=2, sort_keys=True))
+        return
 
     train_texts: list[str] = []
     train_labels: list[int] = []

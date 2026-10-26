@@ -48,20 +48,35 @@ function joinCard(e) {
 }
 
 function readingCard(e) {
-  const d = e.polarity_domain?.by_source;
+  const doc = e.polarity_domain;
+  const d = doc?.by_source;
+  const before = doc?.before_retraining; // present once the model was retrained on mixed sources
   const pol = e.polarity;
   if (!d && !pol) return null;
   const rows = [];
-  if (pol && has(pol.official_test_accuracy)) rows.push(["aclImdb (what it was trained on)", pol.official_test_n?.toLocaleString("en") ?? "", `${pct(pol.official_test_accuracy)} ± ${(pol.official_test_ci95 * 100).toFixed(1)}`, "", ""]);
+  if (pol && has(pol.official_test_accuracy)) {
+    const label = before ? "aclImdb (its official test split)" : "aclImdb (what it was trained on)";
+    const row = [label, pol.official_test_n?.toLocaleString("en") ?? "", `${pct(pol.official_test_accuracy)} ± ${(pol.official_test_ci95 * 100).toFixed(1)}`];
+    rows.push(before ? [...row, "", "", ""] : [...row, "", ""]);
+  }
   for (const k of Object.keys(d || {})) {
     const s = d[k];
     if (!s?.n) continue;
-    rows.push([SHORT[k] || k, s.n.toLocaleString("en"), `${pct(s.accuracy)} [${pct(s.ci95[0])}, ${pct(s.ci95[1])}]`, pct(s.positive_recall), pct(s.negative_recall)]);
+    const row = [SHORT[k] || k, s.n.toLocaleString("en"), `${pct(s.accuracy)} [${pct(s.ci95[0])}, ${pct(s.ci95[1])}]`];
+    if (before) row.push(before[k]?.n ? pct(before[k].accuracy) : "");
+    row.push(pct(s.positive_recall), pct(s.negative_recall));
+    rows.push(row);
   }
+  const head = before
+    ? ["Source", "Reviews", "Right (95% interval)", "Before retraining", "Praise found", "Criticism found"]
+    : ["Source", "Reviews", "Right (95% interval)", "Praise found", "Criticism found"];
+  const intro = before
+    ? "The model that decides whether a sentence is praise or criticism first learned from IMDb reviews written in 2011, and was weak on newer text. It was retrained on those plus Rotten Tomatoes and later IMDb reviews. These scores use only films held out of that training, with each reviewer's own star rating as the answer, and the same reviews were scored by the earlier model."
+    : "The model that decides whether a sentence is praise or criticism learned from IMDb reviews written in 2011. We tested it on newer text from each source, using each reviewer's own star rating as the answer.";
   const worst = Object.entries(d || {}).filter(([, s]) => s?.n).sort((a, b) => a[1].accuracy - b[1].accuracy)[0];
   return h("div", { class: "how-card" }, h("h3", { text: "Does it read newer reviews correctly?" }),
-    h("p", { text: "The model that decides whether a sentence is praise or criticism learned from IMDb reviews written in 2011. We tested it on newer text from each source, using each reviewer's own star rating as the answer." }),
-    table(["Source", "Reviews", "Right (95% interval)", "Praise found", "Criticism found"], rows),
+    h("p", { text: intro }),
+    table(head, rows),
     worst ? h("p", { class: "callout", text: `It is weakest on ${SHORT[worst[0]] || worst[0]} text (${pct(worst[1].accuracy)}). Treat scores for films whose evidence mostly comes from there as less certain.` }) : null);
 }
 
