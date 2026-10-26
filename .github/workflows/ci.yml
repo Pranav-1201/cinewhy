@@ -152,6 +152,35 @@ jobs:
         if: failure()
         run: docker logs cinewhy
 
+  # Browser tests: the real server on the synthetic artifact set, driven by Chromium at eight widths.
+  # The quality job skips tests/e2e (no playwright there); this job is where they must pass, and it
+  # refuses a run in which nothing passed (an all-skipped run exits 0 and proves nothing).
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev,e2e]"
+          python -m playwright install --with-deps chromium
+
+      - name: Browser tests
+        run: |
+          set -o pipefail
+          pytest tests/e2e -o addopts= -v | tee e2e.out
+          if ! grep -qE '[1-9][0-9]* passed' e2e.out; then
+            echo "::error::no browser test passed, refusing to pass"
+            exit 1
+          fi
+
   secrets:
     runs-on: ubuntu-latest
     steps:

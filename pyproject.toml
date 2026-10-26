@@ -31,6 +31,11 @@ dev = [
     "mypy>=1.13",
     "nbstripout>=0.7",
 ]
+# Browser tests (tests/e2e). Kept apart from `dev` so the ordinary suite and the quality job need no
+# browser; the e2e job in CI installs this and Chromium.
+e2e = [
+    "playwright>=1.48",
+]
 
 [build-system]
 requires = ["setuptools>=75"]
