@@ -280,8 +280,10 @@ All numbers come from `artifacts/v2/eval.json`. Intervals are 95%.
   explicit negation ("aren't terrible") but did not measurably improve accuracy on clean data.
 * The catalogue is the popular top of each year, not all films; an obscure film will not be found.
 * Age, region and language answers only set defaults (how new, which shelf leads, which language).
-  Nothing is inferred about taste from them: a test of that needs MovieLens-1M demographics and has
-  not been run.
+  Nothing is inferred about taste from them: a held-out test on MovieLens-1M found age and sex add
+  about a tenth of a point of hit rate on a 6.5% base, so that feature is off (`docs/DECISIONS.md`
+  D-019; `python experiments\demographics_ml1m.py` reproduces it, needing `Data\raw\ml1m\ml-1m.zip`
+  from <https://files.grouplens.org/datasets/movielens/ml-1m.zip>). Region could not be tested.
 * Weights you set with the sliders cannot be validated offline: there is no ground truth for stated
   preferences.
 * The Dockerfile and the CI job that builds it have **not been run yet** and still describe the

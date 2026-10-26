@@ -451,3 +451,23 @@ On 2,000 held-out MovieLens users, hit@20: popularity 8.3%, similar-taste 20.1%,
 hybrid 18.9%. Hybrid minus similar-taste is -1.25 points at 20 (interval -2.15 to -0.35): slightly worse.
 The aspect blend stays because every pick needs its sentences, not because it raises the hit rate;
 the About page says so. Validation hit@20 was identical (0.184) for shrink 10, 50 and 200.
+
+## D-019: demographic recommendations ship OFF; age and region only set defaults (2026-10-26, Sonnet 5.5)
+
+**Question.** Does a visitor's age or sex, with nothing else known, predict what they will like?
+**Protocol** (`experiments/demographics_ml1m.py`, MovieLens-1M: 6,040 users, 3,883 films): users split
+50/50 with a fixed seed before any fitting; a per-group genre-taste prior fitted on training users;
+variant (age x sex, age, sex) and strength chosen on a validation slice of the training users; test
+users scored once. One liked film hidden per user, the ranker sees only age and sex, hit@20.
+**Result.** Validation: every variant within about 0.5 points of popularity (5.4%), inside the
+noise of 1,005 users. Test (n = 3,019): popularity 6.5% [5.6, 7.4]; the validation-chosen variant
+(sex, strength 0.2) +0.03 points [+0.00, +0.10]. For context, not used for selection: age x sex
++0.13 [+0.03, +0.26], age +0.10 [+0.00, +0.23]. An effect of a tenth of a point on a 6.5% base is
+not worth a feature that asks strangers for personal details.
+**Decision.** Off. The sex question stays hidden (`Facets.demographics_enabled` is not sent), no
+demographic term enters the ranking, and the first-visit sheet says nothing is inferred. Age keeps
+one job (the default "how new" setting) and region India keeps one job (Hindi shelf first); both are
+interface defaults the visitor can change, not predictions.
+**Limits of the test.** ML-1M has no location (only a US zip code), so region could not be tested
+at all; its users joined in 2000 and rated until 2003, so even a positive result would describe
+people from that era; and it measures genre taste only.
