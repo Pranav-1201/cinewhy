@@ -145,6 +145,29 @@ def audience_popularity(catalogue: Catalogue) -> npt.NDArray[np.float64]:
     Returns:
         One value per film, in catalogue order.
     """
+    parts = _quality_and_known(catalogue)
+    if parts is None:
+        return rank.popularity_unit(catalogue)
+    quality, known = parts
+    return QUALITY_SHARE * quality + (1.0 - QUALITY_SHARE) * known
+
+
+def audience_quality(catalogue: Catalogue) -> npt.NDArray[np.float64]:
+    """How well liked each film is, 0 to 1: IMDb's rating pulled toward the average by votes.
+
+    Unlike `audience_popularity` this ignores how many people voted beyond the pull toward the
+    average, so a famous but poorly rated film scores low. Used where a heading claims "well
+    reviewed".
+    Without `meta.json` it falls back to the MovieLens-based signal.
+    """
+    parts = _quality_and_known(catalogue)
+    return rank.popularity_unit(catalogue) if parts is None else parts[0]
+
+
+def _quality_and_known(
+    catalogue: Catalogue,
+) -> tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]] | None:
+    """(quality, known-ness), each 0 to 1 per film, or None when no film has IMDb numbers."""
     ratings = np.array(
         [
             float(catalogue.meta.get(m.movie_id, {}).get("imdb_rating") or 0.0)
@@ -159,11 +182,11 @@ def audience_popularity(catalogue: Catalogue) -> npt.NDArray[np.float64]:
     )
     scored = (ratings > 0) & (votes > 0)
     if not scored.any():
-        return rank.popularity_unit(catalogue)
+        return None
     mean = float(ratings[scored].mean())
     shrunk = np.where(scored, (ratings * votes + mean * VOTE_PRIOR) / (votes + VOTE_PRIOR), mean)
     known = np.log10(1.0 + votes) / math.log10(1.0 + float(votes.max()))
-    return QUALITY_SHARE * _unit(shrunk) + (1.0 - QUALITY_SHARE) * known
+    return _unit(shrunk), known
 
 
 Mode = Literal["blend", "similar"]

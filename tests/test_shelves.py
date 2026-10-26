@@ -16,7 +16,7 @@ from fastapi.testclient import TestClient
 import api.main as api_main
 from cinewhy.recsys import shelves as shelves_module
 from cinewhy.recsys.catalogue import Catalogue, FilmStats
-from cinewhy.recsys.discover import audience_popularity
+from cinewhy.recsys.discover import audience_popularity, audience_quality
 from cinewhy.recsys.shelves import (
     MIN_SHELF,
     NEW_FROM_YEAR,
@@ -191,18 +191,35 @@ def test_the_visitors_earliest_year_also_limits_the_new_shelf() -> None:
     assert new.items and all(i.movie.year is not None and i.movie.year >= 2023 for i in new.items)
 
 
-def test_explore_ranks_candidates_by_popularity_times_distance_from_the_liked_films() -> None:
+def test_explore_offers_only_films_that_are_unlike_known_and_well_liked() -> None:
+    """The heading says "well reviewed": a famous but poorly rated film must never qualify."""
     world = _world()
     liked = [world.index["cw-1"]]
     popularity = audience_popularity(world)
-    order = shelves_module._explore_order(world, liked, popularity)
+    quality = audience_quality(world)
+    order = shelves_module._explore_order(world, liked, popularity, quality)
     closeness = world.similarity[:, liked].mean(axis=1).astype(np.float64)
     unit = closeness / closeness.max()
-    cutoff = float(np.quantile(popularity, shelves_module.EXPLORE_MIN_POPULARITY))
+    known_cutoff = float(np.quantile(popularity, shelves_module.EXPLORE_MIN_POPULARITY))
+    quality_cutoff = float(np.quantile(quality, shelves_module.EXPLORE_MIN_QUALITY))
     assert order, "the test world should leave explore candidates"
-    for i in order:  # every candidate is unlike the taste and well known
-        assert unit[i] < shelves_module.EXPLORE_MAX_SIMILARITY and popularity[i] >= cutoff
-    ranking = [float(popularity[i] * (1.0 - unit[i]) ** 2) for i in order]
+    for i in order:
+        assert unit[i] < shelves_module.EXPLORE_MAX_SIMILARITY
+        assert popularity[i] >= known_cutoff
+        assert quality[i] >= quality_cutoff
+    worst = int(np.argmin(quality))
+    assert worst not in order
+
+
+def test_explore_ranks_candidates_by_quality_popularity_and_distance_from_the_taste() -> None:
+    world = _world()
+    liked = [world.index["cw-1"]]
+    popularity = audience_popularity(world)
+    quality = audience_quality(world)
+    order = shelves_module._explore_order(world, liked, popularity, quality)
+    closeness = world.similarity[:, liked].mean(axis=1).astype(np.float64)
+    unit = closeness / closeness.max()
+    ranking = [float(quality[i] * popularity[i] * (1.0 - unit[i]) ** 2) for i in order]
     assert ranking == sorted(ranking, reverse=True), "best candidate first"
 
 

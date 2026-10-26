@@ -31,6 +31,7 @@ from cinewhy.recsys.discover import (
     DiscoverItem,
     Scored,
     audience_popularity,
+    audience_quality,
     catalogue_facets,
     score_films,
     select_items,
@@ -51,10 +52,14 @@ LANGUAGE_NAMES: Final[dict[str, str]] = {
 }
 MIN_LANGUAGE_FILMS: Final[int] = 25  # fewer films than this and a language gets no shelf of its own
 GENRE_SHELVES: Final[int] = 8
-# Explore keeps films whose similarity to the visitor's likes is below this share of the maximum,
-# among the better-known half of the catalogue.
+# Explore keeps films that are unlike the visitor's likes (similarity below this share of the
+# maximum), well known (the better-known half) AND well liked (the top quarter by shrunk IMDb
+# rating).
+# Without the quality bar the shelf filled with famous but poorly rated films, under a heading that
+# says "well reviewed".
 EXPLORE_MAX_SIMILARITY: Final[float] = 0.5
 EXPLORE_MIN_POPULARITY: Final[float] = 0.5
+EXPLORE_MIN_QUALITY: Final[float] = 0.75  # quantile: films at or above it count as well liked
 
 
 class _Frozen(BaseModel):
@@ -89,23 +94,30 @@ def _earlier(*years: int | None) -> int | None:
 
 
 def _explore_order(
-    catalogue: Catalogue, liked: Sequence[int], popularity: npt.NDArray[np.float64]
+    catalogue: Catalogue,
+    liked: Sequence[int],
+    popularity: npt.NDArray[np.float64],
+    quality: npt.NDArray[np.float64],
 ) -> list[int]:
-    """Film positions for the explore shelf: well known, and unlike what the visitor liked.
+    """Film positions for the explore shelf: well liked, well known, unlike what was liked.
 
-    A film's closeness to the visitor's taste is its mean item similarity to the liked films, scaled
-    to 0..1. Films at or above `EXPLORE_MAX_SIMILARITY` of that, or in the less-known half, are not
-    candidates; the rest are ranked by popularity times the square of their distance from the taste.
+    A film's closeness to the visitor's taste is its mean item similarity to the liked films,
+    scaled to 0..1. Films at or above `EXPLORE_MAX_SIMILARITY` of that, in the less-known half, or
+    below the quality bar are not candidates; the rest are ranked by quality times popularity
+    times the square of their distance from the taste.
     """
     closeness = catalogue.similarity[:, list(liked)].mean(axis=1).astype(np.float64)
     top = float(closeness.max())
     unit = closeness / top if top > 0 else np.zeros_like(closeness)
-    cutoff = float(np.quantile(popularity, EXPLORE_MIN_POPULARITY))
-    ranking = popularity * (1.0 - unit) ** 2
+    known_cutoff = float(np.quantile(popularity, EXPLORE_MIN_POPULARITY))
+    quality_cutoff = float(np.quantile(quality, EXPLORE_MIN_QUALITY))
+    ranking = quality * popularity * (1.0 - unit) ** 2
     candidates = [
         i
         for i in range(len(catalogue.movies))
-        if unit[i] < EXPLORE_MAX_SIMILARITY and popularity[i] >= cutoff
+        if unit[i] < EXPLORE_MAX_SIMILARITY
+        and popularity[i] >= known_cutoff
+        and quality[i] >= quality_cutoff
     ]
     return sorted(candidates, key=lambda i: (-float(ranking[i]), i))
 
@@ -199,9 +211,11 @@ def build_shelves(
         add(
             "explore",
             "Something different",
-            "Well reviewed, but unlike what you usually pick",
+            "Popular and well rated, but unlike what you usually pick",
             scored=similar,
-            order=_explore_order(catalogue, liked, audience_popularity(catalogue)),
+            order=_explore_order(
+                catalogue, liked, audience_popularity(catalogue), audience_quality(catalogue)
+            ),
         )
 
     add(

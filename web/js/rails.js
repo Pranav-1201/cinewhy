@@ -13,10 +13,6 @@ import { hueOf } from "./format.js";
 let sequence = 0;
 const scrollMemory = new Map();
 
-function personalised() {
-  return state.liked.length > 0 || Object.keys(state.weights).length > 0;
-}
-
 /** The filters every shelf shares, from what the visitor has chosen. */
 function shared(facets) {
   const req = { recency: state.recency, profile: profileForApi() };
@@ -27,26 +23,18 @@ function shared(facets) {
   return { ...req, ...eraRange(state.era, facets.newest_year) };
 }
 
-function shelves(facets) {
-  const base = shared(facets);
-  const newest = facets.newest_year;
-  const hindiOk = state.languages.length === 0 || state.languages.includes("hi");
-  const list = [
-    { id: "main", title: personalised() ? "Picked for you" : "Tonight's picks", sub: personalised() ? "Ranked by your taste, with the sentences behind each pick" : "Well known and well liked, newest first", req: { ...base, limit: 14 } },
-  ];
-  const extra = [];
-  if (state.era === "any") {
-    extra.push({ id: "new", title: "New and now", sub: "Released in the last few years", req: { ...base, from_year: newest - 7, recency: 1, limit: 20 } });
-  }
-  if (hindiOk) {
-    const { from_year, to_year } = base;
-    extra.push({ id: "hindi", title: "Hindi picks", sub: "Bollywood and beyond", req: { ...base, languages: ["hi"], from_year, to_year, limit: 20 } });
-  }
-  if (state.era === "any") {
-    extra.push({ id: "classics", title: "Classics worth the detour", sub: "Released in 1999 or earlier", req: { ...base, to_year: 1999, recency: 0, limit: 20 } });
-  }
-  if (state.hindiFirst) extra.sort((a) => (a.id === "hindi" ? -1 : 0));
-  return [...list, ...extra];
+/** What the page shows while the shelves load: three empty rails, so the layout does not jump. */
+const LOADING = ["a", "b", "c"].map((id) => ({ id, title: "Finding films", sub: "Reading what people said about them" }));
+
+/** The server's shelves in display order. A visitor from India sees the Hindi shelf before English. */
+function ordered(shelves) {
+  if (!state.hindiFirst) return shelves;
+  const hindi = shelves.findIndex((s) => s.id === "lang-hi");
+  const english = shelves.findIndex((s) => s.id === "lang-en");
+  if (hindi < 0 || english < 0 || hindi < english) return shelves;
+  const copy = [...shelves];
+  [copy[english], copy[hindi]] = [copy[hindi], copy[english]];
+  return copy;
 }
 
 function skeletonRail(spec) {
@@ -92,27 +80,30 @@ async function spotlight(item, open) {
 export async function renderAll(ctx) {
   const mine = ++sequence;
   const { facets, open } = ctx;
-  const specs = shelves(facets);
   const root = $("#rails");
   const status = $("#status");
   status.hidden = true;
-  root.replaceChildren(...specs.map(skeletonRail));
-  const results = await Promise.allSettled(specs.map((s) => post("/discover", s.req)));
+  root.replaceChildren(...LOADING.map(skeletonRail));
+  let shelves = [];
+  let failure = null;
+  try {
+    shelves = ordered((await post("/shelves", shared(facets))).shelves);
+  } catch (err) {
+    failure = err;
+  }
   if (mine !== sequence) return; // a newer request has taken over
   const rails = [];
   let any = false;
-  let failure = null;
-  results.forEach((result, i) => {
-    if (result.status === "rejected") { failure = result.reason; return; }
-    const items = result.value.items;
-    if (specs[i].id === "main") {
-      any = items.length > 0;
-      spotlight(items[0], open);
-      if (items.length > 1) rails.push(filledRail(specs[i], items.slice(1), open));
-    } else if (items.length) {
-      rails.push(filledRail(specs[i], items, open));
+  for (const shelf of shelves) {
+    const spec = { id: shelf.id, title: shelf.title, sub: shelf.subtitle };
+    if (shelf.id === "picks") {
+      any = shelf.items.length > 0;
+      spotlight(shelf.items[0], open);
+      if (shelf.items.length > 1) rails.push(filledRail(spec, shelf.items.slice(1), open));
+    } else {
+      rails.push(filledRail(spec, shelf.items, open));
     }
-  });
+  }
   root.replaceChildren(...rails);
   if (!any) {
     clear($("#spotlight"));
