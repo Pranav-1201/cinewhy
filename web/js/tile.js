@@ -50,9 +50,12 @@ export function tileActions(movie) {
 export function tile(item, open) {
   const m = item.movie;
   const top = item.reasons?.[0];
-  const why = top
-    ? (top.user_weight > 0 ? `Matches your ${labelOf(top.aspect).toLowerCase()}` : `Praised for ${labelOf(top.aspect).toLowerCase()}`)
-    : null;
+  // The plainest reason first: a film the visitor already liked that this one resembles.
+  const why = item.because
+    ? `Because you liked ${item.because}`
+    : top
+      ? (top.user_weight > 0 ? `Matches your ${labelOf(top.aspect).toLowerCase()}` : `Praised for ${labelOf(top.aspect).toLowerCase()}`)
+      : null;
   const button = h(
     "button", {
       class: "tile-btn", type: "button",

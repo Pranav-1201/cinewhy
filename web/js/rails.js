@@ -70,6 +70,7 @@ async function spotlight(item, open) {
     poster(m, { language: item.language, isNew: item.is_new }),
     h("div", { class: "body" },
       h("h1", { text: m.title }),
+      item.because ? h("p", { class: "because", text: `Because you liked ${item.because}` }) : null,
       h("div", { class: "meta" }, chips.map((c) => h("span", { class: "chip static", text: c }))),
       d?.overview ? h("p", { class: "overview", text: clamp(d.overview, 300) }) : null,
       h("div", { class: "actions" }, h("button", { class: "btn primary", type: "button", onclick: () => open(m.movie_id), text: "See all the receipts" })),

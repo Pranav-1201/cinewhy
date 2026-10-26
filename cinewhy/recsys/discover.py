@@ -56,6 +56,9 @@ class DiscoverItem(_Frozen):
     reasons: tuple[Reason, ...]
     # True when nothing about the visitor was used: the film is shown for being well known.
     is_fallback: bool
+    # Title of the visitor's liked film this one is closest to ("Because you liked ..."), or None
+    # when nothing was liked or no liked film is similar to this one.
+    because: str | None = None
 
 
 class DiscoverResult(_Frozen):
@@ -206,6 +209,7 @@ class Scored:
     years: npt.NDArray[np.int64]
     language_of: list[str | None]
     order: list[int]  # film positions, best score first; ties break on catalogue position
+    liked: list[int]  # catalogue positions of the films the visitor liked
 
 
 def score_films(
@@ -277,7 +281,21 @@ def score_films(
             + lift
         )
     order = sorted(range(n), key=lambda j: (-float(score[j]), j))
-    return Scored(score, weights, cold, years, language_of, order)
+    return Scored(score, weights, cold, years, language_of, order, liked)
+
+
+def _closest_liked(catalogue: Catalogue, liked: Sequence[int], film: int) -> str | None:
+    """Title of the liked film most similar to `film`, or None if none of them is similar at all.
+
+    Ties go to the film liked first. A zero similarity means the two have nothing in common that the
+    data can see, so "because you liked ..." would be a made-up reason and is not offered.
+    """
+    best, best_similarity = None, 0.0
+    for position in liked:
+        similarity = float(catalogue.similarity[film, position])
+        if position != film and similarity > best_similarity:
+            best, best_similarity = position, similarity
+    return catalogue.movies[best].title if best is not None else None
 
 
 def select_items(
@@ -344,6 +362,7 @@ def select_items(
                 score=float(scored.score[i]),
                 reasons=reasons,
                 is_fallback=scored.cold,
+                because=_closest_liked(catalogue, scored.liked, i),
             )
         )
         if len(items) == limit:

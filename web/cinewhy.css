@@ -246,6 +246,7 @@ button { font: inherit; color: inherit; }
 }
 .spotlight .poster { width: 100%; }
 .spotlight h1 { font-size: clamp(2rem, 4.6vw, 3.6rem); line-height: 1.02; letter-spacing: -0.035em; font-weight: 800; margin: 4px 0 12px; }
+.spotlight .because { color: var(--accent-text); font-weight: 700; margin: -4px 0 10px; }
 .spotlight .meta { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
 .spotlight .overview { color: var(--text-2); max-width: 62ch; margin-bottom: 18px; }
 .spotlight .actions { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px; }
