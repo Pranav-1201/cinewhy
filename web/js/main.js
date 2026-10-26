@@ -2,7 +2,7 @@
    filters, then asks for shelves. Everything the visitor chooses lives in state.js. */
 
 import { api } from "./api.js";
-import { $, clear, debounce, h } from "./dom.js";
+import { $, clear, debounce, h, reducedMotion } from "./dom.js";
 import { renderAbout } from "./about.js";
 import { initDialogs, openOnboarding, openTaste } from "./dialogs.js";
 import { openFilm } from "./film.js";
@@ -82,9 +82,26 @@ async function boot() {
   renderFilters();
   initDialogs(ctx);
   wireSearch();
-  $("#taste-btn").addEventListener("click", () => openTaste(ctx));
-  $("#review-btn").addEventListener("click", () => $("#review-dialog").showModal());
-  $("#about-btn").addEventListener("click", () => { renderAbout(); $("#about-dialog").showModal(); });
+  // The same three tools are reachable from the top bar (wide screens) and the Profile sheet
+  // (phones), so each is defined once here.
+  const tools = {
+    taste: () => openTaste(ctx),
+    review: () => $("#review-dialog").showModal(),
+    about: () => { renderAbout(); $("#about-dialog").showModal(); },
+    theme: toggleTheme,
+  };
+  $("#taste-btn").addEventListener("click", tools.taste);
+  $("#review-btn").addEventListener("click", tools.review);
+  $("#about-btn").addEventListener("click", tools.about);
+  $("#nav-home").addEventListener("click", () => window.scrollTo({ top: 0, behavior: reducedMotion() ? "auto" : "smooth" }));
+  $("#nav-search").addEventListener("click", () => { window.scrollTo({ top: 0 }); $("#q").focus(); });
+  $("#nav-profile").addEventListener("click", () => $("#profile-dialog").showModal());
+  for (const button of document.querySelectorAll("#profile-dialog [data-tool]")) {
+    button.addEventListener("click", () => {
+      $("#profile-dialog").close();
+      tools[button.dataset.tool]();
+    });
+  }
   // A like or skip changes the ranking, but not while the visitor is still browsing the rails.
   document.addEventListener("cinewhy:opinion", debounce(() => renderAll(ctx), 1200));
   await renderAll(ctx);
