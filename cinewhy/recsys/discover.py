@@ -17,8 +17,9 @@ Nothing here trains or fits anything (CONSTRAINTS.md #5): it reads the catalogue
 from __future__ import annotations
 
 import math
-from collections.abc import Sequence
-from typing import Final
+from collections.abc import Collection, Sequence
+from dataclasses import dataclass
+from typing import Final, Literal
 
 import numpy as np
 import numpy.typing as npt
@@ -26,7 +27,7 @@ from pydantic import BaseModel, ConfigDict
 
 from cinewhy.recsys import rank
 from cinewhy.recsys.catalogue import Catalogue
-from cinewhy.schemas import Movie, Reason, TasteProfile
+from cinewhy.schemas import Aspect, Movie, Reason, TasteProfile
 
 # The most the recency term can add to a score that otherwise runs from 0 to 1. At 0.30 a film
 # from 2022 can overtake a film from 1995 that is somewhat better liked, but not a far better one.
@@ -165,6 +166,168 @@ def audience_popularity(catalogue: Catalogue) -> npt.NDArray[np.float64]:
     return QUALITY_SHARE * _unit(shrunk) + (1.0 - QUALITY_SHARE) * known
 
 
+Mode = Literal["blend", "similar"]
+
+
+@dataclass(frozen=True)
+class Scored:
+    """Every film's score for one visitor, worked out once and then filtered for many shelves.
+
+    Scoring is the costly part (a pass over the similarity matrix); picking a shelf's films from
+    the result is cheap, so a page of twenty shelves costs a few scorings, not twenty.
+    """
+
+    score: npt.NDArray[np.float64]
+    weights: dict[Aspect, float]
+    cold: bool
+    years: npt.NDArray[np.int64]
+    language_of: list[str | None]
+    order: list[int]  # film positions, best score first; ties break on catalogue position
+
+
+def score_films(
+    catalogue: Catalogue, profile: TasteProfile, *, recency: float = 0.5, mode: Mode = "blend"
+) -> Scored:
+    """Score every film for this visitor.
+
+    `mode="blend"` is what `discover` has always done: collaborative filtering and aspect fit,
+    or popularity alone for a cold start. `mode="similar"` uses only what viewers who liked the
+    same films went on to like (no aspect fit), and is a cold start when nothing is liked.
+
+    Args:
+        catalogue: The loaded catalogue.
+        profile: What the visitor said they like; may be empty.
+        recency: 0 for no preference for new films, 1 for the strongest lift (`RECENCY_MAX`).
+        mode: Which signals to use, as above.
+
+    Returns:
+        Scores, the aspect weights the reasons should use, and whether this is a cold start.
+    """
+    n = len(catalogue.movies)
+    years = film_years(catalogue)
+    language_of = [catalogue.meta.get(m.movie_id, {}).get("language") for m in catalogue.movies]
+    popularity = audience_popularity(catalogue)
+    lift = recency_lift(years, recency)
+    liked = [catalogue.index[i] for i in profile.liked_movie_ids if i in catalogue.index]
+    disliked = [catalogue.index[i] for i in profile.disliked_movie_ids if i in catalogue.index]
+
+    weights: dict[Aspect, float] = {}
+    if mode == "similar":
+        cold = not liked
+    else:
+        weights = {a: w for a, w in profile.aspect_weights.items() if w > 0}
+        explicit = bool(weights)
+        if not weights:
+            weights = rank.infer_weights(catalogue, profile.liked_movie_ids)
+        cold = not liked and not weights
+
+    if cold:
+        score = popularity + lift
+    elif mode == "similar":
+        score = (
+            rank.blend_scores(
+                catalogue.similarity,
+                catalogue.aspect_matrix,
+                popularity,
+                liked=liked,
+                disliked=disliked,
+                weights={},
+            )
+            + lift
+        )
+    else:
+        fit_weight = (
+            rank.EXPLICIT_FIT_WEIGHT
+            if explicit
+            else catalogue.settings.get("inferred_fit_weight", rank.DEFAULT_INFERRED_FIT_WEIGHT)
+        )
+        score = (
+            rank.blend_scores(
+                catalogue.similarity,
+                catalogue.aspect_matrix,
+                popularity,
+                liked=liked,
+                disliked=disliked,
+                weights=weights,
+                fit_weight=fit_weight,
+            )
+            + lift
+        )
+    order = sorted(range(n), key=lambda j: (-float(score[j]), j))
+    return Scored(score, weights, cold, years, language_of, order)
+
+
+def select_items(
+    catalogue: Catalogue,
+    scored: Scored,
+    *,
+    limit: int,
+    languages: Sequence[str] = (),
+    genres: Sequence[str] = (),
+    from_year: int | None = None,
+    to_year: int | None = None,
+    exclude: Collection[str] = (),
+    order: Sequence[int] | None = None,
+) -> tuple[DiscoverItem, ...]:
+    """The best films for one shelf: `scored`, filtered by language, genre and years.
+
+    Args:
+        catalogue: The loaded catalogue.
+        scored: From `score_films`.
+        limit: Most films to return.
+        languages: Keep only films whose original language is one of these (empty keeps all).
+        genres: Keep only films with at least one of these genres (empty keeps all).
+        from_year: Keep only films released in or after this year.
+        to_year: Keep only films released in or before this year (films with no known year are
+            left out).
+        exclude: Film ids never to return (including ones already shown on another shelf).
+        order: Film positions in the order to consider them; default is best score first.
+
+    Returns:
+        Up to `limit` films, in order; fewer (even none) when the filters leave few.
+    """
+    n = len(catalogue.movies)
+    years = scored.years
+    newest = int(years.max()) if n else 0
+    allowed = np.ones(n, dtype=bool)
+    if from_year is not None:
+        allowed &= years >= from_year
+    if to_year is not None:
+        # A film of unknown year (0) is not "older than" anything: keep it out of a shelf of
+        # classics rather than let a missing date pass for a very old film.
+        allowed &= (years > 0) & (years <= to_year)
+    if languages:
+        allowed &= np.array([lang in languages for lang in scored.language_of], dtype=bool)
+    if genres:
+        wanted = set(genres)
+        allowed &= np.array([bool(wanted & set(m.genres)) for m in catalogue.movies], dtype=bool)
+
+    skip = set(exclude)
+    items: list[DiscoverItem] = []
+    for i in order if order is not None else scored.order:
+        movie = catalogue.movies[i]
+        if not allowed[i] or movie.movie_id in skip:
+            continue
+        reasons = rank.reasons_for(
+            catalogue, movie.movie_id, scored.weights, highlight=not scored.weights
+        )
+        if not scored.cold and not reasons:  # nothing real to say about this film for this visitor
+            continue
+        items.append(
+            DiscoverItem(
+                movie=movie,
+                language=scored.language_of[i],
+                is_new=bool(newest and years[i] >= newest - NEW_WINDOW_YEARS),
+                score=float(scored.score[i]),
+                reasons=reasons,
+                is_fallback=scored.cold,
+            )
+        )
+        if len(items) == limit:
+            break
+    return tuple(items)
+
+
 def discover(
     catalogue: Catalogue,
     profile: TasteProfile,
@@ -202,75 +365,15 @@ def discover(
     Returns:
         The ranked list, possibly empty when the filters match nothing.
     """
-    n = len(catalogue.movies)
-    years = film_years(catalogue)
-    newest = int(years.max()) if n else 0
-    language_of = [catalogue.meta.get(m.movie_id, {}).get("language") for m in catalogue.movies]
-
-    allowed = np.ones(n, dtype=bool)
-    if from_year is not None:
-        allowed &= years >= from_year
-    if to_year is not None:
-        # A film of unknown year (0) is not "older than" anything: keep it out of a shelf of
-        # classics rather than let a missing date pass for a very old film.
-        allowed &= (years > 0) & (years <= to_year)
-    if languages:
-        allowed &= np.array([lang in languages for lang in language_of], dtype=bool)
-    if genres:
-        wanted = set(genres)
-        allowed &= np.array([bool(wanted & set(m.genres)) for m in catalogue.movies], dtype=bool)
-
-    skip = set(exclude) | set(profile.liked_movie_ids) | set(profile.disliked_movie_ids)
-    popularity = audience_popularity(catalogue)
-    lift = recency_lift(years, recency)
-
-    liked = [catalogue.index[i] for i in profile.liked_movie_ids if i in catalogue.index]
-    disliked = [catalogue.index[i] for i in profile.disliked_movie_ids if i in catalogue.index]
-    weights = {a: w for a, w in profile.aspect_weights.items() if w > 0}
-    explicit = bool(weights)
-    if not weights:
-        weights = rank.infer_weights(catalogue, profile.liked_movie_ids)
-    cold = not liked and not weights
-
-    if cold:
-        score = popularity + lift
-    else:
-        fit_weight = (
-            rank.EXPLICIT_FIT_WEIGHT
-            if explicit
-            else catalogue.settings.get("inferred_fit_weight", rank.DEFAULT_INFERRED_FIT_WEIGHT)
-        )
-        score = (
-            rank.blend_scores(
-                catalogue.similarity,
-                catalogue.aspect_matrix,
-                popularity,
-                liked=liked,
-                disliked=disliked,
-                weights=weights,
-                fit_weight=fit_weight,
-            )
-            + lift
-        )
-
-    items: list[DiscoverItem] = []
-    for i in sorted(range(n), key=lambda j: (-float(score[j]), j)):
-        movie = catalogue.movies[i]
-        if not allowed[i] or movie.movie_id in skip:
-            continue
-        reasons = rank.reasons_for(catalogue, movie.movie_id, weights, highlight=not weights)
-        if not cold and not reasons:  # nothing real to say about this film for this visitor
-            continue
-        items.append(
-            DiscoverItem(
-                movie=movie,
-                language=language_of[i],
-                is_new=bool(newest and years[i] >= newest - NEW_WINDOW_YEARS),
-                score=float(score[i]),
-                reasons=reasons,
-                is_fallback=cold,
-            )
-        )
-        if len(items) == limit:
-            break
-    return DiscoverResult(items=tuple(items), cold_start=cold, manifest=manifest)
+    scored = score_films(catalogue, profile, recency=recency)
+    items = select_items(
+        catalogue,
+        scored,
+        limit=limit,
+        languages=languages,
+        genres=genres,
+        from_year=from_year,
+        to_year=to_year,
+        exclude=set(exclude) | set(profile.liked_movie_ids) | set(profile.disliked_movie_ids),
+    )
+    return DiscoverResult(items=items, cold_start=scored.cold, manifest=manifest)

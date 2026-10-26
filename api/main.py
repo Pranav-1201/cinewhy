@@ -46,6 +46,7 @@ from api.models import (
     Facets,
     MovieDetail,
     SentenceAnalysis,
+    ShelvesRequest,
 )
 from cinewhy.absa.extract import (
     MIN_OPINION,
@@ -59,6 +60,7 @@ from cinewhy.artifacts.manifest import load_manifest, verify
 from cinewhy.recsys import discover, rank
 from cinewhy.recsys.catalogue import Catalogue, load_catalogue
 from cinewhy.recsys.discover import DiscoverResult
+from cinewhy.recsys.shelves import ShelvesResult, build_shelves
 from cinewhy.schemas import (
     ArtifactManifest,
     Aspect,
@@ -282,6 +284,26 @@ def discover_films(request: DiscoverRequest) -> DiscoverResult:
     )
 
 
+def shelves(request: ShelvesRequest) -> ShelvesResult:
+    """Every shelf of the home page in one answer, with no film on two shelves.
+
+    Deterministic, like `recommend`. See `cinewhy.recsys.shelves` for which shelves exist and why a
+    short one is left out.
+    """
+    state = _loaded()
+    return build_shelves(
+        state.catalogue,
+        request.profile,
+        recency=request.recency,
+        languages=request.languages,
+        genres=request.genres,
+        from_year=request.from_year,
+        to_year=request.to_year,
+        exclude=request.exclude_movie_ids,
+        manifest=state.manifest.manifest_hash,
+    )
+
+
 def facets() -> Facets:
     """Counts for the UI's filters: films per language and genre, and the year range."""
     return Facets.model_validate(discover.catalogue_facets(_loaded().catalogue))
@@ -428,6 +450,10 @@ def create_app(artifacts: Path | None = None, *, rate_limit: int = _RATE_LIMIT) 
     @app.post("/discover")
     def discover_route(request: DiscoverRequest) -> DiscoverResult:
         return discover_films(request)
+
+    @app.post("/shelves")
+    def shelves_route(request: ShelvesRequest) -> ShelvesResult:
+        return shelves(request)
 
     @app.get("/facets")
     def facets_route() -> Facets:

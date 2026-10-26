@@ -86,6 +86,26 @@ class DiscoverRequest(BaseModel):
     exclude_movie_ids: tuple[str, ...] = Field(default=(), max_length=3000)
 
 
+class ShelvesRequest(BaseModel):
+    """A request for the whole home page's shelves at once; every field is bounded.
+
+    The visitor's own language, genre and year choices narrow every shelf; the shelves themselves
+    (picks, similar, new, classics, languages, genres) are decided by the server.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    profile: TasteProfile = Field(default_factory=TasteProfile)
+    recency: float = Field(default=0.5, ge=0.0, le=1.0)
+    languages: tuple[Literal["en", "hi", "ja", "fr"], ...] = Field(default=(), max_length=4)
+    genres: tuple[Annotated[str, StringConstraints(max_length=40)], ...] = Field(
+        default=(), max_length=10
+    )
+    from_year: int | None = Field(default=None, ge=1880, le=2100)
+    to_year: int | None = Field(default=None, ge=1880, le=2100)
+    exclude_movie_ids: tuple[str, ...] = Field(default=(), max_length=3000)
+
+
 class Facets(_Out):
     """Counts the UI shows next to its filters."""
 
