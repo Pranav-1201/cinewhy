@@ -29,16 +29,27 @@ Branch `feature/roadmap-v4`, worktree `D:\NLPPROJECT-dev`, local only, never pus
 * Docs: DECISIONS D-021..D-024 and the HANDOVER ritual are written.
 * Whole suite on the branch (with the Playwright path): 466 passed, 1 skipped; ruff, format, mypy clean.
 
+* Also committed since: `cc82a5e` "Because you liked X" reasons; `3e4fa31` null-text fix + bigger stars (phone QA);
+  `846f1de` D-025 (3 liked films double the cold-start hit rate: 6.7% to 12.9%; deck stays at 12) + README;
+  `07d824a` artifact download at container start (16 tests); `0370bb2` proxy note; `38da0e0` TMDB pilot script
+  (ready, needs the owner's token); `e8e5f5e` MovieLens belief 2024 measured: not useful (82 films with 20+ ratings).
+* Official IMDb dumps downloaded and measured (roadmap section 17): recent films and series are plentiful; only
+  25 titles with 1,000+ votes are flagged adult.
+
 ## Now
-* Dev server on port 8010 against `CINEWHY_ARTIFACTS=D:/NLPPROJECT/artifacts/v3` (demo stays on 8000, untouched).
+* Running in the background: `experiments/spine_reach.py` (widened film list, counts films reaching 5/20/50 reviews
+  per language and era from the dumps already on disk). Result file:
+  `C:/Users/Dell/AppData/Local/Temp/claude/D--NLPPROJECT/33717dde-bb2b-4de8-b656-cb441c7b62e6/scratchpad/spine_reach.json`.
+  If the session was interrupted, rerun: `python -u experiments/spine_reach.py --root D:/NLPPROJECT --out spine_reach.json`.
+* Dev server on port 8010 is STOPPED to free memory; restart with `CINEWHY_ARTIFACTS=D:/NLPPROJECT/artifacts/v3`
+  `python -m uvicorn api.main:app --port 8010` from `D:\NLPPROJECT-dev`. The demo on 8000 is untouched.
 
 ## Next (in order)
-1. "Because you liked X" reasons (server field on each item) for the spotlight and tiles.
-2. Phone visual QA of Library, Rate films, Profile sheet and the year bar; fix what shows.
-3. Free official data without keys: IMDb non-commercial datasets (series lists, fresh votes) to size the series
-   and 2024-2026 films; then F0 source verification (TMDB reviews pilot needs Pranav's OK to use the TMDB key).
-4. Measure hit-at-20 by number of rated films (decides the Rate films deck size).
-5. **Decision for Pranav: OK to push this branch** so CI can run the Docker image build and the browser job?
+1. Read the spine_reach result into the roadmap (what the existing dumps can give English, Hindi, Telugu, Japanese, French at 50 reviews).
+2. Tier B (ratings-only titles) end to end: server (no reasons needed), card label, receipts replaced by an honest line.
+3. Language chips and shelves for ja and fr when data exists (DiscoverRequest and profile still accept only en and hi).
+4. **Decisions for Pranav:** push this branch so CI can run the Docker build and the browser job; run the TMDB pilot
+   with his token (`$env:TMDB_API_TOKEN=...; python experiments/tmdb_reviews_pilot.py`); say what "adult" meant.
 
 ## Rules while working
 * Commit only on this branch, explicit paths, never `git add -A`; never touch `D:\NLPPROJECT`.
