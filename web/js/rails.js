@@ -73,7 +73,7 @@ async function spotlight(item, open) {
       h("div", { class: "meta" }, chips.map((c) => h("span", { class: "chip static", text: c }))),
       d?.overview ? h("p", { class: "overview", text: clamp(d.overview, 300) }) : null,
       h("div", { class: "actions" }, h("button", { class: "btn primary", type: "button", onclick: () => open(m.movie_id), text: "See all the receipts" })),
-      lines.length ? h("div", { class: "receipts" }, receipt({ title: m.title, lines, bySource: d.reviews_by_source, maxQuotes: 1, heading: "Why tonight's pick" })) : null));
+      lines.length ? h("div", { class: "receipts" }, receipt({ title: m.title, lines, bySource: d.reviews_by_source, maxQuotes: 1, heading: "Why we picked this" })) : null));
   root.replaceChildren(section);
 }
 

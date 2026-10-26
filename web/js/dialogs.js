@@ -3,7 +3,7 @@
 
 import { post } from "./api.js";
 import { $, clear, h } from "./dom.js";
-import { pct, recencyForAge, signed } from "./format.js";
+import { pct, recencyForAge, verdictFor } from "./format.js";
 import { receipt } from "./receipt.js";
 import { labelOf, resetTaste, save, state } from "./state.js";
 
@@ -108,13 +108,13 @@ function wireReviewDialog() {
         const strongest = c.mentions.slice().sort((a, b) => Math.abs(b.polarity) - Math.abs(a.polarity))[0];
         const tone = strongest && Math.abs(strongest.polarity) >= 0.2 ? (strongest.polarity > 0 ? "pos" : "neg") : "";
         return h("span", { class: "clause" }, h("mark", { class: tone, text: c.text }),
-          c.mentions.map((m) => h("span", { class: "chip static", text: `${labelOf(m.aspect)} ${signed(m.polarity)}` })), " ");
+          c.mentions.map((m) => h("span", { class: "chip static", text: `${labelOf(m.aspect)}: ${verdictFor(m.polarity).toLowerCase()}` })), " ");
       })));
-      const lines = r.summary.map((s) => ({ aspect: s.aspect, score: s.polarity, support: s.mentions, supportLabel: "mentions", quotes: [], weight: 0 }));
+      const lines = r.summary.map((s) => ({ aspect: s.aspect, score: s.polarity, support: s.mentions, supportNouns: ["mention in your review", "mentions in your review"], quotes: [], weight: 0 }));
       out.replaceChildren(
         h("p", { class: "analysis-text" }, body),
         lines.length ? receipt({ title: "your review", lines, heading: "What your review says", animate: false }) : h("p", { class: "note", text: "No aspect was judged in this text." }),
-        h("p", { class: "note", text: `The whole review reads as ${r.overall >= 0 ? "positive" : "negative"} (${signed(r.overall)}). Single clauses are harder to judge than whole reviews; see How it works for how often it is right.` }));
+        h("p", { class: "note", text: `Taken as a whole, this review reads as ${r.overall >= 0 ? "positive" : "negative"}. Single clauses are harder to judge than whole reviews; see How it works for how often it is right.` }));
     } catch (err) {
       out.replaceChildren(h("p", { class: "note", text: err.message }));
     }

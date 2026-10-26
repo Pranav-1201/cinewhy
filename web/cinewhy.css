@@ -325,6 +325,8 @@ button { font: inherit; color: inherit; }
 .receipt .dots { flex: 1; border-bottom: 2px dotted var(--paper-muted); opacity: 0.55; transform: translateY(-4px); }
 .receipt .value { font-variant-numeric: tabular-nums; }
 .receipt .support { color: var(--paper-muted); font-weight: 400; font-size: 0.82rem; }
+.receipt .basis { margin: 4px 0 0; color: var(--paper-muted); font-size: 0.82rem; }
+.receipt .value { cursor: help; }
 .receipt blockquote { margin: 8px 0 0; padding: 0 0 0 10px; border-left: 3px solid var(--mid); font-size: 0.92rem; }
 .receipt .stamp { display: block; margin-top: 3px; color: var(--paper-muted); font-size: 0.78rem; }
 .receipt .stamp a { color: inherit; }

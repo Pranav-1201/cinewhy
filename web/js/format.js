@@ -14,6 +14,12 @@ export function sourceOf(reviewId) {
   return { key, label: SOURCES[key] || "A review" };
 }
 
+/** "From an IMDb review", "From a Rotten Tomatoes review", or "From a review" when the site is unknown. */
+export function sourceStamp(label) {
+  if (!label || label === "A review") return "From a review";
+  return `From ${/^[AEIOU]/.test(label) ? "an" : "a"} ${label} review`;
+}
+
 /** A stable hue (0-359) from an id, for the placeholder shown when a poster is missing. */
 export function hueOf(id) {
   let h = 0;
@@ -53,14 +59,35 @@ export function languageName(code) {
   return { en: "English", hi: "Hindi" }[code] || "";
 }
 
+const count = (n) => n.toLocaleString("en");
+
 /** Plain sentence for a film's reviews, from the per-source counts the server sends. */
 export function reviewsLine(bySource) {
   const rt = bySource?.rt || 0;
   const imdb = (bySource?.acl || 0) + (bySource?.ebd || 0);
-  const parts = [];
-  if (rt) parts.push(`${rt.toLocaleString("en")} from Rotten Tomatoes`);
-  if (imdb) parts.push(`${imdb.toLocaleString("en")} from IMDb`);
-  return parts.length ? `Read ${parts.join(" and ")}` : "";
+  const total = rt + imdb;
+  if (!total) return "";
+  const noun = total === 1 ? "review" : "reviews";
+  if (!rt) return `We read ${count(total)} ${noun} from IMDb`;
+  if (!imdb) return `We read ${count(total)} ${noun} from Rotten Tomatoes`;
+  return `We read ${count(total)} reviews: ${count(rt)} from Rotten Tomatoes and ${count(imdb)} from IMDb`;
+}
+
+/**
+ * One word for how reviewers felt, from an aspect score between -1 and +1. The edges are symmetric
+ * and inclusive on the strong side: 0.5 is Loved and -0.5 is Panned; 0.2 is Liked and -0.2 is Disliked.
+ */
+export function verdictFor(score) {
+  if (score >= 0.5) return "Loved";
+  if (score >= 0.2) return "Liked";
+  if (score > -0.2) return "Mixed";
+  if (score > -0.5) return "Disliked";
+  return "Panned";
+}
+
+/** "Based on 238 review sentences about acting": what a verdict rests on; empty when unknown. */
+export function basisLine(n, aspectName, [one, many] = ["review sentence", "review sentences"]) {
+  return n ? `Based on ${count(n)} ${n === 1 ? one : many} about ${String(aspectName).toLowerCase()}` : "";
 }
 
 /** Wilson 95% interval for hits out of n: the spread shown beside every measured rate. */

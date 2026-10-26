@@ -58,7 +58,7 @@ function body(d) {
     d.overview ? h("p", { class: "film-overview", text: d.overview }) : null,
     actions(m, d),
     d.aspects.length
-      ? receipt({ title: m.title, lines: linesFromAspects(d.aspects), bySource: d.reviews_by_source, heading: `Receipt for ${m.title}` })
+      ? receipt({ title: m.title, lines: linesFromAspects(d.aspects), bySource: d.reviews_by_source, heading: `What reviewers say about ${m.title}` })
       : h("p", { class: "film-overview", text: "Not enough reviews mention any single aspect to score it." }),
     h("p", { class: "film-links", text: ratings }),
   ];
