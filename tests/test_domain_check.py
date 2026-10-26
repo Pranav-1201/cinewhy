@@ -102,6 +102,26 @@ def test_rt_sample_strips_the_verdict_prefix_and_leaves_out_the_middle(tmp_path:
     assert got == {_POS: 1, _NEG: 0}
 
 
+def test_samples_record_which_film_each_review_is_about(tmp_path: Path) -> None:
+    # The mixed-source retraining keeps every film wholly on one side of its split. If a sampler
+    # stopped reporting the film, the split would quietly fall back to hashing each review's text
+    # and one film's reviews would land on both sides: that leak is what this pins.
+    ebd = {
+        r.text: r.film
+        for r in sample_ebd(
+            _ebd_zip(
+                tmp_path / "e.zip",
+                [_ebd("Heat (1995)", "r1", _POS, "9"), _ebd("Se7en (1995)", "r2", _NEG, "2")],
+            )
+        )
+    }
+    assert ebd == {_POS: "Heat (1995)", _NEG: "Se7en (1995)"}
+    films = [("a1", 1995, "Heat", "2h 50m"), ("b2", 1995, "Se7en", "2h 7m")]
+    reviews = [("a1", _POS, 5.0), ("b2", _NEG, 1.0)]
+    rt = {r.text: r.film for r in sample_rt(rt_zip(tmp_path / "r.zip", films, reviews))}
+    assert rt == {_POS: "a1", _NEG: "b2"}
+
+
 def test_rt_sample_leaves_out_spoilers_and_profanity(tmp_path: Path) -> None:
     header = (
         "movieId,rating,quote,reviewId,isVerified,isSuperReviewer,hasSpoilers,hasProfanity,"

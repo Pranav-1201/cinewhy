@@ -52,6 +52,10 @@ class LabelledReview:
     source: str
     text: str
     label: int
+    # The film the review is about, in the source's own naming. Lets a caller keep all of a
+    # film's reviews on one side of a split (a model that sees a film in training and test learns
+    # its name, not its sentiment). Empty when the source does not say.
+    film: str = ""
 
 
 def label_from_ebd_rating(rating: object) -> int | None:
@@ -96,7 +100,7 @@ def sample_ebd(archive: Path, modulus: int = 1) -> Iterator[LabelledReview]:
         if label is None or not _in_sample(str(record.get("review_id")), modulus):
             continue
         if text := clean_ebd_text(str(record.get("review_detail") or "")):
-            yield LabelledReview("ebd", text, label)
+            yield LabelledReview("ebd", text, label, str(record.get("movie") or ""))
 
 
 def sample_rt(archive: Path, modulus: int = 1) -> Iterator[LabelledReview]:
@@ -132,7 +136,7 @@ def sample_rt(archive: Path, modulus: int = 1) -> Iterator[LabelledReview]:
             except ValueError:
                 continue
             if label is not None and (text := clean_rt_quote(row[quote_i])):
-                yield LabelledReview("rt", text, label)
+                yield LabelledReview("rt", text, label, row[movie_i])
 
 
 def wilson_interval(successes: int, n: int, z: float = 1.96) -> tuple[float, float]:
