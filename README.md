@@ -189,23 +189,37 @@ venv\Scripts\python.exe -m mypy
 Expected: every test passes (the browser-side helpers run under Node's built-in test runner from
 inside pytest), ruff says `All checks passed!`, and mypy says `Success: no issues found`.
 
+The browser tests (`tests/e2e`: the page at eight widths from 320 to 1440 px, watched films, the
+library, rating, download and load) need Playwright and are skipped without it:
+`pip install -e ".[e2e]"` then `python -m playwright install chromium`, and run the same `pytest`
+command. CI runs them in their own job.
+
 ### 2. Click through the demo
 
 Open <http://localhost:8000/>.
 
-1. **First visit.** A sheet asks, optionally, for languages, age and region. Answer or press *Skip*.
-   Age only sets how strongly newer films are favoured; region India puts the Hindi shelf first.
-   Nothing leaves your browser.
-2. **Shelves.** Posters load from TMDB. Move *How new* in *Your taste* to 0 and the first page gets
-   older; to 100% and it fills with recent films.
-3. **Receipts.** Click a poster. The drawer shows each aspect's score as a bar, with real review
-   sentences and the source (Rotten Tomatoes or IMDb) for each.
-4. **Taste.** Open *Your taste* and push *Pacing* to ~90%. The picks change to films whose reviews
-   praise pacing, each with a "which you care about" line. Press the heart on a poster and the
-   list leans on films similar viewers liked.
-5. **Try a review.** Press *Use an example*, then *Analyze*. Clauses are underlined blue or red,
-   each tagged with its aspect and score.
-6. **How it works.** Every number on this page is read from `eval.json`, including the limits.
+1. **First visit.** A sheet asks, optionally, for languages, what you like to watch (genres), age and
+   region. Answer, press *Save, then rate a few films*, or press *Skip*. Age only sets how strongly
+   newer films are favoured; region India puts the Hindi shelf first. Nothing leaves your browser.
+2. **Shelves.** One request fills the whole page: *Tonight's picks*, then (once you have liked a
+   film) *Viewers like you also watch* and *Something different*, *New and now* (2021 on), *Old
+   school* (before 1990), a shelf per language and per genre. No film appears twice.
+3. **Quick answers.** Hover a poster (or look at its right edge on a phone): heart = like, eye = I
+   have watched it, bookmark = want to watch. Watched films leave every shelf unless you switch off
+   *Hide films I've watched*.
+4. **Years.** *Old school* and *New* are presets; drag the two handles for any span. With both
+   handles at the ends it says *Any year* and nothing is limited.
+5. **Receipts.** Click a poster. Each aspect gets one word (Loved, Liked, Mixed, Disliked, Panned),
+   what it rests on ("Based on 238 review sentences about acting") and real review sentences with
+   their source. After a like, picks say "Because you liked ...".
+6. **Rate films** (top bar, or the bottom bar on a phone). One card at a time: rate it, say you have
+   not seen it, or that it is not for you. **Library** lists what you watched (with your stars), want
+   to watch, liked and said no to, and lets you change any of it.
+7. **Profile.** Counts, shortcuts, the older tools (*Your taste*, *Try a review*, *How it works*), and
+   *Download my profile* / *Load a profile file* to move your answers to another browser.
+8. **Phone.** Resize the window below 640 px: the top bar keeps the search box and the theme
+   button and a bottom bar holds Home, Search, Rate, Library and Profile.
+9. **How it works.** Every number on this page is read from `eval.json`, including the limits.
 
 ### 3. Poke the API
 
@@ -215,6 +229,7 @@ curl http://localhost:8000/facets
 curl "http://localhost:8000/search?q=matrix"
 curl http://localhost:8000/movie/cw-0468569
 curl -X POST http://localhost:8000/discover -H "content-type: application/json" -d "{\"limit\":5,\"languages\":[\"hi\"],\"recency\":0.8}"
+curl -X POST http://localhost:8000/shelves  -H "content-type: application/json" -d "{\"profile\":{\"liked_movie_ids\":[\"cw-0816692\"]}}"
 curl -X POST http://localhost:8000/recommend -H "content-type: application/json" -d "{\"profile\":{\"aspect_weights\":{\"pacing\":0.9}}}"
 curl -X POST http://localhost:8000/analyze   -H "content-type: application/json" -d "{\"text\":\"Great acting but the pacing dragged.\"}"
 curl http://localhost:8000/movie/nope          rem 404 with no detail
@@ -227,7 +242,7 @@ Interactive docs: <http://localhost:8000/docs>.
 * **Tamper test.** Stop the server, open `artifacts\v3\profiles.json`, change one character, start
   the server again. It must refuse to boot with `ManifestMismatchError`. Restore the file (or
   rebuild) to recover.
-* **Abuse test.** Send a body over 64 KB (413), more than 120 POSTs in a minute (429), or text
+* **Abuse test.** Send a body over 160 KB (413), more than 120 POSTs in a minute (429), or text
   over 5,000 characters to `/analyze` (422). A forced server error returns only an opaque
   `error_id`, never a stack trace.
 

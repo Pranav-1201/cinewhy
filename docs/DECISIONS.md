@@ -526,8 +526,8 @@ planted bugs were each caught. **Limits changed to carry it:** `exclude_movie_id
 request body 64 KB to 160 KB, because the watched list travels with every shelf request. Two guard
 tests that pinned the old numbers were re-pinned to the new boundary on purpose, with a new test that
 the largest library the browser can send is accepted. **Not decided:** what a star rating is worth to
-the ranker. Today 4 and 5 stars count as a like and 1 and 2 as a dislike (`opinionForStars`); the
-hit-at-20 by number of rated films has not been measured yet.
+the ranker. Today 4 and 5 stars count as a like and 1 and 2 as a dislike (`opinionForStars`); how
+many answers it takes is measured in D-025, what a single star is worth is not.
 
 ## D-022: one request returns every shelf, and a short shelf is left out (2026-10-27, Sonnet 5.5)
 
@@ -558,3 +558,21 @@ only; artifacts are mounted or downloaded at start and still verified against th
 `tests/smoke_artifacts.py` writes a six-film verified set, and the CI `docker` job boots the image on it
 and probes `/health`, `/recommend` and the page. **Unverified until the branch is pushed:** Docker is not
 installed here, so the image build has never run; everything else in that job was run locally.
+
+## D-025: three liked films roughly double the first page; keep the 12-card Rate deck and let people go on (2026-10-27, Sonnet 5.5)
+
+`experiments/seed_curve.py` replays the held-out protocol (D-018) giving the ranker 0, 1, 2, 3, 5, 10
+or 20 of a user's liked films; same 2,000 test users and same hidden film at every count, similarity
+and popularity fitted on training users only, shrink 200 and aspect-fit share 0.45 as `eval.json`
+chose. Hit-at-20 for the shipped hybrid, mean and 95% interval: **0 films 6.7% [5.6, 7.7]; 1 8.7%
+[7.5, 10.0]; 2 11.3% [10.0, 12.8]; 3 12.9% [11.5, 14.3]; 5 13.6% [12.0, 15.2]; 10 16.0% [14.4, 17.5];
+20 17.8% [16.2, 19.5]**. Paired gains: 0 to 1 +2.1 points [+0.5, +3.5]; 1 to 2 +2.6 [+1.5, +4.0]; 2 to
+3 +1.6 [+0.4, +2.6]; **3 to 5 +0.7 [-0.6, +1.9] (not distinguishable from zero)**; 5 to 10 +2.5 [+1.2,
++3.7]; 10 to 20 +1.8 [+0.7, +3.0]. Pure collaborative filtering scores 18.8% at 20 films against the
+hybrid's 17.8%, the same direction as D-018. **Decision.** The first three answers are worth the most
+(they double the cold-start rate), so the Rate dialog stays at 12 cards, since a person likes
+perhaps a third to a half of the films they have seen, and offers "Show me more films" at the end.
+**Limits.** Only users with at least 21 liked films qualify (so every count uses the same users); they
+are heavier raters than a typical newcomer, so read the curve for its shape, not as the rate a new
+visitor will see. The deck is chosen for variety, not for films a person has probably seen; choosing
+films people are likely to know would raise the number of useful answers per card and is untested.
