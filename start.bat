@@ -11,9 +11,12 @@ if not exist "%PY%" (
   echo The virtual environment is missing. Run setup.bat first.
   exit /b 1
 )
-if not exist artifacts\v2\manifest.json if not exist artifacts\manifest.json (
-  echo No artifacts found. The data build needs the raw datasets in Data\raw ^(see README.md,
-  echo "Build the data"^), then:  %PY% -m cinewhy.build --out artifacts\v2
+set FOUND=
+for /d %%D in (artifacts\v*) do if exist "%%D\manifest.json" set FOUND=1
+if exist artifacts\manifest.json set FOUND=1
+if not defined FOUND (
+  echo No artifacts found. Unzip the ready-made build into artifacts\v2 ^(README.md, step 5^), or
+  echo build one from the raw datasets ^(README.md, step 6^):  %PY% -m cinewhy.build --out artifacts\v2
   exit /b 1
 )
 echo Starting CineWhy at http://localhost:8000/  (Ctrl+C to stop)

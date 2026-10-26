@@ -18,6 +18,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import time
 import uuid
 from collections import defaultdict, deque
@@ -88,17 +89,24 @@ class _State:
 
 _state: _State | None = None
 
-# The TMDB-based build lives in artifacts/v2; the aclImdb-only build it replaced sits directly in
-# artifacts/. v2 wins when it exists so `start.bat` serves the current catalogue without a rename.
-CURRENT_BUILD = Path("artifacts") / "v2"
-
 
 def default_artifacts_dir() -> Path:
-    """Where to load artifacts from: `$CINEWHY_ARTIFACTS`, else artifacts/v2, else artifacts/."""
+    """Where to load artifacts from.
+
+    `$CINEWHY_ARTIFACTS` if set; otherwise the highest-numbered `artifacts/vN` that has a
+    manifest (the TMDB-based builds live there, newest last, so `start.bat` serves the current
+    catalogue without a rename); otherwise `artifacts/`, where the aclImdb-only build sits. A
+    folder without a manifest is a half-made build and is skipped.
+    """
     chosen = os.environ.get("CINEWHY_ARTIFACTS")
     if chosen:
         return Path(chosen)
-    return CURRENT_BUILD if (CURRENT_BUILD / "manifest.json").is_file() else Path("artifacts")
+    builds = [
+        (int(found.group(1)), path)
+        for path in Path("artifacts").glob("v*")
+        if (found := re.fullmatch(r"v(\d+)", path.name)) and (path / "manifest.json").is_file()
+    ]
+    return max(builds)[1] if builds else Path("artifacts")
 
 
 def load_artifacts(directory: Path | None = None) -> ArtifactManifest:

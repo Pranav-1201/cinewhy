@@ -47,6 +47,18 @@ def test_an_empty_v2_folder_does_not_hide_the_older_build(
     assert api_main.default_artifacts_dir() == Path("artifacts")
 
 
+def test_the_highest_numbered_build_wins_and_numbers_compare_as_numbers(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("CINEWHY_ARTIFACTS", raising=False)
+    for name in ("v2", "v3", "v10"):  # as text "v10" sorts before "v2"; as numbers it is newest
+        _make_build(tmp_path / "artifacts" / name)
+    (tmp_path / "artifacts" / "v11").mkdir()  # newest but half-made: no manifest, so skipped
+    (tmp_path / "artifacts" / "vnext").mkdir()  # not a version number at all
+    assert api_main.default_artifacts_dir() == Path("artifacts") / "v10"
+
+
 @pytest.fixture
 def client(artifact_dir: Path) -> Iterator[TestClient]:
     with TestClient(api_main.create_app(artifact_dir)) as test_client:
