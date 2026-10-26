@@ -51,11 +51,14 @@ export function tile(item, open) {
   const m = item.movie;
   const top = item.reasons?.[0];
   // The plainest reason first: a film the visitor already liked that this one resembles.
-  const why = item.because
-    ? `Because you liked ${item.because}`
-    : top
-      ? (top.user_weight > 0 ? `Matches your ${labelOf(top.aspect).toLowerCase()}` : `Praised for ${labelOf(top.aspect).toLowerCase()}`)
-      : null;
+  // A film we hold only ratings for has no reason to give, so the tile says that instead.
+  const why = item.ratings_only
+    ? "Ratings only"
+    : item.because
+      ? `Because you liked ${item.because}`
+      : top
+        ? (top.user_weight > 0 ? `Matches your ${labelOf(top.aspect).toLowerCase()}` : `Praised for ${labelOf(top.aspect).toLowerCase()}`)
+        : null;
   const button = h(
     "button", {
       class: "tile-btn", type: "button",
@@ -65,7 +68,7 @@ export function tile(item, open) {
     poster(m, { language: item.language, isNew: item.is_new }),
     h("span", { class: "tile-title", text: m.title }),
     h("span", { class: "tile-meta", text: m.year ? String(m.year) : "" }),
-    why ? h("span", { class: "tile-why", text: why }) : null);
+    why ? h("span", { class: item.ratings_only ? "tile-why muted" : "tile-why", text: why }) : null);
   return h("li", { class: "tile" }, button, tileActions(m));
 }
 

@@ -36,7 +36,18 @@ def _free_port() -> int:
 @pytest.fixture(scope="session")
 def server_url(tmp_path_factory: pytest.TempPathFactory) -> Iterator[str]:
     """Start the app on synthetic artifacts; yield its base URL; stop it afterwards."""
-    artifacts = write_smoke_artifacts(tmp_path_factory.mktemp("e2e-artifacts"))
+    yield from _serve(write_smoke_artifacts(tmp_path_factory.mktemp("e2e-artifacts")))
+
+
+@pytest.fixture(scope="session")
+def ratings_only_server_url(tmp_path_factory: pytest.TempPathFactory) -> Iterator[str]:
+    """The same app on a set that also holds 30 films with ratings but no reviews."""
+    artifacts = write_smoke_artifacts(tmp_path_factory.mktemp("e2e-ratings-only"), ratings_only=30)
+    yield from _serve(artifacts)
+
+
+def _serve(artifacts: Path) -> Iterator[str]:
+    """Run uvicorn on `artifacts` in its own process, as `start.bat` does; stop it afterwards."""
     port = _free_port()
     env = {**os.environ, "CINEWHY_ARTIFACTS": str(artifacts), "PYTHONUTF8": "1"}
     process = subprocess.Popen(
@@ -84,6 +95,18 @@ def open_page(browser: Any, server_url: str) -> Iterator[Callable[..., Any]]:
     Each call is a new profile (no saved answers), so a test starts from a first visit. The
     first-visit sheet is dismissed with Skip unless `skip_questions=False`.
     """
+    yield from _pages(browser, server_url)
+
+
+@pytest.fixture
+def open_ratings_only_page(
+    browser: Any, ratings_only_server_url: str
+) -> Iterator[Callable[..., Any]]:
+    """`open_page`, against the set that holds ratings-only films."""
+    yield from _pages(browser, ratings_only_server_url)
+
+
+def _pages(browser: Any, url: str) -> Iterator[Callable[..., Any]]:
     contexts: list[Any] = []
 
     def make(width: int = 1024, *, skip_questions: bool = True, height: int = 800) -> Any:
@@ -92,7 +115,7 @@ def open_page(browser: Any, server_url: str) -> Iterator[Callable[..., Any]]:
         )
         contexts.append(context)
         page = context.new_page()
-        page.goto(server_url)
+        page.goto(url)
         page.wait_for_selector("#onboard-dialog[open]", timeout=20_000)
         if skip_questions:
             page.click("#onboard-form button[value=skip]")

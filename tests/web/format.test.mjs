@@ -4,8 +4,10 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import {
+  RATINGS_ONLY_NOTE,
   clamp,
   hueOf,
+  imdbLine,
   languageName,
   pct,
   recencyForAge,
@@ -90,6 +92,19 @@ test("clamp cuts at a word boundary and only adds an ellipsis when it cut", () =
   const cut = clamp("the quick brown fox jumps over the lazy dog", 20);
   assert.equal(cut, "the quick brown fox…");
   assert.equal(clamp("  padded  ", 20), "padded");
+});
+
+test("imdbLine states the rating and the votes behind it, and nothing without a rating", () => {
+  assert.equal(imdbLine(7.84, 12400), "IMDb rating 7.8 from 12,400 votes.");
+  assert.equal(imdbLine(8, 1), "IMDb rating 8.0 from 1 vote.");
+  assert.equal(imdbLine(8, 0), "IMDb rating 8.0.");
+  assert.equal(imdbLine(0, 500), "");
+  assert.equal(imdbLine(null, 500), "");
+});
+
+test("the ratings-only note admits what is missing and promises no quotes", () => {
+  assert.match(RATINGS_ONLY_NOTE, /not read reviews/);
+  assert.match(RATINGS_ONLY_NOTE, /no quotes/);
 });
 
 test("languageName", () => {

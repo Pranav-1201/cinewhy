@@ -73,6 +73,17 @@ export function reviewsLine(bySource) {
   return `We read ${count(total)} reviews: ${count(rt)} from Rotten Tomatoes and ${count(imdb)} from IMDb`;
 }
 
+/** What stands in for a receipt on a film whose reviews we have not read. Says so, invents no quotes. */
+export const RATINGS_ONLY_NOTE =
+  "We have not read reviews of this film yet, so there are no quotes to show. It is placed by its IMDb rating and its genres.";
+
+/** "IMDb rating 7.8 from 12,400 votes."; empty when the server sent no rating. */
+export function imdbLine(rating, votes) {
+  if (!(rating > 0)) return "";
+  const from = votes > 0 ? ` from ${count(votes)} ${votes === 1 ? "vote" : "votes"}` : "";
+  return `IMDb rating ${Number(rating).toFixed(1)}${from}.`;
+}
+
 /**
  * One word for how reviewers felt, from an aspect score between -1 and +1. The edges are symmetric
  * and inclusive on the strong side: 0.5 is Loved and -0.5 is Panned; 0.2 is Liked and -0.2 is Disliked.

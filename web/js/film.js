@@ -2,7 +2,7 @@
 
 import { api } from "./api.js";
 import { $, clear, fill, h } from "./dom.js";
-import { languageName, runtimeLabel } from "./format.js";
+import { RATINGS_ONLY_NOTE, imdbLine, languageName, runtimeLabel } from "./format.js";
 import { linesFromAspects, receipt } from "./receipt.js";
 import { isWanted, isWatched, opinionOf, setOpinion, setWant, setWatched } from "./state.js";
 import { poster } from "./tile.js";
@@ -48,18 +48,22 @@ function actions(movie, d) {
 function body(d) {
   const m = d.movie;
   const chips = [m.year ? String(m.year) : "", languageName(d.language), runtimeLabel(d.runtime_minutes), ...(m.genres || []).slice(0, 3)].filter(Boolean);
-  const ratings = d.rating_count > 0
-    ? `${d.rating_count.toLocaleString("en")} MovieLens ratings, adjusted mean ${d.mean_rating}.`
-    : "No MovieLens ratings, so there is no “viewers like you” signal for this film. It is placed by its reviews and its IMDb score.";
+  const ratings = d.ratings_only
+    ? imdbLine(d.imdb_rating, d.imdb_votes)
+    : d.rating_count > 0
+      ? `${d.rating_count.toLocaleString("en")} MovieLens ratings, adjusted mean ${d.mean_rating}.`
+      : "No MovieLens ratings, so there is no “viewers like you” signal for this film. It is placed by its reviews and its IMDb score.";
   return [
     h("div", { class: "film-head" },
       poster(m, { language: d.language }),
       h("div", {}, h("h2", { id: "film-title", text: m.title }), h("div", { class: "meta" }, chips.map((c) => h("span", { class: "chip static", text: c }))))),
     d.overview ? h("p", { class: "film-overview", text: d.overview }) : null,
     actions(m, d),
-    d.aspects.length
-      ? receipt({ title: m.title, lines: linesFromAspects(d.aspects), bySource: d.reviews_by_source, heading: `What reviewers say about ${m.title}` })
-      : h("p", { class: "film-overview", text: "Not enough reviews mention any single aspect to score it." }),
+    d.ratings_only
+      ? h("p", { class: "film-overview ratings-only-note", text: RATINGS_ONLY_NOTE })
+      : d.aspects.length
+        ? receipt({ title: m.title, lines: linesFromAspects(d.aspects), bySource: d.reviews_by_source, heading: `What reviewers say about ${m.title}` })
+        : h("p", { class: "film-overview", text: "Not enough reviews mention any single aspect to score it." }),
     h("p", { class: "film-links", text: ratings }),
   ];
 }
