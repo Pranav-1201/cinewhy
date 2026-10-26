@@ -86,6 +86,7 @@ async function boot() {
   const refresh = debounce(() => renderAll(ctx), 350);
   ctx.refresh = refresh;
   ctx.syncFilters = renderFilters;
+  ctx.openRate = openRate;
   renderFilters();
   initDialogs(ctx);
   wireSearch();

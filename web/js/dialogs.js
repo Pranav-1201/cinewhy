@@ -61,6 +61,10 @@ export function openOnboarding(ctx) {
   const readLang = chipGroup($("#ob-lang"), LANGUAGES, state.languages, true);
   const readAge = chipGroup($("#ob-age"), AGES, state.age ? [state.age] : [], false);
   const readRegion = chipGroup($("#ob-region"), REGIONS, state.region ? [state.region] : [], false);
+  // What a person likes to watch says far more about their taste than who they are (D-019), so the
+  // genre question comes first in the form and feeds the "Rate films" deck.
+  const genreOptions = Object.keys(ctx.facets.genres || {}).slice(0, 12).map((g) => [g, g]);
+  const readGenres = chipGroup($("#ob-genres"), genreOptions, state.favouriteGenres, true);
   const sexField = $("#ob-sex-field");
   // Sex is asked only when the server reports a measured demographic prior that uses it.
   sexField.hidden = !ctx.facets.demographics_enabled;
@@ -70,8 +74,10 @@ export function openOnboarding(ctx) {
     : "Age sets how much newer films come first and region decides which shelf leads. Nothing else is inferred from your answers. You can change both under Your taste.";
   const form = $("#onboard-form");
   form.onsubmit = (event) => {
-    if (event.submitter?.value === "save") {
+    const choice = event.submitter?.value;
+    if (choice === "save" || choice === "rate") {
       state.languages = readLang();
+      state.favouriteGenres = readGenres();
       state.age = readAge()[0] ?? null;
       state.region = readRegion()[0] ?? null;
       state.sex = sexField.hidden ? null : (readSex()[0] ?? null);
@@ -82,6 +88,7 @@ export function openOnboarding(ctx) {
     save();
     ctx.syncFilters();
     ctx.refresh();
+    if (choice === "rate") setTimeout(() => ctx.openRate(), 0); // after this dialog has closed
   };
   $("#onboard-dialog").showModal();
 }

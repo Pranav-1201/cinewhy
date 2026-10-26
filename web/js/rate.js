@@ -26,6 +26,12 @@ async function loadDeck() {
     }).then((r) => r.items).catch(() => [])
   )));
   deck = mergeDeck(answers, exclude, DECK_SIZE);
+  if (!deck.length) {
+    // The filters matched nothing (for example a chosen language the catalogue has no films for):
+    // ask for the best-known films instead, so the dialog is never empty while films remain.
+    const fallback = await post("/discover", { limit: DECK_SIZE, exclude_movie_ids: exclude }).then((r) => r.items).catch(() => []);
+    deck = mergeDeck([fallback], exclude, DECK_SIZE);
+  }
   index = 0;
 }
 

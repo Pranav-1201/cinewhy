@@ -97,6 +97,18 @@ def test_rating_a_film_in_rate_films_marks_it_watched_and_liked(
     assert list(saved["ratings"].values()) == [5]
 
 
+def test_the_first_visit_can_lead_straight_into_rating_films(
+    open_page: Callable[..., Any],
+) -> None:
+    page = open_page(1024, skip_questions=False)
+    page.click("#ob-lang .chip")  # the first language chip
+    page.click("#onboard-form button[value=rate]")
+    page.wait_for_selector("#rate-dialog[open]")
+    page.wait_for_selector("#rate-card h3")
+    saved = _profile(page)
+    assert saved["onboarded"] is True and len(saved["languages"]) == 1
+
+
 def test_the_profile_survives_a_download_reset_and_load(
     open_page: Callable[..., Any], tmp_path: Path
 ) -> None:
