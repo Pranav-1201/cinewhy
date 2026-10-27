@@ -43,16 +43,27 @@ Branch `feature/roadmap-v4`, worktree `D:\NLPPROJECT-dev`, local only, never pus
 * confidence weighting: no gain (D-026); not shipped.
 * Pranav accepted the language targets as unreachable for now, and asked for adult titles by both the explicit flag and mature ratings.
 
+## Built since (all committed on this branch, suite 541 passed and 1 skipped with the Playwright path)
+* Ratings-only tier (D-027): `a41e628` back end, `4ee02de` page. Languages ja and fr, Telugu inside the Hindi choice: `ee52fb2`.
+* Accent folding and original-title links (D-028): `8740fc1`. Build options and the tier's selection: `eaeb1e2`.
+
 ## Now
-* Nothing running. Dev server on port 8010 is STOPPED to free memory; restart with `CINEWHY_ARTIFACTS=D:/NLPPROJECT/artifacts/v3`
-  `python -m uvicorn api.main:app --port 8010` from `D:\NLPPROJECT-dev`. The demo on 8000 is untouched.
+* **The real v4 build is running** (started 07:58). Log:
+  `C:/Users/Dell/AppData/Local/Temp/claude/D--NLPPROJECT/33717dde-bb2b-4de8-b656-cb441c7b62e6/scratchpad/build_v4.log`
+  (last line says `build exit N`). Output: `D:\NLPPROJECT-dev\artifacts\v4` (git-ignored). Command, from `D:\NLPPROJECT-dev` with
+  `PYTHONPATH=D:/NLPPROJECT-dev PYTHONUTF8=1`: `python -u -m cinewhy.build --tmdb/--rt/--ebd/--acl/--ml` pointing at
+  `D:/NLPPROJECT/Data/raw/...`, `--out D:/NLPPROJECT-dev/artifacts/v4 --min-reviews 50 --wide --languages en,hi,te,ja,fr
+  --max-year 2026 --cap 100 --ratings-only-min-votes 200 --cache D:/NLPPROJECT-dev/Data/raw/_cache/gathered_v4.jsonl`.
+  `artifacts/v4` first needs `polarity.joblib`, `polarity_report.json`, `polarity_domain.json` copied from the demo's `artifacts/v3`.
+  A cache from this run makes a rerun skip the 40-minute gather.
+* Dev server on 8010 is stopped. Serve v4 with `CINEWHY_ARTIFACTS=D:/NLPPROJECT-dev/artifacts/v4`. The demo on 8000 is untouched.
 
 ## Next (in order)
-1. Read the spine_reach result into the roadmap (what the existing dumps can give English, Hindi, Telugu, Japanese, French at 50 reviews).
-2. Tier B (ratings-only titles) end to end: server (no reasons needed), card label, receipts replaced by an honest line.
-3. Language chips and shelves for ja and fr when data exists (DiscoverRequest and profile still accept only en and hi).
-4. **Decisions for Pranav:** push this branch so CI can run the Docker build and the browser job; run the TMDB pilot
-   with his token (`$env:TMDB_API_TOKEN=...; python experiments/tmdb_reviews_pilot.py`); say what "adult" meant.
+1. When the build ends: read the log's last lines and `eval.json` (`catalogue.ratings_only.by_language` has each language's shortfall),
+   verify the manifest, boot v4 on port 8010 and look at it in a browser at phone and desktop widths.
+2. Series (IMDb dumps list them) and the Japanese anime split are not built; movies only for now.
+3. **Decisions for Pranav:** push this branch so CI can run the Docker build and the browser job; "adult" was read as both the
+   explicit flag and mature ratings (his reply was typed "noth").
 
 ## Rules while working
 * Commit only on this branch, explicit paths, never `git add -A`; never touch `D:\NLPPROJECT`.
