@@ -603,3 +603,38 @@ it. **Limit.** Test users can only be scored on films that have MovieLens rating
 weighting does not help (and at k=200 may hurt) among rated films. It cannot say whether it would
 protect users from films that have reviews but no ratings, which is the Tier B case; there the
 honest label and the 50-review / 200-vote floors do that job.
+
+## D-027: films with ratings but no reviews are a second tier, outside the similarity matrix (2026-10-27, Sonnet 5.5)
+
+Pranav's rules: a full receipt needs 50 reviews; below that, a film with at least 200 IMDb votes may be
+listed with ratings only. **Why a separate tier, not more rows.** `item_sim.npy` is a dense n by n float32
+matrix: 11,065 films is 490 MB, so tens of thousands more would be gigabytes, and these films have no
+viewer overlap to fill the rows with anyway. They live in `ratings_only.json` (`ro-NNNNNNN` ids) beside the
+catalogue, hashed into the manifest only when present, and `Catalogue.index` stays core-only so no code
+that indexes the matrix can reach one. **Ranking.** Cold: IMDb rating and votes on the same 0 to 1 scale as
+the other tier, plus the recency lift. Personal: 0.1 of that popularity plus 0.45 of genre match (liked
+films' genres, dislikes counting half), plus the lift. **0.45 is a judgement, not a measurement**: there
+are no ratings for these films to tune it on, so it is set below collaborative filtering's 0.9 on purpose.
+**Where they appear.** The new, old school, language and genre shelves, search and the film page; never
+the spotlight and picks, "viewers like you" or "something different", which promise quotes or viewer
+overlap they cannot back. **How they are labelled.** A "Ratings only" line on the tile, and on the film
+page the IMDb rating with its votes and a sentence saying no reviews were read. The card carries
+`ratings_only: true`; no reason or quote is ever invented. **Targets.** English 10,000; Hindi 5,250 and
+Telugu 2,250 (7,500 at 70/30); Japanese 5,000; French 2,500. They are minimums the owner wants. The build
+fills each language from the best-voted films not already in the first tier and reports `short_by` in
+`eval.json`, never padding. **Language choices.** English, Hindi, Japanese, French; the Hindi choice also
+includes Telugu. **Limits.** Movies only: series need another source (IMDb dumps list them; not built).
+Japanese is not split anime : movies : live action, because only films are in the data.
+
+## D-028: accent-folded title keys and original-title links (2026-10-27, Sonnet 5.5)
+
+`title_key` kept only ASCII letters, so an accented letter was dropped ("amlie") and a title with no Latin
+letters became the bare year, which linked to any film of that year. It now folds accents (and sharp s,
+ae, o with stroke), refuses an empty key, and a film may carry its original-language title, tried only
+when the English one finds nothing. **Safeguards.** An English-title refusal (ambiguous, runtime) is final;
+an original title any other candidate also uses is given up; two films reaching one ebD record both lose
+it. Measured on 125,897 candidates: accent folding adds 54 French ebD links (3,799 to 3,853); original
+titles add about 2,800 more French and almost none for Japanese, Hindi or Telugu (62, 35, 1). Gather
+cache version 3, and the cache key now includes the selection. **Caution.** The venv's editable install
+points at the demo folder: a script run from `experiments/` imports the OLD code unless `PYTHONPATH` is
+the dev folder (a rerun first showed identical numbers because of it).
