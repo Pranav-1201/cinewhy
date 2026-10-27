@@ -7,7 +7,7 @@ wrong film but not the right one, and a title shared by two candidates cannot be
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from cinewhy.data.linking import (
     Candidate,
@@ -16,6 +16,7 @@ from cinewhy.data.linking import (
     parse_ebd_movie,
     runtimes_agree,
     title_key,
+    with_unique_original_titles,
 )
 
 # ebD writes a series' open range with an en dash; built from a code point so the file stays ASCII.
@@ -116,6 +117,78 @@ def test_runtime_mismatch_rejects_even_an_exact_year_hit() -> None:
 
 def test_no_hit_is_none() -> None:
     assert match_film(_cand(), {}, _runtime).status == "none"
+
+
+def test_title_key_folds_accents_instead_of_dropping_the_letter() -> None:
+    # Dropping gave "amlie", so a title written with and without its accent was two keys.
+    assert title_key("Am" + chr(0xE9) + "lie") == title_key("Amelie") == "amelie"
+    assert title_key("Stra" + chr(0xDF) + "e") == "strasse"
+    assert title_key(chr(0xC6) + "on Flux") == "aeonflux"
+    assert (
+        title_key("Cr" + chr(0xE8) + "me Br" + chr(0xFB) + "l" + chr(0xE9) + "e") == "cremebrulee"
+    )
+    assert title_key("".join(chr(c) for c in (0x30A2, 0x30CB, 0x30E1))) == ""  # kana: no key at all
+
+
+def test_the_original_title_is_tried_only_when_the_english_one_finds_nothing() -> None:
+    original = "Sen to Chihiro"
+    index = {title_key(original) + "2001": [_Item("found-on-original", 125.0)]}
+    plain = _cand(title="Spirited Away", year=2001, language="ja", runtime=125.0)
+    assert match_film(plain, index, _runtime).status == "none"
+    both = replace(plain, original_title=original)
+    result = match_film(both, index, _runtime)
+    assert result.status == "exact" and result.via_original is True
+    assert result.item == _Item("found-on-original", 125.0)
+
+
+def test_a_runtime_refusal_on_the_english_title_is_final_too() -> None:
+    # Same English title and year, but a 40-minute gap: a different film. The original title has an
+    # agreeing record; taking it would turn "that is a different film" into a link.
+    index = {
+        title_key("Spirited Away") + "2001": [_Item("a-short", 85.0)],
+        title_key("Sen to Chihiro") + "2001": [_Item("agrees", 125.0)],
+    }
+    film = _cand(title="Spirited Away", year=2001, language="ja", runtime=125.0)
+    film = replace(film, original_title="Sen to Chihiro")
+    result = match_film(film, index, _runtime)
+    assert result.status == "runtime_rejected" and result.item is None
+
+
+def test_the_english_title_wins_and_a_refusal_on_it_is_final() -> None:
+    index = {
+        title_key("Spirited Away") + "2001": [_Item("english", 125.0)],
+        title_key("Sen to Chihiro") + "2001": [_Item("original", 125.0)],
+    }
+    both = _cand(title="Spirited Away", year=2001, language="ja", runtime=125.0)
+    both = replace(both, original_title="Sen to Chihiro")
+    won = match_film(both, index, _runtime)
+    assert won.item == _Item("english", 125.0) and won.via_original is False
+    # An ambiguous English title ends the search: falling through to the original would turn a
+    # refusal into a guess.
+    index[title_key("Spirited Away") + "2001"] = [_Item("a", 125.0), _Item("b", 125.0)]
+    assert match_film(both, index, _runtime).status == "ambiguous"
+
+
+def test_an_original_title_with_the_same_key_is_not_tried_twice() -> None:
+    both = replace(_cand(), original_title="HEAT!")
+    assert match_film(both, {}, _runtime).status == "none"
+
+
+def test_an_original_title_another_film_also_uses_is_given_up() -> None:
+    a = replace(_cand(title="Film A", year=2001), original_title="Shared Name")
+    b = replace(_cand(title="Film B", year=2001), original_title="Shared Name")
+    c = replace(_cand(title="Shared Name", year=2001), original_title=None)
+    d = replace(_cand(title="Film D", year=2001), original_title="Only Mine")
+    kept = {x.title: x.original_title for x in with_unique_original_titles([a, b, c, d])}
+    assert kept == {
+        "Film A": None,
+        "Film B": None,
+        "Shared Name": None,
+        "Film D": "Only Mine",
+    }
+    # A different YEAR is a different key, so the same original title in another year is fine.
+    e = replace(_cand(title="Film E", year=2005), original_title="Shared Name")
+    assert with_unique_original_titles([a, e])[1].original_title == "Shared Name"
 
 
 def test_a_title_with_no_latin_letters_never_links_on_the_year_alone() -> None:

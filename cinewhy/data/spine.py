@@ -46,6 +46,8 @@ class SpineFilm:
     imdb_rating: float = 0.0
     imdb_votes: int = 0
     vote_average: float = 0.0
+    # The title in the film's own language (TMDB `original_title`), "" when the export had none.
+    original_title: str = ""
 
 
 @dataclass(frozen=True)
@@ -99,6 +101,7 @@ def _film(row: Mapping[str, str], imdb_id: int, year: int) -> SpineFilm:
         imdb_rating=_number(row["imdb_rating"]),
         imdb_votes=int(_number(row["imdb_votes"])),
         vote_average=_number(row["vote_average"]),
+        original_title=row.get("original_title", ""),
     )
 
 
