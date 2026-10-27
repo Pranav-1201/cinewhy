@@ -17,7 +17,7 @@ from __future__ import annotations
 import hashlib
 import json
 from collections import Counter, defaultdict
-from collections.abc import Callable
+from collections.abc import Callable, Collection
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
@@ -80,8 +80,18 @@ def _silent(_message: str) -> None:
 GATHER_VERSION = 3  # 3: accent-folded title keys, original-title links, original_title on films
 
 
-def _cache_key(paths: SourcePaths, cap: int) -> dict[str, Any]:
-    """Everything the gathered result depends on: logic version, cap, and each dump's identity."""
+def _cache_key(
+    paths: SourcePaths,
+    cap: int,
+    quota_for: Callable[[str, int], int] = quota,
+    languages: Collection[str] | None = None,
+    max_year: int | None = None,
+) -> dict[str, Any]:
+    """Everything the gathered result depends on: logic version, cap, selection, and the dumps.
+
+    The selection (quota rule, languages, last year) is part of the key: a cache written for one
+    selection must never be served for another.
+    """
     files: dict[str, list[int]] = {}
     for name, path in (
         ("tmdb", paths.tmdb_csv),
@@ -91,7 +101,16 @@ def _cache_key(paths: SourcePaths, cap: int) -> dict[str, Any]:
     ):
         stat = path.stat()
         files[name] = [stat.st_size, stat.st_mtime_ns]
-    return {"version": GATHER_VERSION, "cap": cap, "files": files}
+    return {
+        "version": GATHER_VERSION,
+        "cap": cap,
+        "selection": {
+            "quota": quota_for.__name__,
+            "languages": None if languages is None else sorted(languages),
+            "max_year": max_year,
+        },
+        "files": files,
+    }
 
 
 def _write_cache(cache_file: Path, key: dict[str, Any], gathered: Gathered) -> None:
@@ -144,6 +163,9 @@ def gather_cached(
     cache_file: Path,
     *,
     cap: int = MAX_REVIEWS_PER_SOURCE,
+    quota_for: Callable[[str, int], int] = quota,
+    languages: Collection[str] | None = None,
+    max_year: int | None = None,
     on_progress: Callable[[str], None] = _silent,
 ) -> Gathered:
     """`gather`, reusing a cached result when nothing it depends on has changed.
@@ -152,17 +174,27 @@ def gather_cached(
         paths: Locations of the four dumps.
         cache_file: Where the result is kept between runs.
         cap: Most reviews kept per film per source.
+        quota_for: Films kept per (language, year).
+        languages: Original languages wanted (default: the spine's).
+        max_year: Latest release year (default: the spine's).
         on_progress: Called with a status line at each stage.
 
     Returns:
         The same result `gather` would return.
     """
-    key = _cache_key(paths, cap)
+    key = _cache_key(paths, cap, quota_for, languages, max_year)
     cached = _read_cache(cache_file, key)
     if cached is not None:
         on_progress(f"using the cached gather result at {cache_file}")
         return cached
-    gathered = gather(paths, cap=cap, on_progress=on_progress)
+    gathered = gather(
+        paths,
+        cap=cap,
+        quota_for=quota_for,
+        languages=languages,
+        max_year=max_year,
+        on_progress=on_progress,
+    )
     _write_cache(cache_file, key, gathered)
     return gathered
 
@@ -192,6 +224,8 @@ def gather(
     *,
     cap: int = MAX_REVIEWS_PER_SOURCE,
     quota_for: Callable[[str, int], int] = quota,
+    languages: Collection[str] | None = None,
+    max_year: int | None = None,
     on_progress: Callable[[str], None] = _silent,
 ) -> Gathered:
     """Select the films and collect their reviews from every source.
@@ -200,12 +234,16 @@ def gather(
         paths: Locations of the four dumps.
         cap: Most reviews kept per film per source.
         quota_for: Films kept per (language, year); injectable for tests.
+        languages: Original languages wanted (default: the spine's).
+        max_year: Latest release year (default: the spine's).
         on_progress: Called with a status line at each stage (the streams take minutes).
 
     Returns:
         The films, merged reviews, Rotten Tomatoes links, and a report of every join outcome.
     """
-    selection = select_spine(read_tmdb_rows(paths.tmdb_csv), quota_for)
+    selection = select_spine(
+        read_tmdb_rows(paths.tmdb_csv), quota_for, languages=languages, max_year=max_year
+    )
     films = selection.films
     on_progress(f"selected {len(films)} films from TMDB")
     candidates = with_unique_original_titles(

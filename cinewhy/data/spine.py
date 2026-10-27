@@ -14,7 +14,7 @@ from __future__ import annotations
 import csv
 import re
 from collections import defaultdict
-from collections.abc import Callable, Iterable, Iterator, Mapping
+from collections.abc import Callable, Collection, Iterable, Iterator, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
@@ -105,32 +105,50 @@ def _film(row: Mapping[str, str], imdb_id: int, year: int) -> SpineFilm:
     )
 
 
-def select_spine(
-    rows: Iterable[Mapping[str, str]],
-    quota_for: Callable[[str, int], int] = quota,
-) -> SpineSelection:
-    """Pick the catalogue candidates from TMDB rows.
+def wide_quota(language: str, year: int) -> int:
+    """A much wider candidate list, for the build that asks for 50 reviews and adds languages.
 
-    Rules, in order: released films in a wanted language and year range; a usable IMDb number;
-    one row per IMDb number (the most voted wins); then per (language, year) the top
-    `quota_for` films by votes, ties broken by TMDB id so the result never depends on file order.
+    The shipped quotas keep the 300 best-known English films a year, then require only 5 reviews.
+    Asking for 50 needs more candidates to find the ones that reach it: 1,000 English films a year
+    from 2000 (250 before), and 300 a year in every other language. Measured on 2026-10-27
+    (`experiments/spine_reach.py`): this reaches 9,706 English, 322 Hindi, 33 Telugu, 147 Japanese
+    and 171 French films at 50 reviews from the dumps on disk.
+    """
+    if language == "en":
+        return 1000 if year >= 2000 else 250
+    return 300
 
-    Args:
-        rows: TMDB CSV rows (see `read_tmdb_rows`).
-        quota_for: Films to keep per (language, year); injectable so tests can use tiny quotas.
 
-    Returns:
-        The selection, ordered by IMDb number, with counts of what was dropped.
+# Films wanted per original language, English and the three others in the ratio 4:3:2:1 that the
+# owner set (English 10,000; Hindi and Telugu 7,500 split 70/30; Japanese 5,000; French 2,500).
+# These are MINIMUMS the owner wants and the supply cannot always meet: the ratings-only selection
+# below fills what it can, and the build reports the shortfall rather than hiding it.
+CATALOGUE_TARGETS: Final[dict[str, int]] = {
+    "en": 10_000,
+    "hi": 5_250,
+    "te": 2_250,
+    "ja": 5_000,
+    "fr": 2_500,
+}
+
+
+def _best_by_imdb(
+    rows: Iterable[Mapping[str, str]], languages: Collection[str], max_year: int
+) -> tuple[dict[int, SpineFilm], int, int]:
+    """One film per IMDb number from released rows in the wanted languages and years.
+
+    Returns the films, how many rows had no usable IMDb number, and how many were duplicates of a
+    number already held (the most-voted row wins, ties broken by TMDB id).
     """
     best: dict[int, SpineFilm] = {}
     dropped_no_imdb = dropped_duplicate = 0
     for row in rows:
         year_text = row["release_date"][:4]
         if (
-            row["original_language"] not in LANGUAGES
+            row["original_language"] not in languages
             or row["status"] != "Released"
             or not year_text.isdigit()
-            or not MIN_YEAR <= int(year_text) <= MAX_YEAR
+            or not MIN_YEAR <= int(year_text) <= max_year
         ):
             continue
         imdb_id = parse_imdb_id(row["imdb_id"])
@@ -145,6 +163,80 @@ def select_spine(
         dropped_duplicate += 1
         if (film.vote_count, -film.tmdb_id) > (held.vote_count, -held.tmdb_id):
             best[imdb_id] = film
+    return best, dropped_no_imdb, dropped_duplicate
+
+
+def select_ratings_only(
+    rows: Iterable[Mapping[str, str]],
+    taken: Collection[int],
+    targets: Mapping[str, int],
+    *,
+    min_votes: int,
+    max_year: int | None = None,
+) -> tuple[SpineFilm, ...]:
+    """Films we will list with their IMDb numbers only, to bring each language up to its target.
+
+    For each language, the best-known films (by IMDb votes) that are not already in the full-receipt
+    catalogue, have at least `min_votes` IMDb votes and a rating, until the language has
+    `targets[language]` films counting those already `taken`. A language already at its target gets
+    none; one that runs out of qualifying films simply gets fewer (the caller reports the gap).
+
+    Args:
+        rows: TMDB CSV rows (see `read_tmdb_rows`).
+        taken: IMDb numbers of the films that already have full receipts.
+        targets: Wanted films per original language, full-receipt films included.
+        min_votes: Fewest IMDb votes a film may have; below it a rating means little.
+        max_year: Latest release year (default `MAX_YEAR`).
+
+    Returns:
+        The chosen films, ordered by IMDb number so the artifact is deterministic.
+    """
+    best, _, _ = _best_by_imdb(rows, set(targets), MAX_YEAR if max_year is None else max_year)
+    held = set(taken)
+    have: dict[str, int] = defaultdict(int)
+    for imdb_id in held:
+        film = best.get(imdb_id)
+        if film is not None:
+            have[film.language] += 1
+    pool: dict[str, list[SpineFilm]] = defaultdict(list)
+    for film in best.values():
+        if film.imdb_id not in held and film.imdb_votes >= min_votes and film.imdb_rating > 0:
+            pool[film.language].append(film)
+    chosen: list[SpineFilm] = []
+    for language, films in pool.items():
+        films.sort(key=lambda f: (-f.imdb_votes, f.tmdb_id))
+        chosen.extend(films[: max(0, targets[language] - have[language])])
+    chosen.sort(key=lambda f: f.imdb_id)
+    return tuple(chosen)
+
+
+def select_spine(
+    rows: Iterable[Mapping[str, str]],
+    quota_for: Callable[[str, int], int] = quota,
+    *,
+    languages: Collection[str] | None = None,
+    max_year: int | None = None,
+) -> SpineSelection:
+    """Pick the catalogue candidates from TMDB rows.
+
+    Rules, in order: released films in a wanted language and year range; a usable IMDb number;
+    one row per IMDb number (the most voted wins); then per (language, year) the top
+    `quota_for` films by votes, ties broken by TMDB id so the result never depends on file order.
+
+    Args:
+        rows: TMDB CSV rows (see `read_tmdb_rows`).
+        quota_for: Films to keep per (language, year); injectable so tests can use tiny quotas.
+        languages: Original languages wanted (default `LANGUAGES`).
+        max_year: Latest release year (default `MAX_YEAR`).
+
+    Returns:
+        The selection, ordered by IMDb number, with counts of what was dropped.
+    """
+    best, dropped_no_imdb, dropped_duplicate = _best_by_imdb(
+        rows,
+        LANGUAGES if languages is None else languages,
+        MAX_YEAR if max_year is None else max_year,
+    )
 
     groups: dict[tuple[str, int], list[SpineFilm]] = defaultdict(list)
     for film in best.values():
