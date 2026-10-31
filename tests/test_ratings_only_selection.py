@@ -53,6 +53,41 @@ def test_too_few_votes_or_no_rating_never_qualifies() -> None:
     assert _ids(select_ratings_only(rows, [], {"en": 10}, min_votes=200)) == [2]
 
 
+def test_a_fallback_floor_fills_a_short_language_after_the_better_voted_films() -> None:
+    votes = [5000, 4000, 150, 120, 80, 30]
+    rows = [_row(i + 1, "ja", votes=v) for i, v in enumerate(votes)]
+    main_only = select_ratings_only(rows, [], {"ja": 5}, min_votes=200)
+    assert _ids(main_only) == [1, 2]  # only two films clear the main floor
+    filled = select_ratings_only(rows, [], {"ja": 5}, min_votes=200, fallback_min_votes=50)
+    assert _ids(filled) == [1, 2, 3, 4, 5]  # the three best of the thin ones; 30 votes is below 50
+
+
+def test_the_fallback_floor_never_displaces_a_film_above_the_main_floor() -> None:
+    # Target 3: the two films above the floor are kept, and only ONE thin film is added, the
+    # better voted of the two. Votes decide, not catalogue order (film 2 has the lower number).
+    rows = [
+        _row(1, "ja", votes=300),
+        _row(2, "ja", votes=60),
+        _row(3, "ja", votes=90),
+        _row(4, "ja", votes=250),
+    ]
+    chosen = select_ratings_only(rows, [], {"ja": 3}, min_votes=200, fallback_min_votes=50)
+    assert _ids(chosen) == [1, 3, 4]
+
+
+def test_a_language_already_at_its_target_takes_no_fallback_films() -> None:
+    rows = [_row(1, "fr", votes=900), _row(2, "fr", votes=900), _row(3, "fr", votes=80)]
+    chosen = select_ratings_only(rows, [], {"fr": 2}, min_votes=200, fallback_min_votes=50)
+    assert _ids(chosen) == [1, 2]
+
+
+def test_a_fallback_floor_above_the_main_floor_changes_nothing() -> None:
+    rows = [_row(i, "ja", votes=v) for i, v in enumerate([500, 300, 100], start=1)]
+    assert select_ratings_only(rows, [], {"ja": 9}, min_votes=200, fallback_min_votes=900) == (
+        select_ratings_only(rows, [], {"ja": 9}, min_votes=200)
+    )
+
+
 def test_a_supply_shorter_than_the_target_gives_what_exists() -> None:
     rows = [_row(i, "te", votes=400) for i in range(1, 4)]
     assert len(select_ratings_only(rows, [], {"te": 2250}, min_votes=200)) == 3

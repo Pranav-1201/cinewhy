@@ -172,6 +172,7 @@ def select_ratings_only(
     targets: Mapping[str, int],
     *,
     min_votes: int,
+    fallback_min_votes: int | None = None,
     max_year: int | None = None,
 ) -> tuple[SpineFilm, ...]:
     """Films we will list with their IMDb numbers only, to bring each language up to its target.
@@ -181,11 +182,16 @@ def select_ratings_only(
     `targets[language]` films counting those already `taken`. A language already at its target gets
     none; one that runs out of qualifying films simply gets fewer (the caller reports the gap).
 
+    With `fallback_min_votes`, a language still short after that is filled, best-known first, from
+    films with at least that many votes but fewer than `min_votes`. Their ratings rest on little,
+    so they come only after every film above the main floor, and only as far as the target needs.
+
     Args:
         rows: TMDB CSV rows (see `read_tmdb_rows`).
         taken: IMDb numbers of the films that already have full receipts.
         targets: Wanted films per original language, full-receipt films included.
         min_votes: Fewest IMDb votes a film may have; below it a rating means little.
+        fallback_min_votes: A lower floor used only to fill a language that is still short.
         max_year: Latest release year (default `MAX_YEAR`).
 
     Returns:
@@ -198,9 +204,12 @@ def select_ratings_only(
         film = best.get(imdb_id)
         if film is not None:
             have[film.language] += 1
+    # The lowest floor any film may pass. Films are taken best-voted first, so those below
+    # `min_votes` are reached only after every film above it, and only if the target is still unmet.
+    floor = min_votes if fallback_min_votes is None else min(min_votes, fallback_min_votes)
     pool: dict[str, list[SpineFilm]] = defaultdict(list)
     for film in best.values():
-        if film.imdb_id not in held and film.imdb_votes >= min_votes and film.imdb_rating > 0:
+        if film.imdb_id not in held and film.imdb_votes >= floor and film.imdb_rating > 0:
             pool[film.language].append(film)
     chosen: list[SpineFilm] = []
     for language, films in pool.items():

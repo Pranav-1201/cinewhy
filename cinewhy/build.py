@@ -102,6 +102,9 @@ class BuildConfig:
     wide: bool = False  # the wider candidate list (`spine.wide_quota`)
     # Fewest IMDb votes for a ratings-only film; None builds no ratings-only tier.
     ratings_only_min_votes: int | None = None
+    # A lower floor used only to fill a language still short of its target once the films above
+    # `ratings_only_min_votes` are used up. Their ratings rest on few voters; the page shows how many.
+    ratings_only_fallback_votes: int | None = None
 
 
 def movie_id_for(imdb_id: int) -> str:
@@ -162,6 +165,7 @@ def ratings_only_films(config: BuildConfig, taken: Sequence[int]) -> tuple[Ratin
         taken,
         CATALOGUE_TARGETS,
         min_votes=config.ratings_only_min_votes,
+        fallback_min_votes=config.ratings_only_fallback_votes,
         max_year=config.max_year,
     )
     return tuple(
@@ -199,14 +203,19 @@ def ratings_only_report(
         return None
     full = Counter(f.language for f in full_receipt_films)
     only = Counter(f.language for f in ratings_only)
+    # Films listed on fewer votes than the main floor: the fallback tier, counted on its own so the
+    # page's honesty about thin ratings can be checked against how many there are.
+    thin = Counter(f.language for f in ratings_only if f.imdb_votes < config.ratings_only_min_votes)
     return {
         "min_imdb_votes": config.ratings_only_min_votes,
+        "fallback_min_imdb_votes": config.ratings_only_fallback_votes,
         "films": len(ratings_only),
         "by_language": {
             lang: {
                 "target": target,
                 "full_receipts": full.get(lang, 0),
                 "ratings_only": only.get(lang, 0),
+                "of_which_below_the_main_floor": thin.get(lang, 0),
                 "short_by": max(0, target - full.get(lang, 0) - only.get(lang, 0)),
             }
             for lang, target in CATALOGUE_TARGETS.items()
@@ -619,6 +628,12 @@ def main() -> None:
         default=None,
         help="also list films with this many IMDb votes and no full receipt (default: none)",
     )
+    parser.add_argument(
+        "--ratings-only-fallback-votes",
+        type=int,
+        default=None,
+        help="a lower vote floor used only to fill a language still short of its target",
+    )
     args = parser.parse_args()
     build_artifacts(
         BuildConfig(
@@ -634,6 +649,7 @@ def main() -> None:
             max_year=args.max_year,
             wide=args.wide,
             ratings_only_min_votes=args.ratings_only_min_votes,
+            ratings_only_fallback_votes=args.ratings_only_fallback_votes,
         )
     )
 

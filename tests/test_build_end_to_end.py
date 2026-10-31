@@ -74,6 +74,7 @@ def _build(
     wrong_tmdb_id_for: int | None = None,
     cache_file: Path | None = None,
     ratings_only_min_votes: int | None = None,
+    ratings_only_fallback_votes: int | None = None,
     extra_tmdb: list[dict[str, str]] | None = None,
 ) -> Path:
     tmdb = [tmdb_row(k + 1, 100 + k, _TITLES[k], 2005 + k % 8) for k in range(N_TMDB)]
@@ -119,6 +120,7 @@ def _build(
         min_reviews=3,
         seed=7,
         ratings_only_min_votes=ratings_only_min_votes,
+        ratings_only_fallback_votes=ratings_only_fallback_votes,
     )
     build_artifacts(config)
     return out
@@ -230,9 +232,40 @@ def test_the_ratings_only_tier_lists_well_voted_films_that_have_no_receipt(
     ]
     assert report["min_imdb_votes"] == 200 and report["films"] == 2
     french = report["by_language"]["fr"]
-    assert french == {"target": 2500, "full_receipts": 0, "ratings_only": 1, "short_by": 2499}
+    assert french == {
+        "target": 2500,
+        "full_receipts": 0,
+        "ratings_only": 1,
+        "of_which_below_the_main_floor": 0,
+        "short_by": 2499,
+    }
     # English: 14 full receipts plus 1 ratings-only film, against the 10,000 target.
     assert report["by_language"]["en"]["short_by"] == 10_000 - N_FILMS - 1
+
+
+def test_a_fallback_floor_lists_thin_films_and_the_report_counts_them(tmp_path: Path) -> None:
+    extras = [
+        _extra_row(90, 900, "fr", 5000),  # above the main floor
+        _extra_row(91, 901, "fr", 150),  # below it, above the fallback floor: listed, and counted
+        _extra_row(92, 902, "fr", 60),  # below the fallback floor: not listed
+    ]
+    out = _build(
+        tmp_path,
+        ratings_only_min_votes=200,
+        ratings_only_fallback_votes=100,
+        extra_tmdb=extras,
+    )
+    catalogue = load_catalogue(out, with_ratings_only=True)
+    assert {f.movie.movie_id for f in catalogue.ratings_only} >= {"ro-0000900", "ro-0000901"}
+    assert "ro-0000902" not in {f.movie.movie_id for f in catalogue.ratings_only}
+    report = json.loads((out / "eval.json").read_text(encoding="utf-8"))["catalogue"][
+        "ratings_only"
+    ]
+    assert report["fallback_min_imdb_votes"] == 100
+    french = report["by_language"]["fr"]
+    assert french["ratings_only"] == 2 and french["of_which_below_the_main_floor"] == 1
+    # English has a film of 10,069 votes among the fixture's own rows, none below the floor.
+    assert report["by_language"]["en"]["of_which_below_the_main_floor"] == 0
 
 
 @pytest.mark.parametrize("wide", [False, True])
