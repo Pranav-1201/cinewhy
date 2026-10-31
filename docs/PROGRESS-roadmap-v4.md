@@ -47,7 +47,13 @@ Branch `feature/roadmap-v4`, worktree `D:\NLPPROJECT-dev`, local only, never pus
 * Ratings-only tier (D-027): `a41e628` back end, `4ee02de` page. Languages ja and fr, Telugu inside the Hindi choice: `ee52fb2`.
 * Accent folding and original-title links (D-028): `8740fc1`. Build options and the tier's selection: `eaeb1e2`.
 
-## Now
+## Update 2026-11-01: v5 is built and is the build to serve
+* `artifacts/v5` (manifest `da475cc32788`, 24,967 films, 50-vote fallback for short languages, D-029) is verified and was
+  looked at in a browser. Build command = the one below plus `--ratings-only-fallback-votes 50`, output `artifacts/v5`.
+  `artifacts/v4` (200-vote floor, 21,730 films) is kept beside it; `start.bat` serves the highest `vN`, so v5.
+* Branch pushed; draft PR #1; CI green. The notes below are from before the build finished.
+
+## Now (older note)
 * **The real v4 build is running** (started 07:58). Log:
   `C:/Users/Dell/AppData/Local/Temp/claude/D--NLPPROJECT/33717dde-bb2b-4de8-b656-cb441c7b62e6/scratchpad/build_v4.log`
   (last line says `build exit N`). Output: `D:\NLPPROJECT-dev\artifacts\v4` (git-ignored). Command, from `D:\NLPPROJECT-dev` with
