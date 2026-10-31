@@ -22,7 +22,7 @@ import json
 import re
 import zipfile
 from collections import Counter
-from collections.abc import Iterator, Mapping
+from collections.abc import Callable, Iterator, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
@@ -153,14 +153,18 @@ def _ebd_parts(z: zipfile.ZipFile) -> list[str]:
     return sorted(n for n in z.namelist() if n.startswith("part-") and n.endswith(".json"))
 
 
-def scan_ebd_keys(archive: Path) -> Counter[str]:
-    """Reviews per film key in ebD, counting films only (series are skipped).
+def scan_ebd_keys(
+    archive: Path, parser: Callable[[str], tuple[str, int] | None] = parse_ebd_movie
+) -> Counter[str]:
+    """Reviews per film key in ebD, counting films only (series are skipped) unless told otherwise.
 
     Uses a regex on the raw text instead of parsing JSON, which is several times faster and is
     all the join needs.
 
     Args:
         archive: Path to `imdb_ebd.zip`.
+        parser: Reads a record's `movie` field: `parse_ebd_movie` (films, the default) or
+            `parse_ebd_series` (series, which count only under their start year).
 
     Returns:
         `film_key(title, year)` -> number of reviews, whatever their length or spoiler flag.
@@ -175,7 +179,7 @@ def scan_ebd_keys(archive: Path) -> Counter[str]:
                     for found in _EBD_MOVIE_FIELD.finditer(text):
                         if found.end() <= len(carry):
                             continue  # already counted while it sat at the end of the last chunk
-                        movie = parse_ebd_movie(json.loads(f'"{found.group(1)}"'))
+                        movie = parser(json.loads(f'"{found.group(1)}"'))
                         if movie is not None:
                             counts[film_key(*movie)] += 1
                     carry = text[-600:]
@@ -225,15 +229,21 @@ def iter_ebd_records(archive: Path) -> Iterator[dict[str, object]]:
                 yield from _iter_json_array(text_stream)
 
 
-def iter_ebd_reviews(archive: Path, imdb_of_key: Mapping[str, int]) -> Iterator[SourceReview]:
+def iter_ebd_reviews(
+    archive: Path,
+    imdb_of_key: Mapping[str, int],
+    parser: Callable[[str], tuple[str, int] | None] = parse_ebd_movie,
+) -> Iterator[SourceReview]:
     """Stream ebD reviews of the wanted films that are safe and long enough to quote.
 
     Args:
         archive: Path to `imdb_ebd.zip`.
         imdb_of_key: `film_key` -> IMDb number for the films the catalogue wants.
+        parser: Reads a record's `movie` field (`parse_ebd_movie` for films, the default, or
+            `parse_ebd_series` for series).
     """
     for record in iter_ebd_records(archive):
-        movie = parse_ebd_movie(str(record.get("movie") or ""))
+        movie = parser(str(record.get("movie") or ""))
         if movie is None or record.get("spoiler_tag"):
             continue
         imdb_id = imdb_of_key.get(film_key(*movie))

@@ -48,6 +48,9 @@ class SpineFilm:
     vote_average: float = 0.0
     # The title in the film's own language (TMDB `original_title`), "" when the export had none.
     original_title: str = ""
+    # "film", or "series" for a TV series (`cinewhy.data.series`); the rest of the build treats both
+    # alike except where it must not (reviews come from different dumps).
+    kind: str = "film"
 
 
 @dataclass(frozen=True)
