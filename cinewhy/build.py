@@ -103,7 +103,7 @@ class BuildConfig:
     # Fewest IMDb votes for a ratings-only film; None builds no ratings-only tier.
     ratings_only_min_votes: int | None = None
     # A lower floor used only to fill a language still short of its target once the films above
-    # `ratings_only_min_votes` are used up. Their ratings rest on few voters; the page shows how many.
+    # `ratings_only_min_votes` are used up. Their ratings rest on few voters; eval.json counts them.
     ratings_only_fallback_votes: int | None = None
 
 
