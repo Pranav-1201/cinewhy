@@ -3,13 +3,13 @@
 
 import { post } from "./api.js";
 import { $, clear, h } from "./dom.js";
-import { pct, recencyForAge, signed } from "./format.js";
+import { pct, recencyForAge, verdictFor } from "./format.js";
 import { receipt } from "./receipt.js";
 import { labelOf, resetTaste, save, state } from "./state.js";
 
 const AGES = [["under-18", "Under 18"], ["18-24", "18 to 24"], ["25-34", "25 to 34"], ["35-44", "35 to 44"], ["45+", "45 and over"]];
 const REGIONS = [["india", "India"], ["north-america", "North America"], ["europe", "Europe"], ["elsewhere", "Somewhere else"]];
-const LANGUAGES = [["en", "English"], ["hi", "Hindi"]];
+const LANGUAGES = [["en", "English"], ["hi", "Hindi"], ["ja", "Japanese"], ["fr", "French"]];
 const SEXES = [["female", "Woman"], ["male", "Man"], ["other", "Another way"]];
 
 /** Chip group inside `root`. Returns a function that reads the current choices. */
@@ -61,6 +61,10 @@ export function openOnboarding(ctx) {
   const readLang = chipGroup($("#ob-lang"), LANGUAGES, state.languages, true);
   const readAge = chipGroup($("#ob-age"), AGES, state.age ? [state.age] : [], false);
   const readRegion = chipGroup($("#ob-region"), REGIONS, state.region ? [state.region] : [], false);
+  // What a person likes to watch says far more about their taste than who they are (D-019), so the
+  // genre question comes first in the form and feeds the "Rate films" deck.
+  const genreOptions = Object.keys(ctx.facets.genres || {}).slice(0, 12).map((g) => [g, g]);
+  const readGenres = chipGroup($("#ob-genres"), genreOptions, state.favouriteGenres, true);
   const sexField = $("#ob-sex-field");
   // Sex is asked only when the server reports a measured demographic prior that uses it.
   sexField.hidden = !ctx.facets.demographics_enabled;
@@ -70,8 +74,10 @@ export function openOnboarding(ctx) {
     : "Age sets how much newer films come first and region decides which shelf leads. Nothing else is inferred from your answers. You can change both under Your taste.";
   const form = $("#onboard-form");
   form.onsubmit = (event) => {
-    if (event.submitter?.value === "save") {
+    const choice = event.submitter?.value;
+    if (choice === "save" || choice === "rate") {
       state.languages = readLang();
+      state.favouriteGenres = readGenres();
       state.age = readAge()[0] ?? null;
       state.region = readRegion()[0] ?? null;
       state.sex = sexField.hidden ? null : (readSex()[0] ?? null);
@@ -82,6 +88,7 @@ export function openOnboarding(ctx) {
     save();
     ctx.syncFilters();
     ctx.refresh();
+    if (choice === "rate") setTimeout(() => ctx.openRate(), 0); // after this dialog has closed
   };
   $("#onboard-dialog").showModal();
 }
@@ -101,13 +108,13 @@ function wireReviewDialog() {
         const strongest = c.mentions.slice().sort((a, b) => Math.abs(b.polarity) - Math.abs(a.polarity))[0];
         const tone = strongest && Math.abs(strongest.polarity) >= 0.2 ? (strongest.polarity > 0 ? "pos" : "neg") : "";
         return h("span", { class: "clause" }, h("mark", { class: tone, text: c.text }),
-          c.mentions.map((m) => h("span", { class: "chip static", text: `${labelOf(m.aspect)} ${signed(m.polarity)}` })), " ");
+          c.mentions.map((m) => h("span", { class: "chip static", text: `${labelOf(m.aspect)}: ${verdictFor(m.polarity).toLowerCase()}` })), " ");
       })));
-      const lines = r.summary.map((s) => ({ aspect: s.aspect, score: s.polarity, support: s.mentions, supportLabel: "mentions", quotes: [], weight: 0 }));
+      const lines = r.summary.map((s) => ({ aspect: s.aspect, score: s.polarity, support: s.mentions, supportNouns: ["mention in your review", "mentions in your review"], quotes: [], weight: 0 }));
       out.replaceChildren(
         h("p", { class: "analysis-text" }, body),
         lines.length ? receipt({ title: "your review", lines, heading: "What your review says", animate: false }) : h("p", { class: "note", text: "No aspect was judged in this text." }),
-        h("p", { class: "note", text: `The whole review reads as ${r.overall >= 0 ? "positive" : "negative"} (${signed(r.overall)}). Single clauses are harder to judge than whole reviews; see How it works for how often it is right.` }));
+        h("p", { class: "note", text: `Taken as a whole, this review reads as ${r.overall >= 0 ? "positive" : "negative"}. Single clauses are harder to judge than whole reviews; see How it works for how often it is right.` }));
     } catch (err) {
       out.replaceChildren(h("p", { class: "note", text: err.message }));
     }

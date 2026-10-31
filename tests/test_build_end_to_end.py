@@ -24,9 +24,11 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
 
 from cinewhy.absa.polarity import PolarityModel
+from cinewhy.artifacts.manifest import load_manifest, verify
 from cinewhy.build import BuildConfig, build_artifacts
 from cinewhy.data.catalogue_sources import Gathered
 from cinewhy.data.sources import load_ratings
+from cinewhy.data.spine import quota, wide_quota
 from cinewhy.recsys.catalogue import load_catalogue
 from tests.dumps import movielens_zip, source_paths, tmdb_row
 
@@ -67,9 +69,16 @@ def _toy_polarity(path: Path) -> None:
 
 
 def _build(
-    tmp_path: Path, *, wrong_tmdb_id_for: int | None = None, cache_file: Path | None = None
+    tmp_path: Path,
+    *,
+    wrong_tmdb_id_for: int | None = None,
+    cache_file: Path | None = None,
+    ratings_only_min_votes: int | None = None,
+    ratings_only_fallback_votes: int | None = None,
+    extra_tmdb: list[dict[str, str]] | None = None,
 ) -> Path:
     tmdb = [tmdb_row(k + 1, 100 + k, _TITLES[k], 2005 + k % 8) for k in range(N_TMDB)]
+    tmdb += extra_tmdb or []
     ebd = [
         (
             f"{_TITLES[k]} ({2005 + k % 8})",
@@ -110,6 +119,8 @@ def _build(
         gold_dir=gold,
         min_reviews=3,
         seed=7,
+        ratings_only_min_votes=ratings_only_min_votes,
+        ratings_only_fallback_votes=ratings_only_fallback_votes,
     )
     build_artifacts(config)
     return out
@@ -180,6 +191,121 @@ def test_the_review_text_is_released_before_ratings_are_loaded(
     monkeypatch.setattr("cinewhy.build.load_ratings", spy)
     _build(tmp_path)
     assert seen["text_still_held"] is False
+
+
+def _extra_row(tmdb_id: int, imdb: int, lang: str, votes: int) -> dict[str, str]:
+    return {**tmdb_row(tmdb_id, imdb, f"Extra {imdb}", 2012, lang=lang), "imdb_votes": str(votes)}
+
+
+def test_without_the_option_there_is_no_ratings_only_tier(tmp_path: Path) -> None:
+    out = _build(tmp_path, extra_tmdb=[_extra_row(90, 900, "fr", 5000)])
+    assert not (out / "ratings_only.json").exists()
+    manifest = json.loads((out / "manifest.json").read_text(encoding="utf-8"))
+    assert "ratings_only.json" not in manifest["files"]
+    assert (
+        json.loads((out / "eval.json").read_text(encoding="utf-8"))["catalogue"]["ratings_only"]
+        is None
+    )
+
+
+def test_the_ratings_only_tier_lists_well_voted_films_that_have_no_receipt(
+    tmp_path: Path,
+) -> None:
+    extras = [
+        _extra_row(90, 900, "fr", 5000),  # French, well voted: listed
+        _extra_row(91, 901, "fr", 150),  # too few votes: not listed
+        _extra_row(92, 902, "de", 9000),  # a language the catalogue does not carry: not listed
+    ]
+    out = _build(tmp_path, ratings_only_min_votes=200, extra_tmdb=extras)
+    verify(out, load_manifest(out))  # the new file is hashed into the manifest the API checks
+    catalogue = load_catalogue(out, with_ratings_only=True)
+    listed = {f.movie.movie_id: f for f in catalogue.ratings_only}
+    # Film 14 (index 14, IMDb 114) has two reviews: below the build's minimum of three, but it is
+    # a well-voted English film, so it is listed rather than lost.
+    assert set(listed) == {"ro-0000900", "ro-0000114"}
+    assert listed["ro-0000900"].language == "fr" and listed["ro-0000900"].imdb_votes == 5000
+    # Nothing is in both tiers, and the full-receipt tier is the same as without the option.
+    assert not {m.movie_id for m in catalogue.movies} & set(listed)
+    assert len(catalogue.movies) == N_FILMS
+    report = json.loads((out / "eval.json").read_text(encoding="utf-8"))["catalogue"][
+        "ratings_only"
+    ]
+    assert report["min_imdb_votes"] == 200 and report["films"] == 2
+    french = report["by_language"]["fr"]
+    assert french == {
+        "target": 2500,
+        "full_receipts": 0,
+        "ratings_only": 1,
+        "of_which_below_the_main_floor": 0,
+        "short_by": 2499,
+    }
+    # English: 14 full receipts plus 1 ratings-only film, against the 10,000 target.
+    assert report["by_language"]["en"]["short_by"] == 10_000 - N_FILMS - 1
+
+
+def test_a_fallback_floor_lists_thin_films_and_the_report_counts_them(tmp_path: Path) -> None:
+    extras = [
+        _extra_row(90, 900, "fr", 5000),  # above the main floor
+        _extra_row(91, 901, "fr", 150),  # below it, above the fallback floor: listed, and counted
+        _extra_row(92, 902, "fr", 60),  # below the fallback floor: not listed
+    ]
+    out = _build(
+        tmp_path,
+        ratings_only_min_votes=200,
+        ratings_only_fallback_votes=100,
+        extra_tmdb=extras,
+    )
+    catalogue = load_catalogue(out, with_ratings_only=True)
+    assert {f.movie.movie_id for f in catalogue.ratings_only} >= {"ro-0000900", "ro-0000901"}
+    assert "ro-0000902" not in {f.movie.movie_id for f in catalogue.ratings_only}
+    report = json.loads((out / "eval.json").read_text(encoding="utf-8"))["catalogue"][
+        "ratings_only"
+    ]
+    assert report["fallback_min_imdb_votes"] == 100
+    french = report["by_language"]["fr"]
+    assert french["ratings_only"] == 2 and french["of_which_below_the_main_floor"] == 1
+    # English has a film of 10,069 votes among the fixture's own rows, none below the floor.
+    assert report["by_language"]["en"]["of_which_below_the_main_floor"] == 0
+
+
+@pytest.mark.parametrize("wide", [False, True])
+def test_the_build_passes_its_selection_settings_to_gather(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, wide: bool
+) -> None:
+    seen: dict[str, Any] = {}
+
+    class Stop(Exception):  # noqa: N818  # a sentinel: the point is only to read the arguments
+        pass
+
+    def spy(*_args: Any, **kwargs: Any) -> Any:
+        seen.update(kwargs)
+        raise Stop
+
+    monkeypatch.setattr("cinewhy.build.gather", spy)
+    config = BuildConfig(
+        sources=source_paths(tmp_path / "dumps", tmdb=[]),
+        out_dir=tmp_path,
+        wide=wide,
+        languages=("en", "fr"),
+        max_year=2026,
+        cap_per_source=77,
+    )
+    with pytest.raises(Stop):
+        build_artifacts(config)
+    assert seen["quota_for"] is (wide_quota if wide else quota)
+    assert (seen["languages"], seen["max_year"], seen["cap"]) == (("en", "fr"), 2026, 77)
+
+
+def test_a_catalogue_with_a_ratings_only_tier_still_serves(tmp_path: Path) -> None:
+    from fastapi.testclient import TestClient
+
+    import api.main as api_main
+
+    out = _build(tmp_path, ratings_only_min_votes=200, extra_tmdb=[_extra_row(90, 900, "fr", 5000)])
+    with TestClient(api_main.create_app(out)) as client:
+        page = client.get("/movie/ro-0000900").json()
+        assert page["ratings_only"] is True and page["aspects"] == []
+        assert client.get("/facets").json()["languages"]["fr"] == 1
 
 
 def test_a_domain_check_next_to_the_model_is_carried_into_eval_json(tmp_path: Path) -> None:

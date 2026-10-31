@@ -4,13 +4,17 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import {
+  RATINGS_ONLY_NOTE,
   clamp,
-  eraRange,
   hueOf,
+  imdbLine,
   languageName,
   pct,
   recencyForAge,
+  basisLine,
   reviewsLine,
+  sourceStamp,
+  verdictFor,
   runtimeLabel,
   signed,
   sourceOf,
@@ -73,14 +77,6 @@ test("age sets a default for how much to favour new films, and unknown is neutra
   assert.equal(recencyForAge("prefer-not"), 0.5);
 });
 
-test("era chips map to year windows", () => {
-  assert.deepEqual(eraRange("new", 2025), { from_year: 2018 });
-  assert.deepEqual(eraRange("2012", 2025), { from_year: 2012 });
-  assert.deepEqual(eraRange("2000", 2025), { from_year: 2000 });
-  assert.deepEqual(eraRange("any", 2025), {});
-  assert.deepEqual(eraRange(undefined, 2025), {});
-});
-
 test("runtimeLabel", () => {
   assert.equal(runtimeLabel(161), "2h 41m");
   assert.equal(runtimeLabel(120), "2h");
@@ -98,17 +94,59 @@ test("clamp cuts at a word boundary and only adds an ellipsis when it cut", () =
   assert.equal(clamp("  padded  ", 20), "padded");
 });
 
+test("imdbLine states the rating and the votes behind it, and nothing without a rating", () => {
+  assert.equal(imdbLine(7.84, 12400), "IMDb rating 7.8 from 12,400 votes.");
+  assert.equal(imdbLine(8, 1), "IMDb rating 8.0 from 1 vote.");
+  assert.equal(imdbLine(8, 0), "IMDb rating 8.0.");
+  assert.equal(imdbLine(0, 500), "");
+  assert.equal(imdbLine(null, 500), "");
+});
+
+test("the ratings-only note admits what is missing and promises no quotes", () => {
+  assert.match(RATINGS_ONLY_NOTE, /not read reviews/);
+  assert.match(RATINGS_ONLY_NOTE, /no quotes/);
+});
+
 test("languageName", () => {
   assert.equal(languageName("en"), "English");
   assert.equal(languageName("hi"), "Hindi");
-  assert.equal(languageName("fr"), "");
+  assert.equal(languageName("fr"), "French");
+  assert.equal(languageName("ja"), "Japanese");
+  assert.equal(languageName("te"), "Telugu");
+  assert.equal(languageName("de"), "");
   assert.equal(languageName(null), "");
 });
 
+test("verdictFor turns a score into one plain word, symmetric at the edges", () => {
+  const cases = [
+    [1, "Loved"], [0.5, "Loved"], [0.4999, "Liked"], [0.2, "Liked"], [0.1999, "Mixed"], [0, "Mixed"],
+    [-0.1999, "Mixed"], [-0.2, "Disliked"], [-0.4999, "Disliked"], [-0.5, "Panned"], [-1, "Panned"],
+  ];
+  for (const [score, word] of cases) assert.equal(verdictFor(score), word, String(score));
+});
+
+test("sourceStamp uses the right article and copes with an unknown site", () => {
+  assert.equal(sourceStamp("IMDb"), "From an IMDb review");
+  assert.equal(sourceStamp("Rotten Tomatoes"), "From a Rotten Tomatoes review");
+  assert.equal(sourceStamp("A review"), "From a review");
+  assert.equal(sourceStamp(undefined), "From a review");
+  assert.equal(sourceStamp(""), "From a review");
+});
+
+test("basisLine says what a verdict rests on, with the right singular and plural", () => {
+  assert.equal(basisLine(238, "Acting"), "Based on 238 review sentences about acting");
+  assert.equal(basisLine(1, "Plot"), "Based on 1 review sentence about plot");
+  assert.equal(basisLine(1200, "Visuals"), "Based on 1,200 review sentences about visuals");
+  assert.equal(basisLine(3, "Pacing", ["mention in your review", "mentions in your review"]), "Based on 3 mentions in your review about pacing");
+  assert.equal(basisLine(0, "Acting"), "");
+  assert.equal(basisLine(null, "Acting"), "");
+});
+
 test("reviewsLine words the per-source counts plainly", () => {
-  assert.equal(reviewsLine({ rt: 4, ebd: 6 }), "Read 4 from Rotten Tomatoes and 6 from IMDb");
-  assert.equal(reviewsLine({ acl: 3, ebd: 2 }), "Read 5 from IMDb");
-  assert.equal(reviewsLine({ rt: 1200 }), "Read 1,200 from Rotten Tomatoes");
+  assert.equal(reviewsLine({ rt: 4, ebd: 6 }), "We read 10 reviews: 4 from Rotten Tomatoes and 6 from IMDb");
+  assert.equal(reviewsLine({ acl: 3, ebd: 2 }), "We read 5 reviews from IMDb");
+  assert.equal(reviewsLine({ rt: 1200 }), "We read 1,200 reviews from Rotten Tomatoes");
+  assert.equal(reviewsLine({ rt: 1 }), "We read 1 review from Rotten Tomatoes");
   assert.equal(reviewsLine({}), "");
   assert.equal(reviewsLine(undefined), "");
 });

@@ -14,6 +14,12 @@ export function sourceOf(reviewId) {
   return { key, label: SOURCES[key] || "A review" };
 }
 
+/** "From an IMDb review", "From a Rotten Tomatoes review", or "From a review" when the site is unknown. */
+export function sourceStamp(label) {
+  if (!label || label === "A review") return "From a review";
+  return `From ${/^[AEIOU]/.test(label) ? "an" : "a"} ${label} review`;
+}
+
 /** A stable hue (0-359) from an id, for the placeholder shown when a poster is missing. */
 export function hueOf(id) {
   let h = 0;
@@ -30,14 +36,6 @@ export function hueOf(id) {
 export function recencyForAge(band) {
   const table = { "under-18": 0.5, "18-24": 0.5, "25-34": 0.5, "35-44": 0.4, "45+": 0.25 };
   return table[band] ?? 0.5;
-}
-
-/** The year window an era chip stands for. `newest` is the latest year in the catalogue. */
-export function eraRange(era, newest) {
-  if (era === "new") return { from_year: newest - 7 };
-  if (era === "2012") return { from_year: 2012 };
-  if (era === "2000") return { from_year: 2000 };
-  return {};
 }
 
 /** "2h 41m" from minutes; empty when the runtime is unknown. */
@@ -58,17 +56,49 @@ export function clamp(text, max) {
 
 /** Language chip text for an ISO code the catalogue uses. */
 export function languageName(code) {
-  return { en: "English", hi: "Hindi" }[code] || "";
+  return { en: "English", hi: "Hindi", te: "Telugu", ja: "Japanese", fr: "French" }[code] || "";
 }
+
+const count = (n) => n.toLocaleString("en");
 
 /** Plain sentence for a film's reviews, from the per-source counts the server sends. */
 export function reviewsLine(bySource) {
   const rt = bySource?.rt || 0;
   const imdb = (bySource?.acl || 0) + (bySource?.ebd || 0);
-  const parts = [];
-  if (rt) parts.push(`${rt.toLocaleString("en")} from Rotten Tomatoes`);
-  if (imdb) parts.push(`${imdb.toLocaleString("en")} from IMDb`);
-  return parts.length ? `Read ${parts.join(" and ")}` : "";
+  const total = rt + imdb;
+  if (!total) return "";
+  const noun = total === 1 ? "review" : "reviews";
+  if (!rt) return `We read ${count(total)} ${noun} from IMDb`;
+  if (!imdb) return `We read ${count(total)} ${noun} from Rotten Tomatoes`;
+  return `We read ${count(total)} reviews: ${count(rt)} from Rotten Tomatoes and ${count(imdb)} from IMDb`;
+}
+
+/** What stands in for a receipt on a film whose reviews we have not read. Says so, invents no quotes. */
+export const RATINGS_ONLY_NOTE =
+  "We have not read reviews of this film yet, so there are no quotes to show. It is placed by its IMDb rating and its genres.";
+
+/** "IMDb rating 7.8 from 12,400 votes."; empty when the server sent no rating. */
+export function imdbLine(rating, votes) {
+  if (!(rating > 0)) return "";
+  const from = votes > 0 ? ` from ${count(votes)} ${votes === 1 ? "vote" : "votes"}` : "";
+  return `IMDb rating ${Number(rating).toFixed(1)}${from}.`;
+}
+
+/**
+ * One word for how reviewers felt, from an aspect score between -1 and +1. The edges are symmetric
+ * and inclusive on the strong side: 0.5 is Loved and -0.5 is Panned; 0.2 is Liked and -0.2 is Disliked.
+ */
+export function verdictFor(score) {
+  if (score >= 0.5) return "Loved";
+  if (score >= 0.2) return "Liked";
+  if (score > -0.2) return "Mixed";
+  if (score > -0.5) return "Disliked";
+  return "Panned";
+}
+
+/** "Based on 238 review sentences about acting": what a verdict rests on; empty when unknown. */
+export function basisLine(n, aspectName, [one, many] = ["review sentence", "review sentences"]) {
+  return n ? `Based on ${count(n)} ${n === 1 ? one : many} about ${String(aspectName).toLowerCase()}` : "";
 }
 
 /** Wilson 95% interval for hits out of n: the spread shown beside every measured rate. */

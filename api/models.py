@@ -64,6 +64,11 @@ class MovieDetail(_Out):
     rt_url: str | None = None
     # How many of the film's reviews each source (acl, ebd, rt) contributed.
     reviews_by_source: dict[str, int] = Field(default_factory=dict)
+    # True for a film we hold only ratings for: `aspects` is empty because no reviews were read, and
+    # the IMDb numbers below are what it is placed by.
+    ratings_only: bool = False
+    imdb_rating: float | None = None
+    imdb_votes: int | None = None
 
 
 class DiscoverRequest(BaseModel):
@@ -75,13 +80,35 @@ class DiscoverRequest(BaseModel):
     limit: int = Field(default=20, ge=1, le=100)
     # 0 = no preference for new films, 1 = the strongest lift the ranker allows.
     recency: float = Field(default=0.5, ge=0.0, le=1.0)
-    languages: tuple[Literal["en", "hi"], ...] = Field(default=(), max_length=2)
+    languages: tuple[Literal["en", "hi", "ja", "fr"], ...] = Field(default=(), max_length=4)
     genres: tuple[Annotated[str, StringConstraints(max_length=40)], ...] = Field(
         default=(), max_length=10
     )
     from_year: int | None = Field(default=None, ge=1880, le=2100)
     to_year: int | None = Field(default=None, ge=1880, le=2100)
-    exclude_movie_ids: tuple[str, ...] = Field(default=(), max_length=500)
+    # Watched films travel here. The browser caps each of its lists at 3,000 (web/js/profile.js
+    # LIST_CAP); this must not be lower, or a long watched list would turn every shelf into a 422.
+    exclude_movie_ids: tuple[str, ...] = Field(default=(), max_length=3000)
+
+
+class ShelvesRequest(BaseModel):
+    """A request for the whole home page's shelves at once; every field is bounded.
+
+    The visitor's own language, genre and year choices narrow every shelf; the shelves themselves
+    (picks, similar, new, classics, languages, genres) are decided by the server.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    profile: TasteProfile = Field(default_factory=TasteProfile)
+    recency: float = Field(default=0.5, ge=0.0, le=1.0)
+    languages: tuple[Literal["en", "hi", "ja", "fr"], ...] = Field(default=(), max_length=4)
+    genres: tuple[Annotated[str, StringConstraints(max_length=40)], ...] = Field(
+        default=(), max_length=10
+    )
+    from_year: int | None = Field(default=None, ge=1880, le=2100)
+    to_year: int | None = Field(default=None, ge=1880, le=2100)
+    exclude_movie_ids: tuple[str, ...] = Field(default=(), max_length=3000)
 
 
 class Facets(_Out):

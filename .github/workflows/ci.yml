@@ -109,23 +109,35 @@ jobs:
             exit 1
           fi
 
-  # Builds the deployable image (fetch datasets, train, build artifacts, ~15 min), boots it,
-  # and checks that the verified manifest is served and a recommendation comes back. The
-  # Dockerfile could not be built on the development machine, so this job is what verifies
-  # it. Pushes to main only: it downloads about 350 MB per run.
+  # Builds the runtime image, boots it on a small synthetic artifact set (tests/smoke_artifacts.py),
+  # and checks that a verified manifest is served and a recommendation comes back. The Dockerfile
+  # cannot be built on the development machine (no Docker), so this job is what verifies it. The
+  # real 365 MB artifacts are not needed to prove the image starts, so it runs on every push and
+  # pull request and takes about two minutes.
   docker:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Write the synthetic artifact set
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+          python -m tests.smoke_artifacts --out "$RUNNER_TEMP/smoke-artifacts"
 
       - name: Build image
         run: docker build -t cinewhy .
 
       - name: Boot and probe
         run: |
-          docker run -d --name cinewhy -p 7860:7860 cinewhy
+          docker run -d --name cinewhy -p 7860:7860 \
+            -v "$RUNNER_TEMP/smoke-artifacts:/app/artifacts:ro" cinewhy
           for i in $(seq 1 60); do
             if curl -fsS http://localhost:7860/health > health.json; then break; fi
             sleep 2
@@ -139,6 +151,35 @@ jobs:
       - name: Container logs on failure
         if: failure()
         run: docker logs cinewhy
+
+  # Browser tests: the real server on the synthetic artifact set, driven by Chromium at eight widths.
+  # The quality job skips tests/e2e (no playwright there); this job is where they must pass, and it
+  # refuses a run in which nothing passed (an all-skipped run exits 0 and proves nothing).
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev,e2e]"
+          python -m playwright install --with-deps chromium
+
+      - name: Browser tests
+        run: |
+          set -o pipefail
+          pytest tests/e2e -o addopts= -v | tee e2e.out
+          if ! grep -qE '[1-9][0-9]* passed' e2e.out; then
+            echo "::error::no browser test passed, refusing to pass"
+            exit 1
+          fi
 
   secrets:
     runs-on: ubuntu-latest

@@ -2,8 +2,8 @@
    it loads: a missing or slow image leaves a deliberate-looking tile, never a hole. */
 
 import { h, icon } from "./dom.js";
-import { hueOf } from "./format.js";
-import { labelOf, opinionOf, setOpinion } from "./state.js";
+import { hueOf, languageName } from "./format.js";
+import { isWanted, isWatched, labelOf, opinionOf, setOpinion, setWant, setWatched } from "./state.js";
 
 export function poster(movie, { language = null, isNew = false } = {}) {
   const el = h(
@@ -16,32 +16,52 @@ export function poster(movie, { language = null, isNew = false } = {}) {
     el.append(img);
   }
   if (isNew) el.append(h("span", { class: "badge", text: "New" }));
-  if (language === "hi") el.append(h("span", { class: "badge lang", text: "Hindi" }));
+  // English is the unmarked case; any other original language is named on the poster.
+  if (language && language !== "en" && languageName(language)) {
+    el.append(h("span", { class: "badge lang", text: languageName(language) }));
+  }
   return el;
 }
 
-/** The like button used on tiles, the spotlight and the film drawer. */
-export function likeButton(movie) {
-  const button = h("button", {
-    class: "like", type: "button", "aria-pressed": String(opinionOf(movie.movie_id) === "like"),
-    "aria-label": `Like ${movie.title}`,
-  }, icon("heart", true));
-  button.addEventListener("click", (event) => {
+/** The three quick answers on a tile: like, seen it, want to watch. One answer can change another
+    (seeing a film takes it off the want-to-watch list), so every button re-reads after a click. */
+export function tileActions(movie) {
+  const id = movie.movie_id;
+  const specs = [
+    { cls: "like", glyph: "heart", label: `Like ${movie.title}`, isOn: () => opinionOf(id) === "like",
+      flip: () => setOpinion(movie, opinionOf(id) === "like" ? null : "like") },
+    { cls: "seen", glyph: "eye", label: `I have watched ${movie.title}`, isOn: () => isWatched(id),
+      flip: () => setWatched(movie, !isWatched(id)) },
+    { cls: "save", glyph: "bookmark", label: `Want to watch ${movie.title}`, isOn: () => isWanted(id),
+      flip: () => setWant(movie, !isWanted(id)) },
+  ];
+  const buttons = specs.map((spec) => h("button", {
+    class: `tile-act ${spec.cls}`, type: "button", "aria-label": spec.label, title: spec.label,
+  }, icon(spec.glyph, spec.glyph !== "eye")));
+  const sync = () => buttons.forEach((button, i) => button.setAttribute("aria-pressed", String(specs[i].isOn())));
+  buttons.forEach((button, i) => button.addEventListener("click", (event) => {
     event.stopPropagation();
-    setOpinion(movie, opinionOf(movie.movie_id) === "like" ? null : "like");
-    button.setAttribute("aria-pressed", String(opinionOf(movie.movie_id) === "like"));
+    specs[i].flip();
+    sync();
     document.dispatchEvent(new CustomEvent("cinewhy:opinion"));
-  });
-  return button;
+  }));
+  sync();
+  return h("div", { class: "tile-acts" }, buttons);
 }
 
 /** One list item for a rail. `item` is a DiscoverItem from the server. */
 export function tile(item, open) {
   const m = item.movie;
   const top = item.reasons?.[0];
-  const why = top
-    ? (top.user_weight > 0 ? `Matches your ${labelOf(top.aspect).toLowerCase()}` : `Praised for ${labelOf(top.aspect).toLowerCase()}`)
-    : null;
+  // The plainest reason first: a film the visitor already liked that this one resembles.
+  // A film we hold only ratings for has no reason to give, so the tile says that instead.
+  const why = item.ratings_only
+    ? "Ratings only"
+    : item.because
+      ? `Because you liked ${item.because}`
+      : top
+        ? (top.user_weight > 0 ? `Matches your ${labelOf(top.aspect).toLowerCase()}` : `Praised for ${labelOf(top.aspect).toLowerCase()}`)
+        : null;
   const button = h(
     "button", {
       class: "tile-btn", type: "button",
@@ -51,7 +71,7 @@ export function tile(item, open) {
     poster(m, { language: item.language, isNew: item.is_new }),
     h("span", { class: "tile-title", text: m.title }),
     h("span", { class: "tile-meta", text: m.year ? String(m.year) : "" }),
-    why ? h("span", { class: "tile-why", text: why }) : null);
-  return h("li", { class: "tile" }, button, likeButton(m));
+    why ? h("span", { class: item.ratings_only ? "tile-why muted" : "tile-why", text: why }) : null);
+  return h("li", { class: "tile" }, button, tileActions(m));
 }
 

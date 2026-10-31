@@ -288,3 +288,32 @@ def test_filters_apply_to_personalised_lists_too() -> None:
     profile = TasteProfile(liked_movie_ids=("cw-5",))
     result = discover(_world(), profile, limit=5, from_year=2000, manifest="m")
     assert "Old Classic" not in _titles(result)
+
+
+def _because(result: DiscoverResult) -> dict[str, str | None]:
+    return {item.movie.title: item.because for item in result.items}
+
+
+def test_a_pick_names_the_liked_film_it_is_closest_to() -> None:
+    """Mid Nineties and Old Classic are alike (similarity 0.9); liking one explains the other."""
+    result = discover(_world(), TasteProfile(liked_movie_ids=("cw-1",)), limit=6, manifest="m")
+    assert _because(result)["Mid Nineties"] == "Old Classic"
+
+
+def test_no_because_is_offered_without_a_real_similarity_or_a_liked_film() -> None:
+    liked = discover(_world(), TasteProfile(liked_movie_ids=("cw-1",)), limit=6, manifest="m")
+    # Recent Hit has no similarity at all to Old Classic: inventing a reason would be a lie.
+    assert _because(liked)["Recent Hit"] is None
+    cold = discover(_world(), TasteProfile(), limit=6, manifest="m")
+    assert set(_because(cold).values()) == {None}
+
+
+def test_the_closest_of_several_liked_films_wins_and_a_film_never_names_itself() -> None:
+    world = _world()
+    world.similarity[1, 0] = world.similarity[0, 1] = (
+        0.3  # Recent Hit leans a little to Old Classic
+    )
+    world.similarity[1, 4] = world.similarity[4, 1] = 0.6  # and more to Mid Nineties
+    result = discover(world, TasteProfile(liked_movie_ids=("cw-1", "cw-5")), limit=6, manifest="m")
+    assert _because(result)["Recent Hit"] == "Mid Nineties"
+    assert all(item.because != item.movie.title for item in result.items)

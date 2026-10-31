@@ -31,6 +31,7 @@ TMDB_COLUMNS = [
     "imdb_rating",
     "imdb_votes",
     "vote_average",
+    "original_title",
 ]
 
 
@@ -43,12 +44,14 @@ def tmdb_row(
     lang: str = "en",
     votes: int = 1000,
     runtime: float = 170.0,
+    original_title: str | None = None,
 ) -> dict[str, str]:
-    """One row of the TMDB export."""
+    """One row of the TMDB export; `original_title` defaults to the English title."""
     return {
         "id": str(tmdb_id),
         "imdb_id": f"tt{imdb:07d}",
         "title": title,
+        "original_title": title if original_title is None else original_title,
         "release_date": f"{year}-06-01",
         "original_language": lang,
         "vote_count": str(votes),

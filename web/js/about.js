@@ -27,7 +27,7 @@ function builtFrom(e) {
   if (!c) return null;
   const grid = c.films_by_language_and_era || {};
   const eras = [["pre2000", "Before 2000"], ["2000-2011", "2000 to 2011"], ["2012+", "2012 onward"]];
-  const langs = [["en", "English"], ["hi", "Hindi"]];
+  const langs = [["en", "English"], ["hi", "Hindi"], ["te", "Telugu"], ["ja", "Japanese"], ["fr", "French"]];
   const rows = langs.filter(([l]) => eras.some(([k]) => grid[`${l}/${k}`])).map(([l, name]) => [name, ...eras.map(([k]) => (grid[`${l}/${k}`] || 0).toLocaleString("en"))]);
   return h("div", { class: "how-card" }, h("h3", { text: "What it is built from" }),
     h("p", { text: `${c.films.toLocaleString("en")} films, ${c.reviews?.toLocaleString("en") ?? "many"} reviews read, ${c.evidence_sentences?.toLocaleString("en") ?? "many"} sentences chosen as quotable.` }),

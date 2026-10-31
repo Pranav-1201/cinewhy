@@ -24,7 +24,7 @@ import json
 import re
 import time
 from collections import Counter, defaultdict
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -38,9 +38,23 @@ from cinewhy.absa.gold import evaluate_gold, evaluate_random, load_gold, load_ra
 from cinewhy.absa.polarity import PolarityModel
 from cinewhy.artifacts.manifest import build as build_manifest
 from cinewhy.data.catalogue_sources import SourcePaths, gather, gather_cached
+from cinewhy.data.reviews import MAX_REVIEWS_PER_SOURCE
 from cinewhy.data.sources import load_movielens_links, load_ratings
-from cinewhy.data.spine import SpineFilm
-from cinewhy.recsys.catalogue import Catalogue, FilmStats, write_catalogue
+from cinewhy.data.spine import (
+    CATALOGUE_TARGETS,
+    SpineFilm,
+    quota,
+    read_tmdb_rows,
+    select_ratings_only,
+    wide_quota,
+)
+from cinewhy.recsys.catalogue import (
+    Catalogue,
+    FilmStats,
+    RatingsOnlyFilm,
+    poster_url,
+    write_catalogue,
+)
 from cinewhy.recsys.cf import bayesian_popularity, build_item_similarity
 from cinewhy.recsys.evaluate import evaluate_recommenders, slider_response
 from cinewhy.schemas import ArtifactManifest, Aspect, EvidenceSentence, Movie, MovieAspectProfile
@@ -79,6 +93,18 @@ class BuildConfig:
     # reviews simply report fewer aspects, each shown with its support.
     min_reviews: int = 5
     seed: int = 42
+    # Everything below is off by default, which reproduces the shipped build. The v4 build turns
+    # it on from the command line: more languages, a wider candidate list, 50 reviews for a full
+    # receipt, and a ratings-only tier for the films that fall short (docs/ROADMAP, section 15).
+    cap_per_source: int = MAX_REVIEWS_PER_SOURCE
+    languages: tuple[str, ...] | None = None  # None: the spine's English and Hindi
+    max_year: int | None = None  # None: the spine's last year
+    wide: bool = False  # the wider candidate list (`spine.wide_quota`)
+    # Fewest IMDb votes for a ratings-only film; None builds no ratings-only tier.
+    ratings_only_min_votes: int | None = None
+    # A lower floor used only to fill a language still short of its target once the films above
+    # `ratings_only_min_votes` are used up. Their ratings rest on few voters; eval.json counts them.
+    ratings_only_fallback_votes: int | None = None
 
 
 def movie_id_for(imdb_id: int) -> str:
@@ -111,6 +137,90 @@ def select_films(
         The qualifying films in the order given, so every artifact is deterministic.
     """
     return [f for f in films if len(reviews.get(f.imdb_id, ())) >= min_reviews]
+
+
+def ratings_only_id(imdb_id: int) -> str:
+    """CineWhy's id for a film listed with ratings only: distinct from `movie_id_for` on purpose."""
+    return f"ro-{imdb_id:07d}"
+
+
+def ratings_only_films(config: BuildConfig, taken: Sequence[int]) -> tuple[RatingsOnlyFilm, ...]:
+    """The ratings-only tier: well-voted films to bring each language up to its target.
+
+    Empty when the config asks for no such tier. A film that already has full receipts is never
+    listed twice (`taken`), and a language the dumps cannot fill simply has fewer than its target;
+    the build reports that gap in eval.json instead of padding the list.
+
+    Args:
+        config: The build settings (`ratings_only_min_votes` switches the tier on).
+        taken: IMDb numbers of the films that have full receipts.
+
+    Returns:
+        The films, ordered by IMDb number so the artifact is deterministic.
+    """
+    if config.ratings_only_min_votes is None:
+        return ()
+    films = select_ratings_only(
+        read_tmdb_rows(config.sources.tmdb_csv),
+        taken,
+        CATALOGUE_TARGETS,
+        min_votes=config.ratings_only_min_votes,
+        fallback_min_votes=config.ratings_only_fallback_votes,
+        max_year=config.max_year,
+    )
+    return tuple(
+        RatingsOnlyFilm(
+            movie=Movie(
+                movie_id=ratings_only_id(f.imdb_id),
+                title=f.title,
+                year=f.year,
+                genres=f.genres,
+                poster_url=poster_url(f.poster_path),
+            ),
+            imdb_id=f.imdb_id,
+            language=f.language,
+            imdb_rating=f.imdb_rating,
+            imdb_votes=f.imdb_votes,
+            overview=f.overview or None,
+            release_date=f.release_date or None,
+            runtime=int(f.runtime) if f.runtime > 0 else None,
+        )
+        for f in films
+    )
+
+
+def ratings_only_report(
+    config: BuildConfig,
+    full_receipt_films: Iterable[SpineFilm],
+    ratings_only: Sequence[RatingsOnlyFilm],
+) -> dict[str, Any] | None:
+    """What the ratings-only tier holds, and how far each language is from its target.
+
+    None when the build has no such tier. `short_by` is what the owner's target asks for beyond
+    what the dumps could supply; it is reported, never hidden by padding the list.
+    """
+    if config.ratings_only_min_votes is None:
+        return None
+    full = Counter(f.language for f in full_receipt_films)
+    only = Counter(f.language for f in ratings_only)
+    # Films listed on fewer votes than the main floor: the fallback tier, counted on its own so the
+    # page's honesty about thin ratings can be checked against how many there are.
+    thin = Counter(f.language for f in ratings_only if f.imdb_votes < config.ratings_only_min_votes)
+    return {
+        "min_imdb_votes": config.ratings_only_min_votes,
+        "fallback_min_imdb_votes": config.ratings_only_fallback_votes,
+        "films": len(ratings_only),
+        "by_language": {
+            lang: {
+                "target": target,
+                "full_receipts": full.get(lang, 0),
+                "ratings_only": only.get(lang, 0),
+                "of_which_below_the_main_floor": thin.get(lang, 0),
+                "short_by": max(0, target - full.get(lang, 0) - only.get(lang, 0)),
+            }
+            for lang, target in CATALOGUE_TARGETS.items()
+        },
+    }
 
 
 def reviews_from(
@@ -266,12 +376,30 @@ def build_artifacts(config: BuildConfig) -> ArtifactManifest:
     out.mkdir(parents=True, exist_ok=True)
 
     _log("gathering films and reviews from TMDB, aclImdb, Rotten Tomatoes and ebD")
+    quota_for = wide_quota if config.wide else quota
     if config.cache_file is None:
-        gathered = gather(config.sources, on_progress=_log)
+        gathered = gather(
+            config.sources,
+            cap=config.cap_per_source,
+            quota_for=quota_for,
+            languages=config.languages,
+            max_year=config.max_year,
+            on_progress=_log,
+        )
     else:
-        gathered = gather_cached(config.sources, config.cache_file, on_progress=_log)
+        gathered = gather_cached(
+            config.sources,
+            config.cache_file,
+            cap=config.cap_per_source,
+            quota_for=quota_for,
+            languages=config.languages,
+            max_year=config.max_year,
+            on_progress=_log,
+        )
     chosen = select_films(gathered.films, gathered.reviews, config.min_reviews)
     imdb_ids = [f.imdb_id for f in chosen]
+    ratings_only = ratings_only_films(config, imdb_ids)
+    _log(f"ratings-only tier: {len(ratings_only)} films")
     films = {f.imdb_id: f for f in chosen}
     reviews = {i: gathered.reviews[i] for i in imdb_ids}
     _log(
@@ -365,6 +493,7 @@ def build_artifacts(config: BuildConfig) -> ArtifactManifest:
         evidence,
         similarity,
         {"inferred_fit_weight": rec_report.chosen_fit_weight},
+        ratings_only=ratings_only,
     )
     write_catalogue(out, catalogue)
     # TMDB fields the API merges later (posters, language, overview). Kept out of catalogue.json
@@ -426,6 +555,7 @@ def build_artifacts(config: BuildConfig) -> ArtifactManifest:
             "reviews": n_reviews,
             "evidence_sentences": sum(len(s) for by in evidence.values() for s in by.values()),
             "min_reviews_per_film": config.min_reviews,
+            "ratings_only": ratings_only_report(config, films.values(), ratings_only),
             "ratings": len(stars),
             "films_with_aspect": {
                 a.value: sum(any(s.aspect is a for s in p.scores) for p in profiles.values())
@@ -452,7 +582,8 @@ def build_artifacts(config: BuildConfig) -> ArtifactManifest:
     row_counts = {"films": n_films, "ratings": len(stars), "reviews": n_reviews}
     # Name the artifacts explicitly: the directory may also hold logs, and hashing a file that
     # is still being written would make the manifest fail to verify at the next boot.
-    manifest = build_manifest(out, row_counts=row_counts, names=ARTIFACT_FILES)
+    names = (*ARTIFACT_FILES, "ratings_only.json") if ratings_only else ARTIFACT_FILES
+    manifest = build_manifest(out, row_counts=row_counts, names=names)
     _log(f"manifest {manifest.manifest_hash[:12]} over {len(manifest.files)} files")
     return manifest
 
@@ -476,6 +607,33 @@ def main() -> None:
         "the gather logic are unchanged",
     )
     parser.add_argument("--no-cache", action="store_true", help="always re-read the dumps")
+    parser.add_argument(
+        "--cap",
+        type=int,
+        default=defaults.cap_per_source,
+        help="most reviews kept per film per source; lower it to save memory on a wide build",
+    )
+    parser.add_argument(
+        "--languages",
+        default=None,
+        help="comma-separated original languages to select, e.g. en,hi,te,ja,fr (default: en,hi)",
+    )
+    parser.add_argument("--max-year", type=int, default=None, help="latest release year")
+    parser.add_argument(
+        "--wide", action="store_true", help="the wider candidate list (spine.wide_quota)"
+    )
+    parser.add_argument(
+        "--ratings-only-min-votes",
+        type=int,
+        default=None,
+        help="also list films with this many IMDb votes and no full receipt (default: none)",
+    )
+    parser.add_argument(
+        "--ratings-only-fallback-votes",
+        type=int,
+        default=None,
+        help="a lower vote floor used only to fill a language still short of its target",
+    )
     args = parser.parse_args()
     build_artifacts(
         BuildConfig(
@@ -486,6 +644,12 @@ def main() -> None:
             ml_archive=args.ml,
             out_dir=args.out,
             min_reviews=args.min_reviews,
+            cap_per_source=args.cap,
+            languages=tuple(args.languages.split(",")) if args.languages else None,
+            max_year=args.max_year,
+            wide=args.wide,
+            ratings_only_min_votes=args.ratings_only_min_votes,
+            ratings_only_fallback_votes=args.ratings_only_fallback_votes,
         )
     )
 

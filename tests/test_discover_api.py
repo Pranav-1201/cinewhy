@@ -66,7 +66,9 @@ def test_an_empty_request_is_a_cold_start_discovery_list(client: TestClient) -> 
 
 def test_each_card_has_what_the_ui_needs(client: TestClient) -> None:
     item = client.post("/discover", json={"limit": 1}).json()["items"][0]
-    assert set(item) == {"movie", "language", "is_new", "score", "reasons", "is_fallback"}
+    assert set(item) == {
+        "movie", "language", "is_new", "score", "reasons", "is_fallback", "because", "ratings_only",
+    }  # fmt: skip
     assert item["movie"]["poster_url"].startswith("https://image.tmdb.org/t/p/w342/cw")
     assert item["language"] in {"en", "hi"}
 
@@ -114,8 +116,8 @@ def test_the_same_request_gives_the_same_list(client: TestClient) -> None:
 @pytest.mark.parametrize(
     "bad",
     [
-        {"languages": ["fr"]},  # only English and Hindi are offered
-        {"languages": ["en", "hi", "en"]},  # more than the two there are
+        {"languages": ["de"]},  # English, Hindi, Japanese and French are offered; not German
+        {"languages": ["en", "hi", "ja", "fr", "en"]},  # more than the four there are
         {"recency": 1.5},
         {"recency": -0.1},
         {"from_year": 1500},
@@ -126,7 +128,7 @@ def test_the_same_request_gives_the_same_list(client: TestClient) -> None:
         {"limit": 101},
         {"genres": ["x"] * 11},
         {"genres": ["y" * 41]},
-        {"exclude_movie_ids": ["cw-1"] * 501},
+        {"exclude_movie_ids": ["cw-1"] * 3001},  # one over the cap (profile.js LIST_CAP)
         {"nonsense": True},  # unknown fields are refused, not ignored
     ],
 )
@@ -135,8 +137,19 @@ def test_out_of_bounds_requests_are_refused(client: TestClient, bad: dict[str, o
 
 
 def test_an_oversized_body_is_refused_before_it_is_parsed(client: TestClient) -> None:
-    body = {"exclude_movie_ids": ["x" * 1000] * 100}  # about 100 KB, over the 64 KB cap
+    body = {"exclude_movie_ids": ["x" * 1000] * 200}  # about 200 KB, over the 160 KB cap
     assert client.post("/discover", json=body).status_code == 413
+
+
+def test_the_largest_library_the_browser_can_send_is_accepted(client: TestClient) -> None:
+    """3,000 liked, 3,000 disliked and 3,000 watched ids (web/js/profile.js LIST_CAP each)."""
+    ids = [f"cw-{n:07d}" for n in range(3000)]
+    body = {
+        "profile": {"liked_movie_ids": ids, "disliked_movie_ids": ids},
+        "exclude_movie_ids": ids,
+    }
+    response = client.post("/discover", json=body)
+    assert len(response.content) > 0 and response.status_code == 200
 
 
 def test_facets_count_languages_and_years(client: TestClient) -> None:

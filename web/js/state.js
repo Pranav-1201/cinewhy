@@ -1,33 +1,30 @@
 /* What the visitor chose. It lives in this browser only (localStorage); the server stores nothing
    and sees only what a request carries. Reads and writes are wrapped because private windows and
-   blocked storage make localStorage throw. */
+   blocked storage make localStorage throw. The rules for the profile itself (what a valid one looks
+   like, how likes, watched and want-to-watch relate) are in profile.js, which Node tests directly. */
 
-const KEY = "cinewhy.profile.v2";
+import * as profile from "./profile.js";
+
+const KEY = "cinewhy.profile.v3";
+const OLD_KEY = "cinewhy.profile.v2"; // read once and migrated; never written again
 const THEME_KEY = "cinewhy.theme";
 
-const defaults = () => ({
-  weights: {}, liked: [], disliked: [], titles: {},
-  languages: [], era: "any", genres: [],
-  recency: 0.5, recencyTouched: false,
-  age: null, region: null, sex: null, hindiFirst: false, onboarded: false,
-});
-
-export const state = defaults();
+export const state = profile.defaultProfile();
 export const aspectLabels = new Map();
 export const labelOf = (id) => aspectLabels.get(id) || id;
 
-/** Keep only what the page expects, so a corrupted value cannot break rendering. */
-function sanitise() {
-  const d = defaults();
-  for (const key of ["liked", "disliked", "languages", "genres"]) if (!Array.isArray(state[key])) state[key] = d[key];
-  for (const key of ["weights", "titles"]) if (typeof state[key] !== "object" || !state[key]) state[key] = d[key];
-  if (typeof state.recency !== "number" || state.recency < 0 || state.recency > 1) state.recency = d.recency;
-  if (!["any", "new", "2012", "2000"].includes(state.era)) state.era = "any";
+/** Replace what `state` holds with `next`, keeping the same object so other modules' imports stay valid. */
+function adopt(next) {
+  for (const key of Object.keys(state)) delete state[key];
+  Object.assign(state, next);
 }
 
 export function load() {
-  try { Object.assign(state, JSON.parse(localStorage.getItem(KEY) || "{}")); } catch (_) { /* start fresh */ }
-  sanitise();
+  let raw = null;
+  try {
+    raw = localStorage.getItem(KEY) ?? localStorage.getItem(OLD_KEY);
+    adopt(profile.migrate(raw ? JSON.parse(raw) : null));
+  } catch (_) { adopt(profile.defaultProfile()); /* corrupted or blocked storage: start fresh */ }
 }
 
 export function save() {
@@ -36,25 +33,30 @@ export function save() {
 
 export function resetTaste() {
   const keep = { onboarded: state.onboarded };
-  Object.assign(state, defaults(), keep);
+  adopt({ ...profile.defaultProfile(), ...keep });
   save();
 }
 
-export const profileForApi = () => ({
-  aspect_weights: state.weights, liked_movie_ids: state.liked, disliked_movie_ids: state.disliked,
-});
+/** Replace the whole profile (used by Import) and keep it. */
+export function replaceProfile(next) {
+  adopt(next);
+  save();
+}
 
-export const opinionOf = (id) => (state.liked.includes(id) ? "like" : state.disliked.includes(id) ? "dislike" : null);
+export const profileForApi = () => profile.profileForApi(state);
+export const excludedIds = () => profile.excludedIds(state);
+export const opinionOf = (id) => profile.opinionOf(state, id);
+export const isWatched = (id) => profile.isWatched(state, id);
+export const isWanted = (id) => profile.isWanted(state, id);
+export const isEmpty = () => profile.isEmpty(state);
+export const counts = () => profile.counts(state);
+export const exportText = () => profile.exportText(state);
 
 /** Record like, dislike, or neither for a film; the film's title is kept to word the list later. */
-export function setOpinion(movie, opinion) {
-  state.titles[movie.movie_id] = movie.title + (movie.year ? ` (${movie.year})` : "");
-  state.liked = state.liked.filter((id) => id !== movie.movie_id);
-  state.disliked = state.disliked.filter((id) => id !== movie.movie_id);
-  if (opinion === "like") state.liked.push(movie.movie_id);
-  if (opinion === "dislike") state.disliked.push(movie.movie_id);
-  save();
-}
+export function setOpinion(movie, opinion) { profile.setOpinion(state, movie, opinion); save(); }
+export function setWatched(movie, on) { profile.setWatched(state, movie, on); save(); }
+export function setWant(movie, on) { profile.setWant(state, movie, on); save(); }
+export function rate(movie, stars) { profile.rate(state, movie, stars); save(); }
 
 export function initTheme() {
   let stored = null;

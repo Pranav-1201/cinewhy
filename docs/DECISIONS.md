@@ -513,3 +513,144 @@ Pranav asked for everything outside deployment to be finished; the one test that
 values was updated to the new ones on purpose.) **Caveat:** the evaluated hybrid ranks with MovieLens popularity, not the IMDb
 scores the live list uses, and MovieLens users rated films of every year, so this is the cost for
 people who rate old and new films alike.
+
+## D-021: the profile lives in the browser as one exportable object; accounts come later (2026-10-27, Sonnet 5.5)
+
+**Decision (Pranav, "browser now, accounts later").** Everything a visitor says (likes, not for me,
+watched with optional 1 to 5 stars, want to watch, favourite genres, languages, year range, age and
+region) is one versioned object in `localStorage` (`cinewhy.profile.v3`), with Download and Load as
+a JSON file, so a person can move browsers now and an account can adopt the same shape later. The rules
+(one list per opinion, ratings only for watched films, capped well-formed id lists, migration of the
+v2 key and of the old four era chips) are in `web/js/profile.js` and pinned by 22 Node tests; 11
+planted bugs were each caught. **Limits changed to carry it:** `exclude_movie_ids` 500 to 3,000 and the
+request body 64 KB to 160 KB, because the watched list travels with every shelf request. Two guard
+tests that pinned the old numbers were re-pinned to the new boundary on purpose, with a new test that
+the largest library the browser can send is accepted. **Not decided:** what a star rating is worth to
+the ranker. Today 4 and 5 stars count as a like and 1 and 2 as a dislike (`opinionForStars`); how
+many answers it takes is measured in D-025, what a single star is worth is not.
+
+## D-022: one request returns every shelf, and a short shelf is left out (2026-10-27, Sonnet 5.5)
+
+`POST /shelves` (`cinewhy/recsys/shelves.py`) replaces one `/discover` call per row. `discover()` was
+split into `score_films` (the costly pass) and `select_items` (cheap per shelf) with unchanged behaviour
+(27 existing tests). Shelves in order: picks (spotlight plus 15), similar viewers, explore, new (2021
+on), old school (before 1990), one per language with at least 25 films (English, Hindi, Japanese,
+French), one per top genre. No film is on two shelves; watched, liked and disliked films never appear;
+a shelf under 4 films is not shown. **The language ratio is a catalogue ratio, not an exposure ratio**
+(Pranav's clarification), so there is no language mixer: the mix comes from how many films each
+language has. *Explore* first offered famous but mediocre films under a "well reviewed" heading; it now
+needs the top quarter by shrunk IMDb rating, and its subtitle says popular and well rated. Measured in
+a browser: 13 shelves, 256 films, no repeats, one 76 ms request.
+
+## D-023: receipts say a word, then what it rests on (2026-10-27, Sonnet 5.5)
+
+The signed score is no longer printed. Five words from symmetric bands (Loved at 0.5 and up, Liked at
+0.2, Mixed between, Disliked at minus 0.2, Panned at minus 0.5), the basis in plain words ("Based on 238
+review sentences about acting"), and the raw score in a hover. This changes presentation only: no score
+or ranking changed. **Open:** the bands are a judgement, not a measurement; the true share of positive
+sentences per aspect needs a build change (roadmap B4).
+
+## D-024: the Docker image is runtime-only and CI boots it on synthetic artifacts (2026-10-27, Sonnet 5.5)
+
+The Dockerfile used to fetch `ml-25m.zip` and rebuild the old pipeline; its CI job failed on four
+commits with a certificate error and never described build v3. The image now holds code and web files
+only; artifacts are mounted or downloaded at start and still verified against the manifest.
+`tests/smoke_artifacts.py` writes a six-film verified set, and the CI `docker` job boots the image on it
+and probes `/health`, `/recommend` and the page. **Unverified until the branch is pushed:** Docker is not
+installed here, so the image build has never run; everything else in that job was run locally.
+**Follow-up.** A free host has no volume holding the 365 MB set, so the image's start command runs
+`python -m cinewhy.artifacts.download` first: if no manifest is present it downloads
+`$CINEWHY_ARTIFACTS_URL` (https only), requires the zip's SHA-256 to equal
+`$CINEWHY_ARTIFACTS_SHA256`, and unpacks it, refusing paths that escape the folder, symlinks, an
+oversize archive and an archive with no manifest. 16 tests; 12 planted bugs, each caught either alone
+or (for the overlapping path checks, which back one another up) when all path checks are removed
+together. Where the zip is hosted, and whether its licence allows that, is still Pranav's decision.
+**Rate limit behind a proxy (SOURCE-ONLY, not exercised).** The limiter keys on the connecting
+address, so behind a host's proxy every visitor would share one 120-a-minute budget. uvicorn's
+documented `FORWARDED_ALLOW_IPS` setting makes it read the real address from `X-Forwarded-For`; the
+Dockerfile says to set it to `*` only where the container is reachable through the proxy alone. A
+check from a real proxied deployment is still owed.
+
+## D-025: three liked films roughly double the first page; keep the 12-card Rate deck and let people go on (2026-10-27, Sonnet 5.5)
+
+`experiments/seed_curve.py` replays the held-out protocol (D-018) giving the ranker 0, 1, 2, 3, 5, 10
+or 20 of a user's liked films; same 2,000 test users and same hidden film at every count, similarity
+and popularity fitted on training users only, shrink 200 and aspect-fit share 0.45 as `eval.json`
+chose. Hit-at-20 for the shipped hybrid, mean and 95% interval: **0 films 6.7% [5.6, 7.7]; 1 8.7%
+[7.5, 10.0]; 2 11.3% [10.0, 12.8]; 3 12.9% [11.5, 14.3]; 5 13.6% [12.0, 15.2]; 10 16.0% [14.4, 17.5];
+20 17.8% [16.2, 19.5]**. Paired gains: 0 to 1 +2.1 points [+0.5, +3.5]; 1 to 2 +2.6 [+1.5, +4.0]; 2 to
+3 +1.6 [+0.4, +2.6]; **3 to 5 +0.7 [-0.6, +1.9] (not distinguishable from zero)**; 5 to 10 +2.5 [+1.2,
++3.7]; 10 to 20 +1.8 [+0.7, +3.0]. Pure collaborative filtering scores 18.8% at 20 films against the
+hybrid's 17.8%, the same direction as D-018. **Decision.** The first three answers are worth the most
+(they double the cold-start rate), so the Rate dialog stays at 12 cards, since a person likes
+perhaps a third to a half of the films they have seen, and offers "Show me more films" at the end.
+**Limits.** Only users with at least 21 liked films qualify (so every count uses the same users); they
+are heavier raters than a typical newcomer, so read the curve for its shape, not as the rate a new
+visitor will see. The deck is chosen for variety, not for films a person has probably seen; choosing
+films people are likely to know would raise the number of useful answers per card and is untested.
+
+## D-026: do not weight films by review count (2026-10-27, Sonnet 5.5)
+
+Pranav's idea: films with few reviews should count for less, so thin evidence cannot lift a film.
+`experiments/confidence_weight.py` multiplies each film's hybrid score by n/(n+k), n being its review
+count, under the D-018 protocol. The rule was fixed before looking: k chosen among 10, 50, 200 on
+1,000 validation cases, adopted only if it beat no weighting by more than one standard error. Validation
+hit-at-20: **none 0.192; k=10 0.197; k=50 0.189; k=200 0.180**; standard error 0.012, so the best
+gain (+0.005) is inside it and **no weighting was chosen**. Test (2,000 cases, read once), paired
+difference from unweighted with 95% interval: k=10 +0.001 [-0.003, +0.005]; k=50 +0.0005 [-0.0055,
++0.007]; k=200 -0.004 [-0.0125, +0.004]. Unweighted test hit-at-20 is 0.190. **Decision.** Do not ship
+it. **Limit.** Test users can only be scored on films that have MovieLens ratings, so this shows the
+weighting does not help (and at k=200 may hurt) among rated films. It cannot say whether it would
+protect users from films that have reviews but no ratings, which is the Tier B case; there the
+honest label and the 50-review / 200-vote floors do that job.
+
+## D-027: films with ratings but no reviews are a second tier, outside the similarity matrix (2026-10-27, Sonnet 5.5)
+
+Pranav's rules: a full receipt needs 50 reviews; below that, a film with at least 200 IMDb votes may be
+listed with ratings only. **Why a separate tier, not more rows.** `item_sim.npy` is a dense n by n float32
+matrix: 11,065 films is 490 MB, so tens of thousands more would be gigabytes, and these films have no
+viewer overlap to fill the rows with anyway. They live in `ratings_only.json` (`ro-NNNNNNN` ids) beside the
+catalogue, hashed into the manifest only when present, and `Catalogue.index` stays core-only so no code
+that indexes the matrix can reach one. **Ranking.** Cold: IMDb rating and votes on the same 0 to 1 scale as
+the other tier, plus the recency lift. Personal: 0.1 of that popularity plus 0.45 of genre match (liked
+films' genres, dislikes counting half), plus the lift. **0.45 is a judgement, not a measurement**: there
+are no ratings for these films to tune it on, so it is set below collaborative filtering's 0.9 on purpose.
+**Where they appear.** The new, old school, language and genre shelves, search and the film page; never
+the spotlight and picks, "viewers like you" or "something different", which promise quotes or viewer
+overlap they cannot back. **How they are labelled.** A "Ratings only" line on the tile, and on the film
+page the IMDb rating with its votes and a sentence saying no reviews were read. The card carries
+`ratings_only: true`; no reason or quote is ever invented. **Targets.** English 10,000; Hindi 5,250 and
+Telugu 2,250 (7,500 at 70/30); Japanese 5,000; French 2,500. They are minimums the owner wants. The build
+fills each language from the best-voted films not already in the first tier and reports `short_by` in
+`eval.json`, never padding. **Language choices.** English, Hindi, Japanese, French; the Hindi choice also
+includes Telugu. **Limits.** Movies only: series need another source (IMDb dumps list them; not built).
+Japanese is not split anime : movies : live action, because only films are in the data.
+
+## D-029: a 50-vote fallback fills the short languages; the build is v5 (2026-11-01, Sonnet 5.5)
+
+At the 200-vote floor Hindi, Telugu and Japanese were 3,270 films short of the owner's targets (roadmap
+section 19). Pranav chose to lower the floor for them. **Rule.** A language still short once every film with
+200 or more IMDb votes is used is filled, best-voted first, from films with 50 to 199 votes, only as far as
+its target needs; a language already at target takes none. Because films are taken in vote order, the thin ones
+can never displace a better-voted one. **Result** (`artifacts/v5`, manifest `da475cc32788`): 24,967 films, 10,386
+with full receipts and 14,581 ratings-only; Hindi 5,250 and Japanese 5,000 reach their targets (1,871 and 715 of
+their films are in the thin tier), Telugu 2,217 of 2,250 (651 thin; 33 short, as no more films have 50 votes).
+`eval.json` counts the thin films per language (`of_which_below_the_main_floor`). **Check on the page.**
+Across the home page, a Hindi-only and a Japanese-only view, no film with under 200 votes is on any shelf (the
+fewest votes shown is 1,669): popularity shrinks a thin rating toward the average, so these films fill the count
+and are found by search or deep browsing, not by the front page. Recommender quality is unchanged (hybrid 17.95%
+against collaborative filtering 18.6% at 20, the D-018 finding). **Limit.** A rating from 50 voters is weak
+evidence; the film page states the vote count next to the rating.
+
+## D-028: accent-folded title keys and original-title links (2026-10-27, Sonnet 5.5)
+
+`title_key` kept only ASCII letters, so an accented letter was dropped ("amlie") and a title with no Latin
+letters became the bare year, which linked to any film of that year. It now folds accents (and sharp s,
+ae, o with stroke), refuses an empty key, and a film may carry its original-language title, tried only
+when the English one finds nothing. **Safeguards.** An English-title refusal (ambiguous, runtime) is final;
+an original title any other candidate also uses is given up; two films reaching one ebD record both lose
+it. Measured on 125,897 candidates: accent folding adds 54 French ebD links (3,799 to 3,853); original
+titles add about 2,800 more French and almost none for Japanese, Hindi or Telugu (62, 35, 1). Gather
+cache version 3, and the cache key now includes the selection. **Caution.** The venv's editable install
+points at the demo folder: a script run from `experiments/` imports the OLD code unless `PYTHONPATH` is
+the dev folder (a rerun first showed identical numbers because of it).

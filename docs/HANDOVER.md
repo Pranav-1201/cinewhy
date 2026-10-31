@@ -140,6 +140,50 @@ permanently by `unique_review_indices` and `test_no_review_text_appears_in_both_
 ## Five-line handoff ritual (fill in each session)
 
 ```
+Session date:      2026-11-01 (session "nlp 3", continued), branch feature/roadmap-v4 in D:\NLPPROJECT-dev
+Model:             Claude Sonnet 5.5
+What we did:       Ratings-only tier (films with IMDb numbers but no reviews; own file, outside the
+                   similarity matrix; D-027), Japanese and French choices with Telugu inside Hindi,
+                   accent-folded title keys and original-title links (D-028), accent-blind search, build
+                   options (--wide --languages --ratings-only-min-votes ...), and the REAL builds:
+                   artifacts/v5 (manifest da475cc32788) = 10,386 full-receipt films + 14,581 ratings-only
+                   = 24,967, with a 50-vote fallback floor for the short languages (D-029; roadmap section
+                   19 has the first, 200-vote build). Looked at in a browser at 1280 and 375 px. Pushed as
+                   draft PR #1; CI (quality, docker, e2e, secrets) green. 547 passed, 1 skipped locally.
+What's left:       1) Series and the Japanese anime split are not built (the data is movies only).
+                   2) Telugu is 33 films short (no more films have 50 votes). 3) PR #1 is still a draft and
+                   remote main is unchanged; merging it is Pranav's call. 4) /shelves takes about 335 ms
+                   on v4/v5 (76 ms on v3); cache per-catalogue arrays if it matters. 5) Parked: region and
+                   age shelves, aspect-finder labelling.
+Watch out for:     Time with 127.0.0.1, not localhost (flat 2 s IPv6 delay on this Windows). The venv's editable
+                   install points at D:\NLPPROJECT: scripts must run with PYTHONPATH=D:\NLPPROJECT-dev or
+                   they import OLD code. Stop a server by PID (Get-CimInstance Win32_Process), the port query
+                   misses it. v4 server on 8010: CINEWHY_ARTIFACTS=D:\NLPPROJECT-dev\artifacts\v4.
+
+Session date:      2026-10-27 (session "nlp 3"), branch feature/roadmap-v4 in D:\NLPPROJECT-dev
+Model:             Claude Sonnet 5.5
+What we did:       Audit + plan (docs/ROADMAP-2026-10-27.md, section 15 is the final draft), then built on a
+                   LOCAL branch in a separate worktree so the demo in D:\NLPPROJECT stays on main:
+                   runtime-only Dockerfile + CI boot check (A), responsive header and phone bottom bar +
+                   browser tests (B), profile model v3 (watched, want, stars, export/import), Library, Rate
+                   films, Profile sheet, hide-watched toggle, favourite-genre question (C), POST /shelves
+                   (one request, no repeats, similar / explore / new / old school / language / genre
+                   shelves) (D), year-range bar with Old school and New presets, plain-language receipts (E).
+                   DECISIONS D-021..D-024. 466 passed, 1 skipped; ruff and mypy clean.
+What's left:       1) Pranav's OK to PUSH the branch: CI has never run the Docker image build or the
+                   browser job. 2) Data expansion (roadmap F0/F): verify sources, English 2021-26, Hindi/
+                   Telugu, Japanese (anime 5 : movies 3 : live-action 2), French, series; review floor 50
+                   with a ratings-only tier (needs Pranav's OK to use the TMDB key). 3) Measure hit-at-20 by
+                   number of rated films (sets the Rate films deck size). 4) Plain "because you liked X"
+                   reasons need a server field. 5) Region and age shelves are parked. 6) Labelling parked.
+Watch out for:     main is untouched and equals origin/main. Run the suite from D:\NLPPROJECT-dev with the
+                   demo venv's python and PYTHONPATH=D:\NLPPROJECT-dev\.e2e-deps (Playwright lives there);
+                   the new .venv in the dev folder cannot import scikit-learn (Windows Application
+                   Control blocked a DLL), do not use it. Dev server on port 8010 with
+                   CINEWHY_ARTIFACTS=D:\NLPPROJECT\artifacts\v3; the demo is on 8000. Two guard tests were
+                   re-pinned on purpose (D-021). GateGuard denies the first edit of every path: state the
+                   facts and retry the identical call.
+
 Session date:      2026-10-26 (session "nlp 2", final state)
 Model:             Claude Sonnet 5.5
 What we did:       Data layer (FEATURE-004), posters/meta API, /discover + /facets with recency

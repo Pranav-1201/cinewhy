@@ -24,6 +24,7 @@ PROFILES_FILE: Final[str] = "profiles.json"
 EVIDENCE_FILE: Final[str] = "evidence.json"
 SIMILARITY_FILE: Final[str] = "item_sim.npy"
 META_FILE: Final[str] = "meta.json"
+RATINGS_ONLY_FILE: Final[str] = "ratings_only.json"
 
 # Where TMDB serves poster images, at a width that suits a card (342 px). TMDB's terms require
 # attribution wherever these are shown (docs/FEATURE-004.md, step 2).
@@ -59,9 +60,33 @@ class FilmStats:
     review_count: int
 
 
+@dataclass(frozen=True)
+class RatingsOnlyFilm:
+    """A film we hold ratings for but have not read reviews of (roadmap section 15, "Tier B").
+
+    These have an IMDb rating and vote count and TMDB's description, but fewer than 50 reviews,
+    so there is no aspect profile, no quotes and no row in the similarity matrix. They are ranked
+    on how well known and well rated they are and on genre, and the page says so.
+    """
+
+    movie: Movie
+    imdb_id: int
+    language: str | None
+    imdb_rating: float
+    imdb_votes: int
+    overview: str | None = None
+    release_date: str | None = None
+    runtime: int | None = None
+
+
 @dataclass
 class Catalogue:
-    """Everything the ranker needs, indexed by catalogue position."""
+    """Everything the ranker needs, indexed by catalogue position.
+
+    Positions `0 .. len(movies) - 1` are the full-receipt films, which alone have rows in
+    `similarity` and `aspect_matrix`. Ratings-only films follow, so the position of the i-th one
+    is `len(movies) + i`; `film_at` and `all_movies` hide that offset from callers.
+    """
 
     movies: tuple[Movie, ...]
     stats: tuple[FilmStats, ...]
@@ -74,7 +99,12 @@ class Catalogue:
     # TMDB fields per movie id (overview, language, runtime, ...), read from the verified
     # `meta.json`. Empty when the artifact set has none.
     meta: dict[str, dict[str, Any]] = field(default_factory=dict)
+    ratings_only: tuple[RatingsOnlyFilm, ...] = ()
+    # Id to position for full-receipt films only: every row of `similarity` and `aspect_matrix`
+    # is one of these, so code indexing them with `index[...]` can never reach a ratings-only film.
     index: dict[str, int] = field(init=False)
+    # Id to position over BOTH kinds of film (see the class docstring).
+    all_index: dict[str, int] = field(init=False)
     # (n_films, n_aspects): support-shrunk aspect score, 0.0 where an aspect was not reported.
     aspect_matrix: npt.NDArray[np.float32] = field(init=False)
 
@@ -86,6 +116,11 @@ class Catalogue:
         if len(self.stats) != n:
             raise ValueError("stats and movies differ in length")
         self.index = {m.movie_id: i for i, m in enumerate(self.movies)}
+        self.all_index = dict(self.index)
+        for offset, film in enumerate(self.ratings_only):
+            if film.movie.movie_id in self.all_index:
+                raise ValueError(f"{film.movie.movie_id} is in both tiers")
+            self.all_index[film.movie.movie_id] = n + offset
         matrix = np.zeros((n, len(_ASPECTS)), dtype=np.float32)
         for movie_id, profile in self.profiles.items():
             row = self.index[movie_id]
@@ -93,6 +128,19 @@ class Catalogue:
                 shrunk = score.score * score.support / (score.support + SHRINK_K)
                 matrix[row, _ASPECTS.index(score.aspect)] = shrunk
         self.aspect_matrix = matrix
+
+    @property
+    def all_movies(self) -> tuple[Movie, ...]:
+        """Every film, full-receipt first then ratings-only, in position order."""
+        return self.movies + tuple(f.movie for f in self.ratings_only)
+
+    def is_ratings_only(self, position: int) -> bool:
+        """True when this position belongs to a ratings-only film."""
+        return position >= len(self.movies)
+
+    def ratings_only_at(self, position: int) -> RatingsOnlyFilm:
+        """The ratings-only film at a position (the caller checked `is_ratings_only`)."""
+        return self.ratings_only[position - len(self.movies)]
 
     def shrunk(self, movie_id: str, aspect: Aspect) -> float:
         """Support-shrunk score of one film on one aspect (0.0 when not reported)."""
@@ -135,6 +183,52 @@ def write_catalogue(directory: Path, catalogue: Catalogue) -> None:
     }
     (directory / EVIDENCE_FILE).write_text(_dumps(evidence), encoding="utf-8")
     np.save(directory / SIMILARITY_FILE, catalogue.similarity, allow_pickle=False)
+    if catalogue.ratings_only:
+        (directory / RATINGS_ONLY_FILE).write_text(
+            _dumps([_ratings_only_record(f) for f in catalogue.ratings_only]), encoding="utf-8"
+        )
+
+
+def _ratings_only_record(film: RatingsOnlyFilm) -> dict[str, Any]:
+    """One ratings-only film as plain JSON; the poster is stored as TMDB's path, not a full URL."""
+    url = film.movie.poster_url
+    return {
+        "movie_id": film.movie.movie_id,
+        "title": film.movie.title,
+        "year": film.movie.year,
+        "genres": list(film.movie.genres),
+        "poster_path": url.removeprefix(POSTER_BASE) if url else None,
+        "imdb_id": film.imdb_id,
+        "language": film.language,
+        "imdb_rating": film.imdb_rating,
+        "imdb_votes": film.imdb_votes,
+        "overview": film.overview,
+        "release_date": film.release_date,
+        "runtime": film.runtime,
+    }
+
+
+def _read_ratings_only(path: Path) -> tuple[RatingsOnlyFilm, ...]:
+    """Ratings-only films from `ratings_only.json`; the caller has verified the file's hash."""
+    return tuple(
+        RatingsOnlyFilm(
+            movie=Movie(
+                movie_id=r["movie_id"],
+                title=r["title"],
+                year=r["year"],
+                genres=tuple(r["genres"]),
+                poster_url=poster_url(r.get("poster_path")),
+            ),
+            imdb_id=int(r["imdb_id"]),
+            language=r.get("language") or None,
+            imdb_rating=float(r["imdb_rating"]),
+            imdb_votes=int(r["imdb_votes"]),
+            overview=r.get("overview") or None,
+            release_date=r.get("release_date") or None,
+            runtime=int(r["runtime"]) if r.get("runtime") else None,
+        )
+        for r in json.loads(path.read_text(encoding="utf-8"))
+    )
 
 
 def _dumps(obj: object) -> str:
@@ -142,7 +236,9 @@ def _dumps(obj: object) -> str:
     return json.dumps(obj, sort_keys=True, ensure_ascii=False)
 
 
-def load_catalogue(directory: Path, *, with_meta: bool = False) -> Catalogue:
+def load_catalogue(
+    directory: Path, *, with_meta: bool = False, with_ratings_only: bool = False
+) -> Catalogue:
     """Read a catalogue from a verified artifact directory.
 
     Args:
@@ -151,6 +247,8 @@ def load_catalogue(directory: Path, *, with_meta: bool = False) -> Catalogue:
         with_meta: Also read `meta.json` and give each film its poster URL. The caller passes
             True only when the verified manifest lists that file: a `meta.json` that is merely
             sitting in the directory is unverified and must not change what browsers are told.
+        with_ratings_only: Also read `ratings_only.json`, on the same condition: only when the
+            verified manifest lists it.
 
     Returns:
         The catalogue.
@@ -200,4 +298,5 @@ def load_catalogue(directory: Path, *, with_meta: bool = False) -> Catalogue:
     if stray:
         raise ValueError(f"profiles/evidence for films not in the catalogue: {sorted(stray)[:3]}")
     similarity = np.load(directory / SIMILARITY_FILE, allow_pickle=False)
-    return Catalogue(movies, stats, profiles, evidence, similarity, settings, meta)
+    ratings_only = _read_ratings_only(directory / RATINGS_ONLY_FILE) if with_ratings_only else ()
+    return Catalogue(movies, stats, profiles, evidence, similarity, settings, meta, ratings_only)
