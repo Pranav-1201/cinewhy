@@ -12,6 +12,7 @@ yields the same list (the contract test `test_recommendations_are_deterministic`
 
 from __future__ import annotations
 
+import unicodedata
 from typing import Final
 
 import numpy as np
@@ -279,10 +280,21 @@ def recommend(catalogue: Catalogue, request: RecommendRequest, manifest: str) ->
     return RecommendResponse(items=tuple(items), cold_start=False, manifest=manifest)
 
 
+def fold_accents(text: str) -> str:
+    """Lowercase, with accents removed: so "amelie" finds the film titled with an accent on its e.
+
+    Keeps spaces and punctuation (search matches word starts), unlike the join key in
+    `cinewhy.data.linking`, which drops them. Letters that do not decompose (an o with a stroke)
+    are left as they are.
+    """
+    decomposed = unicodedata.normalize("NFKD", text.lower())
+    return "".join(ch for ch in decomposed if not unicodedata.combining(ch))
+
+
 def search(catalogue: Catalogue, query: str, limit: int = 20) -> list[Movie]:
     """Find films by title: prefix matches first, then word-start, then substring.
 
-    Within a tier, better-known films (more ratings) come first.
+    Accents are ignored on both sides. Within a tier, better-known films (more ratings) come first.
 
     Args:
         catalogue: The catalogue.
@@ -292,13 +304,13 @@ def search(catalogue: Catalogue, query: str, limit: int = 20) -> list[Movie]:
     Returns:
         Matching films, best first. Empty for a blank query.
     """
-    needle = query.strip().lower()
+    needle = fold_accents(query.strip())
     if not needle:
         return []
     hits: list[tuple[int, int, int, int]] = []
     everything = catalogue.all_movies
     for i, movie in enumerate(everything):
-        title = movie.title.lower()
+        title = fold_accents(movie.title)
         if title.startswith(needle):
             tier = 0
         elif f" {needle}" in f" {title}":

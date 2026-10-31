@@ -223,6 +223,14 @@ def test_search_lists_full_receipt_films_before_ratings_only_ones() -> None:
     assert hits.index("ro-1") > hits.index("cw-7")
 
 
+def test_search_ignores_accents_on_either_side() -> None:
+    accented = "Am" + chr(0xE9) + "lie"
+    world = _with_extras(_extra(1, title=accented, language="fr"))
+    for query in ("amelie", "AMELIE", accented, "am" + chr(0xC9) + "lie", "melie"):
+        assert [m.movie_id for m in search(world, query)] == ["ro-1"], query
+    assert search(world, "amel1e") == []
+
+
 def test_the_movie_page_of_a_ratings_only_film_has_facts_but_no_receipt(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
