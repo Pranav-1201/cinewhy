@@ -4,7 +4,7 @@
 
 import { api, post } from "./api.js";
 import { $, clear, h, icon, reducedMotion } from "./dom.js";
-import { clamp, languageName, runtimeLabel } from "./format.js";
+import { clamp, kindLabel, languageName, runtimeLabel } from "./format.js";
 import { requestYears } from "./years.js";
 import { linesFromAspects, receipt } from "./receipt.js";
 import { excludedIds, profileForApi, state } from "./state.js";
@@ -19,6 +19,7 @@ function shared(facets) {
   const req = { recency: state.recency, profile: profileForApi() };
   if (state.languages.length) req.languages = state.languages;
   if (state.genres.length) req.genres = state.genres;
+  if (state.kinds.length) req.kinds = state.kinds;
   const watched = excludedIds(); // films the visitor has seen are left out unless they chose to see them
   if (watched.length) req.exclude_movie_ids = watched;
   return { ...req, ...requestYears(state.yearFrom, state.yearTo, facets.oldest_year, facets.newest_year) };
@@ -64,7 +65,7 @@ async function spotlight(item, open) {
   const m = item.movie;
   let d = null;
   try { d = await api(`/movie/${encodeURIComponent(m.movie_id)}`); } catch (_) { /* the pick still shows without details */ }
-  const chips = [m.year ? String(m.year) : "", languageName(item.language), runtimeLabel(d?.runtime_minutes), ...(m.genres || []).slice(0, 2)].filter(Boolean);
+  const chips = [m.year ? String(m.year) : "", kindLabel(m.kind), languageName(item.language), runtimeLabel(d?.runtime_minutes), ...(m.genres || []).slice(0, 2)].filter(Boolean);
   const lines = d?.aspects?.length ? linesFromAspects(d.aspects.slice(0, 2)) : [];
   const section = h("div", { class: "spotlight", vars: { "--tint": hueOf(m.movie_id) } },
     poster(m, { language: item.language, isNew: item.is_new }),

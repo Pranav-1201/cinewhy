@@ -222,6 +222,24 @@ test("export then import gives back the same profile", () => {
   assert.deepEqual(back.profile, migrate(p));
 });
 
+test("the films-or-series choice starts empty, keeps only the two valid kinds, and old profiles read as empty", () => {
+  assert.deepEqual(defaultProfile().kinds, []);
+  assert.deepEqual(migrate({ kinds: ["series"] }).kinds, ["series"]);
+  assert.deepEqual(migrate({ kinds: ["film", "series", "film"] }).kinds, ["film", "series"]);
+  assert.deepEqual(migrate({ kinds: ["movie", 3, "series", null] }).kinds, ["series"]);
+  assert.deepEqual(migrate({ kinds: "series" }).kinds, []);
+  assert.deepEqual(migrate({ languages: ["en"] }).kinds, []); // a profile saved before series existed
+  assert.deepEqual(migrate(null).kinds, []);
+});
+
+test("the kinds choice survives an export and an import", () => {
+  const p = defaultProfile();
+  p.kinds = ["series"];
+  const back = importText(exportText(p, new Date("2026-11-01T00:00:00Z")));
+  assert.equal(back.ok, true);
+  assert.deepEqual(back.profile.kinds, ["series"]);
+});
+
 test("import refuses what is not a CineWhy profile, and never throws", () => {
   const good = JSON.parse(exportText(defaultProfile()));
   const cases = [

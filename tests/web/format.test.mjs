@@ -8,7 +8,10 @@ import {
   clamp,
   hueOf,
   imdbLine,
+  kindLabel,
   languageName,
+  ratingsOnlyNote,
+  yearAndKind,
   pct,
   recencyForAge,
   basisLine,
@@ -105,6 +108,28 @@ test("imdbLine states the rating and the votes behind it, and nothing without a 
 test("the ratings-only note admits what is missing and promises no quotes", () => {
   assert.match(RATINGS_ONLY_NOTE, /not read reviews/);
   assert.match(RATINGS_ONLY_NOTE, /no quotes/);
+});
+
+test("the ratings-only note names a series a series and a film a film", () => {
+  assert.match(ratingsOnlyNote("series"), /this series yet/);
+  assert.match(ratingsOnlyNote("film"), /this film yet/);
+  assert.match(ratingsOnlyNote(undefined), /this film yet/); // an older server sends no kind
+  assert.equal(RATINGS_ONLY_NOTE, ratingsOnlyNote("film"));
+});
+
+test("a series is labelled and a film is not", () => {
+  assert.equal(kindLabel("series"), "TV series");
+  assert.equal(kindLabel("film"), "");
+  assert.equal(kindLabel(undefined), "");
+});
+
+test("yearAndKind gives the year, then Series for a series, and copes with what is missing", () => {
+  assert.equal(yearAndKind({ year: 2008, kind: "series" }), "2008 · Series");
+  assert.equal(yearAndKind({ year: 1995, kind: "film" }), "1995");
+  assert.equal(yearAndKind({ year: 1995 }), "1995");
+  assert.equal(yearAndKind({ kind: "series" }), "Series");
+  assert.equal(yearAndKind({}), "");
+  assert.equal(yearAndKind(null), "");
 });
 
 test("languageName", () => {

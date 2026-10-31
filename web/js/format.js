@@ -73,9 +73,18 @@ export function reviewsLine(bySource) {
   return `We read ${count(total)} reviews: ${count(rt)} from Rotten Tomatoes and ${count(imdb)} from IMDb`;
 }
 
-/** What stands in for a receipt on a film whose reviews we have not read. Says so, invents no quotes. */
-export const RATINGS_ONLY_NOTE =
-  "We have not read reviews of this film yet, so there are no quotes to show. It is placed by its IMDb rating and its genres.";
+/** "TV series" for a series; a film needs no label, so it gets none. */
+export const kindLabel = (kind) => (kind === "series" ? "TV series" : "");
+
+/** "2008 · Series" for a tile or a search result: the year, then the kind when it is a series. */
+export function yearAndKind(movie) {
+  return [movie?.year ? String(movie.year) : "", movie?.kind === "series" ? "Series" : ""].filter(Boolean).join(" · ");
+}
+
+/** What stands in for a receipt on a title whose reviews we have not read. Says so, invents no quotes. */
+export const ratingsOnlyNote = (kind) =>
+  `We have not read reviews of this ${kind === "series" ? "series" : "film"} yet, so there are no quotes to show. It is placed by its IMDb rating and its genres.`;
+export const RATINGS_ONLY_NOTE = ratingsOnlyNote("film");
 
 /** "IMDb rating 7.8 from 12,400 votes."; empty when the server sent no rating. */
 export function imdbLine(rating, votes) {

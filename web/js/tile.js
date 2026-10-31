@@ -2,7 +2,7 @@
    it loads: a missing or slow image leaves a deliberate-looking tile, never a hole. */
 
 import { h, icon } from "./dom.js";
-import { hueOf, languageName } from "./format.js";
+import { hueOf, languageName, yearAndKind } from "./format.js";
 import { isWanted, isWatched, labelOf, opinionOf, setOpinion, setWant, setWatched } from "./state.js";
 
 export function poster(movie, { language = null, isNew = false } = {}) {
@@ -70,7 +70,7 @@ export function tile(item, open) {
     },
     poster(m, { language: item.language, isNew: item.is_new }),
     h("span", { class: "tile-title", text: m.title }),
-    h("span", { class: "tile-meta", text: m.year ? String(m.year) : "" }),
+    h("span", { class: "tile-meta", text: yearAndKind(m) }),
     why ? h("span", { class: item.ratings_only ? "tile-why muted" : "tile-why", text: why }) : null);
   return h("li", { class: "tile" }, button, tileActions(m));
 }

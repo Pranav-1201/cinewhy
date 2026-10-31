@@ -2,7 +2,7 @@
 
 import { api } from "./api.js";
 import { $, clear, fill, h } from "./dom.js";
-import { RATINGS_ONLY_NOTE, imdbLine, languageName, runtimeLabel } from "./format.js";
+import { imdbLine, kindLabel, languageName, ratingsOnlyNote, runtimeLabel } from "./format.js";
 import { linesFromAspects, receipt } from "./receipt.js";
 import { isWanted, isWatched, opinionOf, setOpinion, setWant, setWatched } from "./state.js";
 import { poster } from "./tile.js";
@@ -47,7 +47,7 @@ function actions(movie, d) {
 
 function body(d) {
   const m = d.movie;
-  const chips = [m.year ? String(m.year) : "", languageName(d.language), runtimeLabel(d.runtime_minutes), ...(m.genres || []).slice(0, 3)].filter(Boolean);
+  const chips = [m.year ? String(m.year) : "", kindLabel(m.kind), languageName(d.language), runtimeLabel(d.runtime_minutes), ...(m.genres || []).slice(0, 3)].filter(Boolean);
   const ratings = d.ratings_only
     ? imdbLine(d.imdb_rating, d.imdb_votes)
     : d.rating_count > 0
@@ -60,7 +60,7 @@ function body(d) {
     d.overview ? h("p", { class: "film-overview", text: d.overview }) : null,
     actions(m, d),
     d.ratings_only
-      ? h("p", { class: "film-overview ratings-only-note", text: RATINGS_ONLY_NOTE })
+      ? h("p", { class: "film-overview ratings-only-note", text: ratingsOnlyNote(m.kind) })
       : d.aspects.length
         ? receipt({ title: m.title, lines: linesFromAspects(d.aspects), bySource: d.reviews_by_source, heading: `What reviewers say about ${m.title}` })
         : h("p", { class: "film-overview", text: "Not enough reviews mention any single aspect to score it." }),
