@@ -145,14 +145,16 @@ Model:             Claude Sonnet 5.5
 What we did:       Ratings-only tier (films with IMDb numbers but no reviews; own file, outside the
                    similarity matrix; D-027), Japanese and French choices with Telugu inside Hindi,
                    accent-folded title keys and original-title links (D-028), accent-blind search, build
-                   options (--wide --languages --ratings-only-min-votes ...), and the REAL v4 build:
-                   artifacts/v4 = 10,386 full-receipt films + 11,344 ratings-only = 21,730 (roadmap
-                   section 19). Looked at in a browser at 1280 and 375 px. 542 passed, 1 skipped.
-What's left:       1) Pranav's OK to PUSH (CI has never run Docker or the browser job). 2) Hindi, Telugu and
-                   Japanese are 3,270 films short of target at the 200-vote floor; lowering it is his call.
-                   3) Series and the Japanese anime split are not built. 4) Make v4 the served build
-                   (start.bat serves the highest artifacts/vN; v4 is in the dev folder only, not on main).
-                   5) /shelves takes about 335 ms on v4 (76 ms on v3); cache per-catalogue arrays if it matters.
+                   options (--wide --languages --ratings-only-min-votes ...), and the REAL builds:
+                   artifacts/v5 (manifest da475cc32788) = 10,386 full-receipt films + 14,581 ratings-only
+                   = 24,967, with a 50-vote fallback floor for the short languages (D-029; roadmap section
+                   19 has the first, 200-vote build). Looked at in a browser at 1280 and 375 px. Pushed as
+                   draft PR #1; CI (quality, docker, e2e, secrets) green. 547 passed, 1 skipped locally.
+What's left:       1) Series and the Japanese anime split are not built (the data is movies only).
+                   2) Telugu is 33 films short (no more films have 50 votes). 3) PR #1 is still a draft and
+                   remote main is unchanged; merging it is Pranav's call. 4) /shelves takes about 335 ms
+                   on v4/v5 (76 ms on v3); cache per-catalogue arrays if it matters. 5) Parked: region and
+                   age shelves, aspect-finder labelling.
 Watch out for:     Time with 127.0.0.1, not localhost (flat 2 s IPv6 delay on this Windows). The venv's editable
                    install points at D:\NLPPROJECT: scripts must run with PYTHONPATH=D:\NLPPROJECT-dev or
                    they import OLD code. Stop a server by PID (Get-CimInstance Win32_Process), the port query

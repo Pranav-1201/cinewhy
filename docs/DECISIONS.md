@@ -626,6 +626,22 @@ fills each language from the best-voted films not already in the first tier and 
 includes Telugu. **Limits.** Movies only: series need another source (IMDb dumps list them; not built).
 Japanese is not split anime : movies : live action, because only films are in the data.
 
+## D-029: a 50-vote fallback fills the short languages; the build is v5 (2026-11-01, Sonnet 5.5)
+
+At the 200-vote floor Hindi, Telugu and Japanese were 3,270 films short of the owner's targets (roadmap
+section 19). Pranav chose to lower the floor for them. **Rule.** A language still short once every film with
+200 or more IMDb votes is used is filled, best-voted first, from films with 50 to 199 votes, only as far as
+its target needs; a language already at target takes none. Because films are taken in vote order, the thin ones
+can never displace a better-voted one. **Result** (`artifacts/v5`, manifest `da475cc32788`): 24,967 films, 10,386
+with full receipts and 14,581 ratings-only; Hindi 5,250 and Japanese 5,000 reach their targets (1,871 and 715 of
+their films are in the thin tier), Telugu 2,217 of 2,250 (651 thin; 33 short, as no more films have 50 votes).
+`eval.json` counts the thin films per language (`of_which_below_the_main_floor`). **Check on the page.**
+Across the home page, a Hindi-only and a Japanese-only view, no film with under 200 votes is on any shelf (the
+fewest votes shown is 1,669): popularity shrinks a thin rating toward the average, so these films fill the count
+and are found by search or deep browsing, not by the front page. Recommender quality is unchanged (hybrid 17.95%
+against collaborative filtering 18.6% at 20, the D-018 finding). **Limit.** A rating from 50 voters is weak
+evidence; the film page states the vote count next to the rating.
+
 ## D-028: accent-folded title keys and original-title links (2026-10-27, Sonnet 5.5)
 
 `title_key` kept only ASCII letters, so an accented letter was dropped ("amlie") and a title with no Latin
