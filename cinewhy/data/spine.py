@@ -281,12 +281,20 @@ def choose_ratings_only(
     split = "ja-anime" in targets
     languages = _languages_of(targets)
     held = set(taken)
+    # One title per IMDb number. TMDB's film list sometimes carries an IMDb number that IMDb itself
+    # files as a TV series; IMDb is the authority on type, so the series wins and the film row goes.
+    # (Found on the first real build: one number was chosen twice and the catalogue refused it.)
+    by_number: dict[int, SpineFilm] = {}
+    for film in candidates:
+        kept = by_number.get(film.imdb_id)
+        if kept is None or (film.kind == "series" and kept.kind != "series"):
+            by_number[film.imdb_id] = film
     have: dict[str, int] = defaultdict(int)
     # The lowest floor any title may pass. Titles are taken best-voted first, so those below
     # `min_votes` are reached only after every title above it, and only while the target is unmet.
     floor = min_votes if fallback_min_votes is None else min(min_votes, fallback_min_votes)
     pool: dict[str, list[SpineFilm]] = defaultdict(list)
-    for film in candidates:
+    for film in by_number.values():
         if film.language not in languages:
             continue
         bucket = bucket_of(film.language, film.kind, film.genres, split_japanese=split)

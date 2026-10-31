@@ -470,8 +470,13 @@ def build_artifacts(config: BuildConfig) -> ArtifactManifest:
         series_reviews, series_report = gather_series_reviews(
             config.sources.ebd_zip, series, cap=config.cap_per_source, on_progress=_log
         )
+        # IMDb is the authority on type: a TMDB film row carrying a number IMDb files as a series
+        # is dropped, and the series (with its own reviews) stands in its place.
+        series_numbers = {s.imdb_id for s in series}
+        films_chosen = [f for f in chosen if f.imdb_id not in series_numbers]
+        series_report["films_dropped_for_being_series"] = len(chosen) - len(films_chosen)
         chosen = sorted(
-            [*chosen, *select_films(series, series_reviews, config.min_reviews)],
+            [*films_chosen, *select_films(series, series_reviews, config.min_reviews)],
             key=lambda f: f.imdb_id,
         )
     imdb_ids = [f.imdb_id for f in chosen]
