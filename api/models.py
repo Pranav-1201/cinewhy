@@ -84,6 +84,8 @@ class DiscoverRequest(BaseModel):
     genres: tuple[Annotated[str, StringConstraints(max_length=40)], ...] = Field(
         default=(), max_length=10
     )
+    # Films, series or both (empty is both).
+    kinds: tuple[Literal["film", "series"], ...] = Field(default=(), max_length=2)
     from_year: int | None = Field(default=None, ge=1880, le=2100)
     to_year: int | None = Field(default=None, ge=1880, le=2100)
     # Watched films travel here. The browser caps each of its lists at 3,000 (web/js/profile.js
@@ -106,6 +108,8 @@ class ShelvesRequest(BaseModel):
     genres: tuple[Annotated[str, StringConstraints(max_length=40)], ...] = Field(
         default=(), max_length=10
     )
+    # Films, series or both (empty is both).
+    kinds: tuple[Literal["film", "series"], ...] = Field(default=(), max_length=2)
     from_year: int | None = Field(default=None, ge=1880, le=2100)
     to_year: int | None = Field(default=None, ge=1880, le=2100)
     exclude_movie_ids: tuple[str, ...] = Field(default=(), max_length=3000)
@@ -114,7 +118,8 @@ class ShelvesRequest(BaseModel):
 class Facets(_Out):
     """Counts the UI shows next to its filters."""
 
-    films: int
+    films: int  # titles of both kinds, the name kept for older pages
+    kinds: dict[str, int] = Field(default_factory=dict)
     languages: dict[str, int]
     genres: dict[str, int]
     oldest_year: int | None

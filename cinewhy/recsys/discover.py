@@ -155,8 +155,10 @@ def catalogue_facets(catalogue: Catalogue) -> dict[str, object]:
         for genre in movie.genres:
             genres[genre] = genres.get(genre, 0) + 1
     known = [int(y) for y in film_years(catalogue) if y > 0]
+    series = int(catalogue.is_series.sum())
     return {
         "films": len(catalogue.all_movies),
+        "kinds": {"film": len(catalogue.all_movies) - series, "series": series},
         "languages": dict(sorted(languages.items(), key=lambda kv: (-kv[1], kv[0]))),
         "genres": dict(sorted(genres.items(), key=lambda kv: (-kv[1], kv[0]))),
         "oldest_year": min(known) if known else None,
@@ -439,20 +441,23 @@ def select_items(
     limit: int,
     languages: Sequence[str] = (),
     genres: Sequence[str] = (),
+    kinds: Sequence[str] = (),
     from_year: int | None = None,
     to_year: int | None = None,
     exclude: Collection[str] = (),
     order: Sequence[int] | None = None,
     include_ratings_only: bool = True,
 ) -> tuple[DiscoverItem, ...]:
-    """The best films for one shelf: `scored`, filtered by language, genre and years.
+    """The best films and series for one shelf: `scored`, filtered by language, genre and years.
 
     Args:
         catalogue: The loaded catalogue.
         scored: From `score_films`.
-        limit: Most films to return.
-        languages: Keep only films whose original language is one of these (empty keeps all).
-        genres: Keep only films with at least one of these genres (empty keeps all).
+        limit: Most titles to return.
+        languages: Keep only titles whose original language is one of these (empty keeps all).
+        genres: Keep only titles with at least one of these genres (empty keeps all).
+        kinds: "film", "series" or both; empty keeps both. Choosing both is the same as choosing
+            neither.
         from_year: Keep only films released in or after this year.
         to_year: Keep only films released in or before this year (films with no known year are
             left out).
@@ -480,6 +485,10 @@ def select_items(
     if languages:
         wanted_languages = expand_languages(languages)
         allowed &= np.array([lang in wanted_languages for lang in scored.language_of], dtype=bool)
+    if set(kinds) == {"series"}:
+        allowed &= catalogue.is_series
+    elif set(kinds) == {"film"}:
+        allowed &= ~catalogue.is_series
     if genres:
         wanted = set(genres)
         allowed &= np.array([bool(wanted & set(m.genres)) for m in all_movies], dtype=bool)
@@ -527,6 +536,7 @@ def discover(
     recency: float = 0.5,
     languages: Sequence[str] = (),
     genres: Sequence[str] = (),
+    kinds: Sequence[str] = (),
     from_year: int | None = None,
     to_year: int | None = None,
     exclude: Sequence[str] = (),
@@ -547,6 +557,7 @@ def discover(
         recency: 0 for no preference for new films, 1 for the strongest lift (`RECENCY_MAX`).
         languages: Keep only films whose original language is one of these (empty keeps all).
         genres: Keep only films with at least one of these genres (empty keeps all).
+        kinds: "film", "series" or both; empty keeps both.
         from_year: Keep only films released in or after this year.
         to_year: Keep only films released in or before this year (films with no known year are
             left out).
@@ -563,6 +574,7 @@ def discover(
         limit=limit,
         languages=languages,
         genres=genres,
+        kinds=kinds,
         from_year=from_year,
         to_year=to_year,
         exclude=set(exclude) | set(profile.liked_movie_ids) | set(profile.disliked_movie_ids),

@@ -107,6 +107,9 @@ class Catalogue:
     all_index: dict[str, int] = field(init=False)
     # (n_films, n_aspects): support-shrunk aspect score, 0.0 where an aspect was not reported.
     aspect_matrix: npt.NDArray[np.float32] = field(init=False)
+    # True at the position of every TV series (both tiers), so a "series only" filter is one array
+    # lookup per shelf, not a loop over every title.
+    is_series: npt.NDArray[np.bool_] = field(init=False)
 
     def __post_init__(self) -> None:
         """Derive the id index and the shrunk aspect matrix; validate shapes."""
@@ -128,6 +131,7 @@ class Catalogue:
                 shrunk = score.score * score.support / (score.support + SHRINK_K)
                 matrix[row, _ASPECTS.index(score.aspect)] = shrunk
         self.aspect_matrix = matrix
+        self.is_series = np.array([m.kind == "series" for m in self.all_movies], dtype=bool)
 
     @property
     def all_movies(self) -> tuple[Movie, ...]:
