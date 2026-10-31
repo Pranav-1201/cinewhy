@@ -37,15 +37,24 @@ from cinewhy.absa.extract import build_profile
 from cinewhy.absa.gold import evaluate_gold, evaluate_random, load_gold, load_random_gold
 from cinewhy.absa.polarity import PolarityModel
 from cinewhy.artifacts.manifest import build as build_manifest
-from cinewhy.data.catalogue_sources import SourcePaths, gather, gather_cached
+from cinewhy.data import spine
+from cinewhy.data.catalogue_sources import (
+    SourcePaths,
+    gather,
+    gather_cached,
+    gather_series_reviews,
+)
 from cinewhy.data.reviews import MAX_REVIEWS_PER_SOURCE
+from cinewhy.data.series import iter_series_films, read_imdb_series, read_tmdb_tv
 from cinewhy.data.sources import load_movielens_links, load_ratings
 from cinewhy.data.spine import (
-    CATALOGUE_TARGETS,
     SpineFilm,
+    bucket_of,
+    candidate_films,
+    catalogue_targets,
+    choose_ratings_only,
     quota,
     read_tmdb_rows,
-    select_ratings_only,
     wide_quota,
 )
 from cinewhy.recsys.catalogue import (
@@ -105,6 +114,12 @@ class BuildConfig:
     # A lower floor used only to fill a language still short of its target once the films above
     # `ratings_only_min_votes` are used up. Their ratings rest on few voters; eval.json counts them.
     ratings_only_fallback_votes: int | None = None
+    # TV series are built only when BOTH of these are given: IMDb's dumps (the list of series, votes
+    # and genres) and the cache of TMDB's details for them (`cinewhy.data.fetch_series`). Their
+    # reviews come from ebD alone. Giving them also splits the Japanese target 5 : 3 : 2.
+    series_dumps: Path | None = None
+    series_tmdb: Path | None = None
+    series_min_votes: int = 200
 
 
 def movie_id_for(imdb_id: int) -> str:
@@ -144,29 +159,62 @@ def ratings_only_id(imdb_id: int) -> str:
     return f"ro-{imdb_id:07d}"
 
 
-def ratings_only_films(config: BuildConfig, taken: Sequence[int]) -> tuple[RatingsOnlyFilm, ...]:
-    """The ratings-only tier: well-voted films to bring each language up to its target.
+def build_targets(config: BuildConfig, *, with_series: bool) -> dict[str, int]:
+    """The wanted size of each bucket: with series in the build, Japanese is split 5 : 3 : 2."""
+    return catalogue_targets(split_japanese=with_series)
 
-    Empty when the config asks for no such tier. A film that already has full receipts is never
-    listed twice (`taken`), and a language the dumps cannot fill simply has fewer than its target;
+
+def series_candidates(config: BuildConfig) -> list[SpineFilm]:
+    """TV series TMDB knows, in the build's languages, as build records (none when not asked for).
+
+    Series need both IMDb's dumps (which titles are series, and their votes and genres) and the
+    downloaded TMDB details (their language, poster and description).
+    """
+    if config.series_dumps is None or config.series_tmdb is None:
+        return []
+    languages = set(config.languages) if config.languages else set(spine.LANGUAGES)
+    listed = read_imdb_series(
+        config.series_dumps / "title.basics.tsv.gz",
+        config.series_dumps / "title.ratings.tsv.gz",
+        min_votes=config.series_min_votes,
+    )
+    last_year = config.max_year if config.max_year is not None else spine.MAX_YEAR
+    return [
+        f
+        for f in iter_series_films(listed, read_tmdb_tv(config.series_tmdb))
+        if f.language in languages and f.year <= last_year
+    ]
+
+
+def ratings_only_films(
+    config: BuildConfig, taken: Sequence[int], series: Sequence[SpineFilm] = ()
+) -> tuple[RatingsOnlyFilm, ...]:
+    """The ratings-only tier: well-voted films and series to bring each bucket up to its target.
+
+    Empty when the config asks for no such tier. A title that already has full receipts is never
+    listed twice (`taken`), and a bucket the dumps cannot fill simply has fewer than its target;
     the build reports that gap in eval.json instead of padding the list.
 
     Args:
         config: The build settings (`ratings_only_min_votes` switches the tier on).
-        taken: IMDb numbers of the films that have full receipts.
+        taken: IMDb numbers of the films and series that have full receipts.
+        series: Every series that may be listed (empty when the build has none).
 
     Returns:
-        The films, ordered by IMDb number so the artifact is deterministic.
+        The titles, ordered by IMDb number so the artifact is deterministic.
     """
     if config.ratings_only_min_votes is None:
         return ()
-    films = select_ratings_only(
-        read_tmdb_rows(config.sources.tmdb_csv),
+    targets = build_targets(config, with_series=bool(series))
+    films = choose_ratings_only(
+        [
+            *candidate_films(read_tmdb_rows(config.sources.tmdb_csv), targets, config.max_year),
+            *series,
+        ],
         taken,
-        CATALOGUE_TARGETS,
+        targets,
         min_votes=config.ratings_only_min_votes,
         fallback_min_votes=config.ratings_only_fallback_votes,
-        max_year=config.max_year,
     )
     return tuple(
         RatingsOnlyFilm(
@@ -176,6 +224,7 @@ def ratings_only_films(config: BuildConfig, taken: Sequence[int]) -> tuple[Ratin
                 year=f.year,
                 genres=f.genres,
                 poster_url=poster_url(f.poster_path),
+                kind="series" if f.kind == "series" else "film",
             ),
             imdb_id=f.imdb_id,
             language=f.language,
@@ -193,32 +242,46 @@ def ratings_only_report(
     config: BuildConfig,
     full_receipt_films: Iterable[SpineFilm],
     ratings_only: Sequence[RatingsOnlyFilm],
+    *,
+    with_series: bool = False,
 ) -> dict[str, Any] | None:
-    """What the ratings-only tier holds, and how far each language is from its target.
+    """What the ratings-only tier holds, and how far each bucket is from its target.
 
-    None when the build has no such tier. `short_by` is what the owner's target asks for beyond
-    what the dumps could supply; it is reported, never hidden by padding the list.
+    A bucket is a language, or with series in the build one of the three Japanese parts (anime
+    series, movies, live-action series). None when the build has no such tier. `short_by` is what
+    the owner's target asks for beyond what the dumps could supply; it is reported, never hidden
+    by padding the list.
     """
     if config.ratings_only_min_votes is None:
         return None
-    full = Counter(f.language for f in full_receipt_films)
-    only = Counter(f.language for f in ratings_only)
-    # Films listed on fewer votes than the main floor: the fallback tier, counted on its own so the
+    split = with_series
+
+    def bucket(language: str, kind: str, genres: Iterable[str]) -> str:
+        return bucket_of(language, kind, tuple(genres), split_japanese=split)
+
+    full = Counter(bucket(f.language, f.kind, f.genres) for f in full_receipt_films)
+    only = Counter(bucket(f.language or "", f.movie.kind, f.movie.genres) for f in ratings_only)
+    # Titles listed on fewer votes than the main floor: the fallback tier, counted on its own so the
     # page's honesty about thin ratings can be checked against how many there are.
-    thin = Counter(f.language for f in ratings_only if f.imdb_votes < config.ratings_only_min_votes)
+    thin = Counter(
+        bucket(f.language or "", f.movie.kind, f.movie.genres)
+        for f in ratings_only
+        if f.imdb_votes < config.ratings_only_min_votes
+    )
     return {
         "min_imdb_votes": config.ratings_only_min_votes,
         "fallback_min_imdb_votes": config.ratings_only_fallback_votes,
         "films": len(ratings_only),
+        "series": sum(f.movie.kind == "series" for f in ratings_only),
         "by_language": {
-            lang: {
+            name: {
                 "target": target,
-                "full_receipts": full.get(lang, 0),
-                "ratings_only": only.get(lang, 0),
-                "of_which_below_the_main_floor": thin.get(lang, 0),
-                "short_by": max(0, target - full.get(lang, 0) - only.get(lang, 0)),
+                "full_receipts": full.get(name, 0),
+                "ratings_only": only.get(name, 0),
+                "of_which_below_the_main_floor": thin.get(name, 0),
+                "short_by": max(0, target - full.get(name, 0) - only.get(name, 0)),
             }
-            for lang, target in CATALOGUE_TARGETS.items()
+            for name, target in build_targets(config, with_series=split).items()
         },
     }
 
@@ -258,6 +321,7 @@ def film_meta(
     return {
         "tmdb_id": film.tmdb_id,
         "imdb_id": film.imdb_id,
+        "kind": film.kind,
         "language": film.language,
         "release_date": film.release_date,
         "popularity": film.popularity,
@@ -397,14 +461,28 @@ def build_artifacts(config: BuildConfig) -> ArtifactManifest:
             on_progress=_log,
         )
     chosen = select_films(gathered.films, gathered.reviews, config.min_reviews)
+    # TV series: their reviews come from ebD alone, joined by title and start year.
+    series = series_candidates(config)
+    series_reviews: dict[int, list[tuple[str, str]]] = {}
+    series_report: dict[str, Any] | None = None
+    if series:
+        _log(f"reading ebD for the reviews of {len(series)} series")
+        series_reviews, series_report = gather_series_reviews(
+            config.sources.ebd_zip, series, cap=config.cap_per_source, on_progress=_log
+        )
+        chosen = sorted(
+            [*chosen, *select_films(series, series_reviews, config.min_reviews)],
+            key=lambda f: f.imdb_id,
+        )
     imdb_ids = [f.imdb_id for f in chosen]
-    ratings_only = ratings_only_films(config, imdb_ids)
-    _log(f"ratings-only tier: {len(ratings_only)} films")
+    ratings_only = ratings_only_films(config, imdb_ids, series)
+    _log(f"ratings-only tier: {len(ratings_only)} titles")
     films = {f.imdb_id: f for f in chosen}
-    reviews = {i: gathered.reviews[i] for i in imdb_ids}
+    all_reviews = {**gathered.reviews, **series_reviews}
+    reviews = {i: all_reviews[i] for i in imdb_ids}
     _log(
-        f"catalogue: {len(chosen)} films (of {len(gathered.films)} selected, "
-        f"{len(gathered.reviews)} with any review)"
+        f"catalogue: {len(chosen)} titles, {sum(f.kind == 'series' for f in chosen)} of them "
+        f"series (of {len(gathered.films)} films selected, {len(gathered.reviews)} with any review)"
     )
 
     # Does a film's reviews name that film more often than a neighbour's? Checked per source,
@@ -424,7 +502,13 @@ def build_artifacts(config: BuildConfig) -> ArtifactManifest:
         film = films[imdb_id]
         movie_id = movie_id_for(imdb_id)
         movies.append(
-            Movie(movie_id=movie_id, title=film.title, year=film.year, genres=film.genres)
+            Movie(
+                movie_id=movie_id,
+                title=film.title,
+                year=film.year,
+                genres=film.genres,
+                kind="series" if film.kind == "series" else "film",
+            )
         )
         profile, sentences = build_profile(
             movie_id,
@@ -450,7 +534,7 @@ def build_artifacts(config: BuildConfig) -> ArtifactManifest:
         movie_id_for(i): film_meta(films[i], reviews[i], gathered.rt_url.get(i), rating_count=0)
         for i in imdb_ids
     }
-    gather_report = gathered.report
+    gather_report = {**gathered.report, "series": series_report}
     del reviews, gathered
 
     _log("loading ratings for catalogue films")
@@ -555,7 +639,10 @@ def build_artifacts(config: BuildConfig) -> ArtifactManifest:
             "reviews": n_reviews,
             "evidence_sentences": sum(len(s) for by in evidence.values() for s in by.values()),
             "min_reviews_per_film": config.min_reviews,
-            "ratings_only": ratings_only_report(config, films.values(), ratings_only),
+            "series": sum(f.kind == "series" for f in films.values()),
+            "ratings_only": ratings_only_report(
+                config, films.values(), ratings_only, with_series=bool(series)
+            ),
             "ratings": len(stars),
             "films_with_aspect": {
                 a.value: sum(any(s.aspect is a for s in p.scores) for p in profiles.values())
@@ -634,6 +721,19 @@ def main() -> None:
         default=None,
         help="a lower vote floor used only to fill a language still short of its target",
     )
+    parser.add_argument(
+        "--series-dumps",
+        type=Path,
+        default=None,
+        help="folder with IMDb's title.basics and title.ratings dumps (adds series with the next)",
+    )
+    parser.add_argument(
+        "--series-tmdb",
+        type=Path,
+        default=None,
+        help="the TMDB series cache written by `python -m cinewhy.data.fetch_series`",
+    )
+    parser.add_argument("--series-min-votes", type=int, default=200, help="fewest IMDb votes")
     args = parser.parse_args()
     build_artifacts(
         BuildConfig(
@@ -650,6 +750,9 @@ def main() -> None:
             wide=args.wide,
             ratings_only_min_votes=args.ratings_only_min_votes,
             ratings_only_fallback_votes=args.ratings_only_fallback_votes,
+            series_dumps=args.series_dumps,
+            series_tmdb=args.series_tmdb,
+            series_min_votes=args.series_min_votes,
         )
     )
 

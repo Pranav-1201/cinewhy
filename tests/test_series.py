@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 
+from cinewhy.data.catalogue_sources import gather_series_reviews
 from cinewhy.data.linking import film_key, parse_ebd_movie, parse_ebd_series
 from cinewhy.data.reviews import iter_ebd_reviews, scan_ebd_keys
 from cinewhy.data.series import (
@@ -19,6 +20,7 @@ from cinewhy.data.series import (
     series_genres,
     to_spine_film,
 )
+from cinewhy.data.spine import SpineFilm
 from tests.dumps import ebd_zip
 
 _EN_DASH = chr(0x2013)
@@ -180,6 +182,52 @@ def _ebd(tmp_path: Path) -> Path:
             ("Heat (1995)", "f1", _REVIEW),
         ],
     )
+
+
+def _film_of(imdb: int, title: str, year: int) -> SpineFilm:
+    return to_spine_film(_series(imdb_id=imdb, title=title, start_year=year), {"tmdb_id": imdb})
+
+
+def test_series_reviews_are_joined_by_title_and_start_year(tmp_path: Path) -> None:
+    series = [
+        _film_of(7, "Dark", 2017),
+        _film_of(8, "Other Show", 2010),
+        _film_of(9, "Absent", 2001),
+    ]
+    reviews, report = gather_series_reviews(_ebd(tmp_path), series)
+    assert reviews == {
+        7: [("ebd/s1", _REVIEW), ("ebd/s2", _REVIEW + " Again.")],
+        8: [("ebd/s3", _REVIEW)],
+    }
+    assert report["series_with_reviews"] == 2 and report["series_linkable"] == 3
+    assert report["series_candidates"] == 3 and report["series_reviews_after_cap"] == 3
+
+
+def test_a_wrong_start_year_links_nothing_and_a_film_is_never_taken_for_a_series(
+    tmp_path: Path,
+) -> None:
+    series = [_film_of(7, "Dark", 2016), _film_of(8, "Heat", 1995)]
+    reviews, _ = gather_series_reviews(_ebd(tmp_path), series)
+    assert reviews == {}  # "Heat (1995)" is a film record: the series parser does not read it
+
+
+def test_two_series_sharing_a_title_and_year_are_both_refused(tmp_path: Path) -> None:
+    series = [_film_of(7, "Dark", 2017), _film_of(70, "Dark", 2017)]
+    reviews, report = gather_series_reviews(_ebd(tmp_path), series)
+    assert reviews == {} and report["series_refused_shared_title"] == 2
+    assert report["series_linkable"] == 0
+
+
+def test_a_title_with_no_latin_letters_is_not_joined(tmp_path: Path) -> None:
+    kana = "".join(chr(c) for c in (0x30A2, 0x30CB, 0x30E1))
+    archive = ebd_zip(tmp_path / "k.zip", [(f"{kana} (2017{_EN_DASH} )", "k1", _REVIEW)])
+    reviews, report = gather_series_reviews(archive, [_film_of(7, kana, 2017)])
+    assert reviews == {} and report["series_linkable"] == 0
+
+
+def test_at_most_cap_reviews_are_kept_per_series(tmp_path: Path) -> None:
+    reviews, _ = gather_series_reviews(_ebd(tmp_path), [_film_of(7, "Dark", 2017)], cap=1)
+    assert len(reviews[7]) == 1
 
 
 def test_the_key_scan_counts_films_by_default_and_series_when_asked(tmp_path: Path) -> None:

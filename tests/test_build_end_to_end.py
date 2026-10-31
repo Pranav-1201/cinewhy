@@ -76,6 +76,9 @@ def _build(
     ratings_only_min_votes: int | None = None,
     ratings_only_fallback_votes: int | None = None,
     extra_tmdb: list[dict[str, str]] | None = None,
+    extra_ebd: list[tuple[str, str, str]] | None = None,
+    series_dumps: Path | None = None,
+    series_tmdb: Path | None = None,
 ) -> Path:
     tmdb = [tmdb_row(k + 1, 100 + k, _TITLES[k], 2005 + k % 8) for k in range(N_TMDB)]
     tmdb += extra_tmdb or []
@@ -88,6 +91,7 @@ def _build(
         for k in range(N_TMDB)
         for j in range(2 if k == N_TMDB - 1 else 6)
     ]
+    ebd += extra_ebd or []
     rt_films = [("a0", 2005, _TITLES[0], "2h 50m"), ("a1", 2006, _TITLES[1], "2h 50m")]
     rt_reviews = [
         # Stronger praise than the ebD reviews, so RT sentences win evidence slots and the RT
@@ -121,6 +125,8 @@ def _build(
         seed=7,
         ratings_only_min_votes=ratings_only_min_votes,
         ratings_only_fallback_votes=ratings_only_fallback_votes,
+        series_dumps=series_dumps,
+        series_tmdb=series_tmdb,
     )
     build_artifacts(config)
     return out

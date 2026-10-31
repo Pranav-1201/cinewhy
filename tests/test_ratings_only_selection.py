@@ -7,6 +7,11 @@ from pathlib import Path
 from cinewhy.data.catalogue_sources import SourcePaths, _cache_key
 from cinewhy.data.spine import (
     CATALOGUE_TARGETS,
+    JAPANESE_SPLIT,
+    SpineFilm,
+    bucket_of,
+    catalogue_targets,
+    choose_ratings_only,
     quota,
     select_ratings_only,
     select_spine,
@@ -104,6 +109,110 @@ def test_the_result_does_not_depend_on_row_order() -> None:
     forward = select_ratings_only(rows, [], {"fr": 4}, min_votes=200)
     backward = select_ratings_only(list(reversed(rows)), [], {"fr": 4}, min_votes=200)
     assert forward == backward
+
+
+def _title(
+    imdb: int, language: str, kind: str, votes: int, genres: tuple[str, ...] = ("Drama",)
+) -> SpineFilm:
+    return SpineFilm(
+        tmdb_id=imdb,
+        imdb_id=imdb,
+        title=f"Title {imdb}",
+        year=2015,
+        release_date="2015-01-01",
+        language=language,
+        vote_count=votes,
+        popularity=1.0,
+        runtime=0.0,
+        poster_path=None,
+        genres=genres,
+        overview="",
+        imdb_rating=7.5,
+        imdb_votes=votes,
+        kind=kind,
+    )
+
+
+_ANIMATION = ("Animation", "Fantasy")
+
+
+def test_japanese_parts_follow_the_owners_5_3_2_and_anime_films_count_as_movies() -> None:
+    assert JAPANESE_SPLIT == {"ja-anime": 2500, "ja-movies": 1500, "ja-live-action": 1000}
+    assert sum(JAPANESE_SPLIT.values()) == CATALOGUE_TARGETS["ja"] == 5000
+    assert [JAPANESE_SPLIT[k] for k in ("ja-anime", "ja-movies", "ja-live-action")] == [
+        5 * 500,
+        3 * 500,
+        2 * 500,
+    ]
+    pick = {"split_japanese": True}
+    assert bucket_of("ja", "series", _ANIMATION, **pick) == "ja-anime"
+    assert bucket_of("ja", "film", _ANIMATION, **pick) == "ja-movies"  # an anime FILM is a movie
+    assert bucket_of("ja", "film", ("Drama",), **pick) == "ja-movies"
+    assert bucket_of("ja", "series", ("Drama",), **pick) == "ja-live-action"
+    assert bucket_of("ja", "series", _ANIMATION, split_japanese=False) == "ja"
+    assert bucket_of("fr", "series", _ANIMATION, **pick) == "fr"
+
+
+def test_the_split_replaces_the_single_japanese_target_and_leaves_the_rest() -> None:
+    plain, split = catalogue_targets(split_japanese=False), catalogue_targets(split_japanese=True)
+    assert plain == CATALOGUE_TARGETS and "ja" in plain
+    assert "ja" not in split and sum(v for k, v in split.items() if k.startswith("ja")) == 5000
+    assert {k: v for k, v in split.items() if not k.startswith("ja")} == {
+        k: v for k, v in plain.items() if k != "ja"
+    }
+
+
+def test_each_japanese_part_fills_to_its_own_target_from_its_own_kind_of_title() -> None:
+    targets = {"ja-anime": 2, "ja-movies": 1, "ja-live-action": 1}
+    candidates = [
+        _title(1, "ja", "series", 9000, _ANIMATION),
+        _title(2, "ja", "series", 8000, _ANIMATION),
+        _title(3, "ja", "series", 7000, _ANIMATION),  # a third anime series: the part is full
+        _title(4, "ja", "film", 6000, _ANIMATION),  # an anime film is a movie
+        _title(5, "ja", "film", 5000),  # a second movie: the part is full
+        _title(6, "ja", "series", 4000),  # a live-action series
+        _title(7, "ja", "series", 3000),  # a second one: full
+    ]
+    chosen = choose_ratings_only(candidates, [], targets, min_votes=200)
+    assert _ids(chosen) == [1, 2, 4, 6]
+
+
+def test_full_receipts_count_toward_their_japanese_part() -> None:
+    targets = {"ja-anime": 2, "ja-movies": 1, "ja-live-action": 1}
+    candidates = [
+        _title(1, "ja", "series", 9000, _ANIMATION),  # already has full receipts
+        _title(2, "ja", "series", 8000, _ANIMATION),
+        _title(3, "ja", "series", 7000, _ANIMATION),
+    ]
+    assert _ids(choose_ratings_only(candidates, [1], targets, min_votes=200)) == [2]
+
+
+def test_series_and_films_compete_on_votes_alone_within_a_language() -> None:
+    candidates = [
+        _title(1, "hi", "film", 500),
+        _title(2, "hi", "series", 90_000),
+        _title(3, "hi", "film", 40_000),
+        _title(4, "hi", "series", 300),
+    ]
+    chosen = choose_ratings_only(candidates, [], {"hi": 2}, min_votes=200)
+    assert _ids(chosen) == [2, 3]  # the famous series first, then the best-voted film
+
+
+def test_a_series_with_no_known_language_is_never_listed() -> None:
+    candidates = [_title(1, "", "series", 9000), _title(2, "fr", "series", 9000)]
+    assert _ids(choose_ratings_only(candidates, [], {"fr": 5}, min_votes=200)) == [2]
+
+
+def test_the_fallback_floor_reaches_a_thin_japanese_series_only_for_a_short_part() -> None:
+    targets = {"ja-anime": 2, "ja-movies": 1, "ja-live-action": 1}
+    candidates = [
+        _title(1, "ja", "series", 5000, _ANIMATION),
+        _title(2, "ja", "series", 120, _ANIMATION),  # thin: only if the part is still short
+        _title(3, "ja", "series", 90, _ANIMATION),
+    ]
+    assert _ids(choose_ratings_only(candidates, [], targets, min_votes=200)) == [1]
+    filled = choose_ratings_only(candidates, [], targets, min_votes=200, fallback_min_votes=50)
+    assert _ids(filled) == [1, 2]
 
 
 def test_the_targets_are_the_owners_ratio() -> None:

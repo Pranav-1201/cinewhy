@@ -133,6 +133,36 @@ CATALOGUE_TARGETS: Final[dict[str, int]] = {
     "ja": 5_000,
     "fr": 2_500,
 }
+# With series in the catalogue the Japanese 5,000 is split 5 : 3 : 2 (the owner's ratio): anime
+# series, movies (anime films included), and live-action series.
+JAPANESE_SPLIT: Final[dict[str, int]] = {
+    "ja-anime": 2_500,
+    "ja-movies": 1_500,
+    "ja-live-action": 1_000,
+}
+
+
+def catalogue_targets(*, split_japanese: bool) -> dict[str, int]:
+    """The wanted size of each bucket: a language, or one of the three Japanese parts."""
+    targets = dict(CATALOGUE_TARGETS)
+    if split_japanese:
+        del targets["ja"]
+        targets.update(JAPANESE_SPLIT)
+    return targets
+
+
+def bucket_of(language: str, kind: str, genres: Collection[str], *, split_japanese: bool) -> str:
+    """Which target a title counts toward: its language, or for Japanese its part of the split.
+
+    Anime is a Japanese series with the Animation genre. A Japanese FILM is a "movie" whether or
+    not it is animated (the owner: movies include anime films). Any other Japanese series is
+    live action.
+    """
+    if language == "ja" and split_japanese:
+        if kind == "film":
+            return "ja-movies"
+        return "ja-anime" if "Animation" in genres else "ja-live-action"
+    return language
 
 
 def _best_by_imdb(
@@ -200,24 +230,74 @@ def select_ratings_only(
     Returns:
         The chosen films, ordered by IMDb number so the artifact is deterministic.
     """
-    best, _, _ = _best_by_imdb(rows, set(targets), MAX_YEAR if max_year is None else max_year)
+    best, _, _ = _best_by_imdb(
+        rows, _languages_of(targets), MAX_YEAR if max_year is None else max_year
+    )
+    return choose_ratings_only(
+        best.values(), taken, targets, min_votes=min_votes, fallback_min_votes=fallback_min_votes
+    )
+
+
+def _languages_of(targets: Mapping[str, int]) -> set[str]:
+    """The original languages the targets cover ("ja-anime" is Japanese)."""
+    return {bucket.split("-")[0] for bucket in targets}
+
+
+def candidate_films(
+    rows: Iterable[Mapping[str, str]], targets: Mapping[str, int], max_year: int | None = None
+) -> list[SpineFilm]:
+    """Every released film in the targets' languages, one per IMDb number."""
+    best, _, _ = _best_by_imdb(
+        rows, _languages_of(targets), MAX_YEAR if max_year is None else max_year
+    )
+    return list(best.values())
+
+
+def choose_ratings_only(
+    candidates: Iterable[SpineFilm],
+    taken: Collection[int],
+    targets: Mapping[str, int],
+    *,
+    min_votes: int,
+    fallback_min_votes: int | None = None,
+) -> tuple[SpineFilm, ...]:
+    """`select_ratings_only` over films AND series: fill each bucket toward its target.
+
+    A bucket is a language, or (when `targets` has the Japanese split) one of its three parts.
+    Everything `taken` (full receipts) counts toward its bucket first; then the best-voted of the
+    rest are added until the bucket is full or the supply runs out. Films and series compete on
+    votes alone, so a famous series ranks ahead of an obscure film.
+
+    Args:
+        candidates: Every film and series that may be listed (any not in `targets` is ignored).
+        taken: IMDb numbers of the titles that already have full receipts.
+        targets: Wanted titles per bucket, full-receipt ones included.
+        min_votes: Fewest IMDb votes a title may have; below it a rating means little.
+        fallback_min_votes: A lower floor used only to fill a bucket that is still short.
+
+    Returns:
+        The chosen titles, ordered by IMDb number so the artifact is deterministic.
+    """
+    split = "ja-anime" in targets
+    languages = _languages_of(targets)
     held = set(taken)
     have: dict[str, int] = defaultdict(int)
-    for imdb_id in held:
-        film = best.get(imdb_id)
-        if film is not None:
-            have[film.language] += 1
-    # The lowest floor any film may pass. Films are taken best-voted first, so those below
-    # `min_votes` are reached only after every film above it, and only if the target is still unmet.
+    # The lowest floor any title may pass. Titles are taken best-voted first, so those below
+    # `min_votes` are reached only after every title above it, and only while the target is unmet.
     floor = min_votes if fallback_min_votes is None else min(min_votes, fallback_min_votes)
     pool: dict[str, list[SpineFilm]] = defaultdict(list)
-    for film in best.values():
-        if film.imdb_id not in held and film.imdb_votes >= floor and film.imdb_rating > 0:
-            pool[film.language].append(film)
+    for film in candidates:
+        if film.language not in languages:
+            continue
+        bucket = bucket_of(film.language, film.kind, film.genres, split_japanese=split)
+        if film.imdb_id in held:
+            have[bucket] += 1
+        elif film.imdb_votes >= floor and film.imdb_rating > 0:
+            pool[bucket].append(film)
     chosen: list[SpineFilm] = []
-    for language, films in pool.items():
-        films.sort(key=lambda f: (-f.imdb_votes, f.tmdb_id))
-        chosen.extend(films[: max(0, targets[language] - have[language])])
+    for bucket, films in pool.items():
+        films.sort(key=lambda f: (-f.imdb_votes, f.tmdb_id, f.imdb_id))
+        chosen.extend(films[: max(0, targets[bucket] - have[bucket])])
     chosen.sort(key=lambda f: f.imdb_id)
     return tuple(chosen)
 

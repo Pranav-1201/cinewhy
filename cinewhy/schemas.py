@@ -16,7 +16,7 @@ impossible to build, not merely discouraged (audit idea B-13).
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Annotated, Self
+from typing import Annotated, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -70,6 +70,9 @@ class Movie(_Frozen):
     year: int | None = Field(default=None, ge=1878, le=2100)
     genres: tuple[str, ...] = ()
     poster_url: str | None = None
+    # A TV series is listed and ranked like a film; `kind` is what lets a page say so and filter on
+    # it. Defaults to "film", so every film in an existing artifact set reads exactly as before.
+    kind: Literal["film", "series"] = "film"
 
 
 class EvidenceSentence(_Frozen):
