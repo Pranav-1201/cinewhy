@@ -140,6 +140,24 @@ permanently by `unique_review_indices` and `test_no_review_text_appears_in_both_
 ## Five-line handoff ritual (fill in each session)
 
 ```
+Session date:      2026-11-01 (session "nlp 3", continued), branch feature/roadmap-v4 in D:\NLPPROJECT-dev
+Model:             Claude Sonnet 5.5
+What we did:       Ratings-only tier (films with IMDb numbers but no reviews; own file, outside the
+                   similarity matrix; D-027), Japanese and French choices with Telugu inside Hindi,
+                   accent-folded title keys and original-title links (D-028), accent-blind search, build
+                   options (--wide --languages --ratings-only-min-votes ...), and the REAL v4 build:
+                   artifacts/v4 = 10,386 full-receipt films + 11,344 ratings-only = 21,730 (roadmap
+                   section 19). Looked at in a browser at 1280 and 375 px. 542 passed, 1 skipped.
+What's left:       1) Pranav's OK to PUSH (CI has never run Docker or the browser job). 2) Hindi, Telugu and
+                   Japanese are 3,270 films short of target at the 200-vote floor; lowering it is his call.
+                   3) Series and the Japanese anime split are not built. 4) Make v4 the served build
+                   (start.bat serves the highest artifacts/vN; v4 is in the dev folder only, not on main).
+                   5) /shelves takes about 335 ms on v4 (76 ms on v3); cache per-catalogue arrays if it matters.
+Watch out for:     Time with 127.0.0.1, not localhost (flat 2 s IPv6 delay on this Windows). The venv's editable
+                   install points at D:\NLPPROJECT: scripts must run with PYTHONPATH=D:\NLPPROJECT-dev or
+                   they import OLD code. Stop a server by PID (Get-CimInstance Win32_Process), the port query
+                   misses it. v4 server on 8010: CINEWHY_ARTIFACTS=D:\NLPPROJECT-dev\artifacts\v4.
+
 Session date:      2026-10-27 (session "nlp 3"), branch feature/roadmap-v4 in D:\NLPPROJECT-dev
 Model:             Claude Sonnet 5.5
 What we did:       Audit + plan (docs/ROADMAP-2026-10-27.md, section 15 is the final draft), then built on a
