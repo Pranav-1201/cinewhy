@@ -107,6 +107,9 @@ class Catalogue:
     all_index: dict[str, int] = field(init=False)
     # (n_films, n_aspects): support-shrunk aspect score, 0.0 where an aspect was not reported.
     aspect_matrix: npt.NDArray[np.float32] = field(init=False)
+    # True at the position of every TV series (both tiers), so a "series only" filter is one array
+    # lookup per shelf, not a loop over every title.
+    is_series: npt.NDArray[np.bool_] = field(init=False)
 
     def __post_init__(self) -> None:
         """Derive the id index and the shrunk aspect matrix; validate shapes."""
@@ -128,6 +131,7 @@ class Catalogue:
                 shrunk = score.score * score.support / (score.support + SHRINK_K)
                 matrix[row, _ASPECTS.index(score.aspect)] = shrunk
         self.aspect_matrix = matrix
+        self.is_series = np.array([m.kind == "series" for m in self.all_movies], dtype=bool)
 
     @property
     def all_movies(self) -> tuple[Movie, ...]:
@@ -165,6 +169,7 @@ def write_catalogue(directory: Path, catalogue: Catalogue) -> None:
             "title": m.title,
             "year": m.year,
             "genres": list(m.genres),
+            "kind": m.kind,
             "imdb_id": s.imdb_id,
             "rating_count": s.rating_count,
             "bayes_mean": s.bayes_mean,
@@ -197,6 +202,7 @@ def _ratings_only_record(film: RatingsOnlyFilm) -> dict[str, Any]:
         "title": film.movie.title,
         "year": film.movie.year,
         "genres": list(film.movie.genres),
+        "kind": film.movie.kind,
         "poster_path": url.removeprefix(POSTER_BASE) if url else None,
         "imdb_id": film.imdb_id,
         "language": film.language,
@@ -218,6 +224,7 @@ def _read_ratings_only(path: Path) -> tuple[RatingsOnlyFilm, ...]:
                 year=r["year"],
                 genres=tuple(r["genres"]),
                 poster_url=poster_url(r.get("poster_path")),
+                kind=r.get("kind", "film"),
             ),
             imdb_id=int(r["imdb_id"]),
             language=r.get("language") or None,
@@ -270,6 +277,7 @@ def load_catalogue(
             year=r["year"],
             genres=tuple(r["genres"]),
             poster_url=poster_url(meta.get(r["movie_id"], {}).get("poster_path")),
+            kind=r.get("kind", "film"),
         )
         for r in raw
     )

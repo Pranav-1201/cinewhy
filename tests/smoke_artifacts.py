@@ -34,6 +34,7 @@ def _ratings_only_films(count: int) -> tuple[RatingsOnlyFilm, ...]:
                 title=f"Anime film {n}",
                 year=1996 + n % 20,
                 genres=("Animation", "Drama") if n % 2 else ("Animation",),
+                kind="series" if n % 2 else "film",  # every other one is a TV series
             ),
             imdb_id=8_000_000 + n,
             language="ja",

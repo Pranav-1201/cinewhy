@@ -41,6 +41,13 @@ _FOLD_LETTERS: Final[dict[int, str]] = {
 # counts by about 5.5%.
 _EBD_FILM: Final[re.Pattern[str]] = re.compile(r"^(.*) \((\d{4})\)$")
 
+# A series is "Title (YYYY-YYYY)" or "Title (YYYY- )" in ebD: the shape the film pattern above
+# rejects on purpose. The dump writes the dash as U+2013 (an en dash); a plain hyphen also passes.
+_EN_DASH: Final[str] = chr(0x2013)
+_EBD_SERIES: Final[re.Pattern[str]] = re.compile(
+    r"^(.*) \((\d{4})[" + _EN_DASH + r"-](\d{4})?\s*\)$"
+)
+
 MatchStatus = Literal["exact", "adjacent", "none", "ambiguous", "runtime_rejected"]
 
 
@@ -97,6 +104,21 @@ def parse_ebd_movie(raw: str) -> tuple[str, int] | None:
         string with no year.
     """
     found = _EBD_FILM.match(raw)
+    return (found.group(1), int(found.group(2))) if found else None
+
+
+def parse_ebd_series(raw: str) -> tuple[str, int] | None:
+    """Split an ebD `movie` field into title and START year, or None if it is not a series.
+
+    Args:
+        raw: e.g. `"Breaking Bad (2008-2013)"` or, for a series still running, `"Dark (2017- )"`.
+
+    Returns:
+        `("Breaking Bad", 2008)` for a series; None for a film, a video release or anything else.
+        Only the start year is returned: that is the year IMDb's own list gives, so it is the
+        year the join uses.
+    """
+    found = _EBD_SERIES.match(raw)
     return (found.group(1), int(found.group(2))) if found else None
 
 

@@ -12,9 +12,11 @@ import { renderAll } from "./rails.js";
 import { openRate } from "./rate.js";
 import { aspectLabels, initTheme, load, save, state, toggleTheme } from "./state.js";
 import { poster } from "./tile.js";
+import { yearAndKind } from "./format.js";
 import { activePreset, describeYears, normaliseYears, presetYears } from "./years.js";
 
 const LANGS = [["en", "English"], ["hi", "Hindi"], ["ja", "Japanese"], ["fr", "French"]];
+const KINDS = [["film", "Films"], ["series", "Series"]];
 const ctx = { facets: null, aspects: [], open: openFilm, refresh: null, syncFilters: null };
 
 function chip(text, pressed, onclick) {
@@ -70,11 +72,16 @@ function renderYears() {
 function renderFilters() {
   const lang = $("#lang-chips"), genre = $("#genre-chips");
   renderYears();
+  // Films, series, or both (nothing chosen is both).
+  $("#kind-chips").replaceChildren(h("span", { class: "chip-label", text: "Show" }), ...KINDS.map(([v, t]) => chip(t, state.kinds.includes(v), () => {
+    state.kinds = state.kinds.includes(v) ? state.kinds.filter((x) => x !== v) : [...state.kinds, v];
+    save(); renderFilters(); ctx.refresh();
+  })));
   lang.replaceChildren(h("span", { class: "chip-label", text: "Language" }), ...LANGS.map(([v, t]) => chip(t, state.languages.includes(v), () => {
     state.languages = state.languages.includes(v) ? state.languages.filter((x) => x !== v) : [...state.languages, v];
     save(); renderFilters(); ctx.refresh();
   })));
-  $("#seen-chips").replaceChildren(h("span", { class: "chip-label", text: "Seen" }), chip("Hide films I've watched", state.hideWatched, () => {
+  $("#seen-chips").replaceChildren(h("span", { class: "chip-label", text: "Seen" }), chip("Hide what I've watched", state.hideWatched, () => {
     state.hideWatched = !state.hideWatched;
     save(); renderFilters(); ctx.refresh();
   }));
@@ -96,11 +103,11 @@ function wireSearch() {
       const films = await api(`/search?limit=8&q=${encodeURIComponent(q)}`);
       list.hidden = false;
       input.setAttribute("aria-expanded", "true");
-      if (!films.length) list.append(h("li", {}, h("p", { class: "note", text: "No film by that name in this catalogue." })));
+      if (!films.length) list.append(h("li", {}, h("p", { class: "note", text: "No film or series by that name in this catalogue." })));
       for (const m of films) {
         list.append(h("li", {}, h("button", { type: "button", onclick: () => { hide(); input.value = ""; openFilm(m.movie_id); } },
           h("span", { class: "thumb" }, m.poster_url ? h("img", { src: m.poster_url, alt: "", loading: "lazy" }) : null),
-          h("span", {}, m.title, h("br"), h("small", { text: m.year ? String(m.year) : "" })))));
+          h("span", {}, m.title, h("br"), h("small", { text: yearAndKind(m) })))));
       }
     } catch (err) {
       list.hidden = false;

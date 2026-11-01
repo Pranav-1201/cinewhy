@@ -626,6 +626,37 @@ fills each language from the best-voted films not already in the first tier and 
 includes Telugu. **Limits.** Movies only: series need another source (IMDb dumps list them; not built).
 Japanese is not split anime : movies : live action, because only films are in the data.
 
+## D-030: TV series are built from IMDb's list, TMDB's details and ebD's reviews (2026-11-01, Sonnet 5.5)
+
+Pranav asked for series in every language (Friends, Mirzapur, anime). **Sources.** IMDb's dumps list which titles
+are series (with start year, votes, genres) but carry no language, poster or description; TMDB's `/find` gives
+all three from an IMDb number, one request per series (the join is exact, no title matching). Reviews exist for
+series only in ebD (aclImdb and Rotten Tomatoes are films): 611,000 reviews over 31,866 series, joined by title and
+START year; a key two series share, or a title with no Latin letters, is refused. **Measured supply**
+(`experiments/series_reach.py`): about 1,900 series reach 50 ebD reviews (1,704 non-animation, 193 animation),
+mostly English; 30,635 series have 200+ IMDb votes. So series follow the film pattern: a modest tier with full
+receipts, and a larger ratings-only tier (D-027). **v6** (`artifacts/v6`, manifest `a475a9f294c5`): 25,533 titles;
+1,546 series with receipts (230,773 ebD reviews after the cap), 3,892 ratings-only series. English already exceeds
+its target (11,104). **IMDb decides a title's type**: TMDB's film list can carry a number IMDb files as a series (the
+first build chose one number twice and the catalogue refused it); the series wins and the film row is dropped
+(4 in the real build). **Downloader.** `cinewhy.data.fetch_series` is resumable, rate-limited and keeps one connection
+per worker: a new TLS connection per request cost 0.7 to 8 seconds here against 0.24 s on a reused one, which
+would have been most of a day instead of 26 minutes (24 workers, 20 requests a second). The token is read from
+the environment and never written. **Limits.** ebD ends about 2020, so recent series have no reviews and are
+ratings-only; there is no season or episode level; series with 50 to 199 votes were never downloaded.
+
+## D-031: Japanese is split 5 : 3 : 2 once series exist (2026-11-01, Sonnet 5.5)
+
+The Japanese 5,000 becomes anime series 2,500, movies 1,500 and live-action series 1,000. **Rules.** Anime is a
+Japanese series with the Animation genre; a Japanese FILM is a "movie" whether or not it is animated (the owner:
+movies include anime films); any other Japanese series is live action. Films and series compete on votes inside a
+bucket; full receipts count first. A build without series keeps the single Japanese target of 5,000. **Result in v6:**
+movies 1,500 of 1,500; anime series 2,354 of 2,500 (short 146); live-action series 575 of 1,000 (short 425). The
+shortfall is real supply, not a rule: only series with 200+ votes were downloaded, so the 50-vote fallback has no
+Japanese series to draw on. Fetching 50 to 199 votes (about 22,000 more requests, 40 minutes) is the lever if
+the targets must be met. **Page.** A Films / Series choice, a Series shelf after old school, and an Anime shelf
+(Japanese animation, films and series) after the language shelves.
+
 ## D-029: a 50-vote fallback fills the short languages; the build is v5 (2026-11-01, Sonnet 5.5)
 
 At the 200-vote floor Hindi, Telugu and Japanese were 3,270 films short of the owner's targets (roadmap

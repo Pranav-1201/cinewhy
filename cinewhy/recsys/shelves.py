@@ -8,8 +8,10 @@ limit of 120 a minute, and the same film could appear on several rows. The shelv
 * similar: what viewers who liked the same films went on to like (needs at least one liked film);
 * explore: well-reviewed films unlike the visitor's usual taste, so a new taste can find them;
 * new (2021 onward) and classics (before 1990), each ranked for this visitor;
+* a row of TV series (left out when the visitor asked for films only);
 * one row per language the catalogue has enough films in, in a fixed order (English, Hindi,
   Japanese, French);
+* a row of anime (Japanese animation, films and series), after the language rows;
 * one row per popular genre.
 
 A shelf with fewer than `MIN_SHELF` films is left out rather than shown nearly empty. Every shelf
@@ -130,6 +132,7 @@ def build_shelves(
     recency: float = 0.5,
     languages: Sequence[str] = (),
     genres: Sequence[str] = (),
+    kinds: Sequence[str] = (),
     from_year: int | None = None,
     to_year: int | None = None,
     exclude: Collection[str] = (),
@@ -146,6 +149,7 @@ def build_shelves(
         recency: 0 for no preference for new films, 1 for the strongest lift.
         languages: The visitor's language choice (empty means all); limits every shelf.
         genres: The visitor's genre choice (empty means all); limits every shelf.
+        kinds: "film", "series" or both (empty means both); limits every shelf.
         from_year: Earliest release year the visitor allows.
         to_year: Latest release year the visitor allows.
         exclude: Film ids never to show (the films the visitor has watched).
@@ -168,6 +172,7 @@ def build_shelves(
         scored: Scored = blend,
         shelf_languages: Sequence[str] = languages,
         shelf_genres: Sequence[str] = genres,
+        shelf_kinds: Sequence[str] = kinds,
         lo: int | None = from_year,
         hi: int | None = to_year,
         order: Sequence[int] | None = None,
@@ -180,6 +185,7 @@ def build_shelves(
             limit=limit,
             languages=shelf_languages,
             genres=shelf_genres,
+            kinds=shelf_kinds,
             from_year=lo,
             to_year=hi,
             exclude=seen,
@@ -237,6 +243,14 @@ def build_shelves(
         hi=_earlier(to_year, OLD_TO_YEAR),
         scored=score_films(catalogue, profile, recency=0.0),
     )
+    # A visitor who asked for films only has no use for a row of series.
+    if not kinds or "series" in kinds:
+        add(
+            "series",
+            "Top series" if cold else "Series for you",
+            "TV series, well known and well liked" if cold else "TV series, ranked for you",
+            shelf_kinds=("series",),
+        )
 
     facets = catalogue_facets(catalogue)
     language_counts = facets["languages"]
@@ -255,6 +269,17 @@ def build_shelves(
                 f"{name} films, ranked for you",
                 shelf_languages=[code],
             )
+
+    # Anime: Japanese animation, films and series together, after the language shelves have taken
+    # the best Japanese titles. Left out when the visitor's own choices rule it out.
+    if (not languages or "ja" in languages) and (not genres or "Animation" in genres):
+        add(
+            "anime",
+            "Anime",
+            "Japanese animation, films and series, ranked for you",
+            shelf_languages=["ja"],
+            shelf_genres=["Animation"],
+        )
 
     if not genres:
         genre_counts = facets["genres"]

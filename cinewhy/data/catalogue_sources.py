@@ -17,7 +17,7 @@ from __future__ import annotations
 import hashlib
 import json
 from collections import Counter, defaultdict
-from collections.abc import Callable, Collection
+from collections.abc import Callable, Collection, Sequence
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
@@ -28,6 +28,7 @@ from cinewhy.data.linking import (
     ambiguous_candidate_keys,
     film_key,
     match_film,
+    parse_ebd_series,
     title_key,
     with_unique_original_titles,
 )
@@ -337,3 +338,54 @@ def gather(
         "films_with_reviews": len(reviews),
     }
     return Gathered(films, reviews, rt_url, report)
+
+
+def gather_series_reviews(
+    ebd_zip: Path,
+    series: Sequence[SpineFilm],
+    *,
+    cap: int = MAX_REVIEWS_PER_SOURCE,
+    on_progress: Callable[[str], None] = _silent,
+) -> tuple[dict[int, list[tuple[str, str]]], dict[str, Any]]:
+    """Reviews of TV series from the ebD dump, joined to the series by title and start year.
+
+    ebD is the only dump with series reviews (aclImdb and Rotten Tomatoes are films). Its series
+    records read "Title (2008-2013)"; the join key is the title with the START year, which is the
+    year IMDb's own list gives. A key two series share is refused (the reviews could belong to
+    either), as is a title with no Latin letters (its key would be the bare year). There is no
+    runtime or adjacent-year rule here: a series has neither to check against.
+
+    Args:
+        ebd_zip: Path to `imdb_ebd.zip`.
+        series: The series wanted, as build records (`kind` "series").
+        cap: Most reviews kept per series.
+        on_progress: Called with a status line.
+
+    Returns:
+        Reviews per IMDb number as `(source-prefixed review id, text)` sorted by id (a series
+        with none is absent), and a report of what linked and what was refused.
+    """
+    counts = Counter(film_key(s.title, s.year) for s in series)
+    imdb_of_key = {
+        film_key(s.title, s.year): s.imdb_id
+        for s in series
+        if title_key(s.title) and counts[film_key(s.title, s.year)] == 1
+    }
+    capped = Capped(cap)
+    for review in iter_ebd_reviews(ebd_zip, imdb_of_key, parse_ebd_series):
+        capped.add(review)
+    reviews = {
+        imdb_id: [(r.review_id, r.text) for r in found]
+        for imdb_id, found in capped.by_film().items()
+        if found
+    }
+    on_progress(f"ebD series: {len(reviews)} of {len(imdb_of_key)} linkable series have reviews")
+    shared = sum(1 for s in series if counts[film_key(s.title, s.year)] > 1)
+    report: dict[str, Any] = {
+        "series_candidates": len(series),
+        "series_linkable": len(imdb_of_key),
+        "series_refused_shared_title": shared,
+        "series_with_reviews": len(reviews),
+        "series_reviews_after_cap": sum(len(v) for v in reviews.values()),
+    }
+    return reviews, report
