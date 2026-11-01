@@ -643,18 +643,22 @@ first build chose one number twice and the catalogue refused it); the series win
 per worker: a new TLS connection per request cost 0.7 to 8 seconds here against 0.24 s on a reused one, which
 would have been most of a day instead of 26 minutes (24 workers, 20 requests a second). The token is read from
 the environment and never written. **Limits.** ebD ends about 2020, so recent series have no reviews and are
-ratings-only; there is no season or episode level; series with 50 to 199 votes were never downloaded.
+ratings-only; there is no season or episode level. The first download took series with 200+ votes only; the
+50 to 199 range was added later for the Japanese split (D-031), giving a 61,136-series cache.
 
 ## D-031: Japanese is split 5 : 3 : 2 once series exist (2026-11-01, Sonnet 5.5)
 
 The Japanese 5,000 becomes anime series 2,500, movies 1,500 and live-action series 1,000. **Rules.** Anime is a
 Japanese series with the Animation genre; a Japanese FILM is a "movie" whether or not it is animated (the owner:
 movies include anime films); any other Japanese series is live action. Films and series compete on votes inside a
-bucket; full receipts count first. A build without series keeps the single Japanese target of 5,000. **Result in v6:**
-movies 1,500 of 1,500; anime series 2,354 of 2,500 (short 146); live-action series 575 of 1,000 (short 425). The
-shortfall is real supply, not a rule: only series with 200+ votes were downloaded, so the 50-vote fallback has no
-Japanese series to draw on. Fetching 50 to 199 votes (about 22,000 more requests, 40 minutes) is the lever if
-the targets must be met. **Page.** A Films / Series choice, a Series shelf after old school, and an Anime shelf
+bucket; full receipts count first. A build without series keeps the single Japanese target of 5,000. **Result in v6**
+(series with 200+ votes only): movies 1,500 of 1,500; anime series 2,354 of 2,500 (short 146); live-action series
+575 of 1,000 (short 425). The shortfall was supply, not a rule. **Result in v7** (`artifacts/v7`, manifest
+`13179d3c1cde`, after downloading the 30,501 series with 50 to 199 votes, 26 minutes): **every target is met**, 26,105
+titles, nothing short. Anime series 2,500 (35 with receipts, 2,465 ratings-only, 146 of them on 50 to 199 votes);
+live-action series 1,000 (2 with receipts, 998 ratings-only, 425 on 50 to 199 votes); movies 1,500. So the last 146
+anime and 425 live-action series rest on ratings from 50 to 199 voters, and are the ones the page shows last (the
+front page, a Japanese-only view and the series shelf were checked: they lead with the well-voted titles). **Page.** A Films / Series choice, a Series shelf after old school, and an Anime shelf
 (Japanese animation, films and series) after the language shelves.
 
 ## D-029: a 50-vote fallback fills the short languages; the build is v5 (2026-11-01, Sonnet 5.5)

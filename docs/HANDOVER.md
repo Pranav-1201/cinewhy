@@ -140,6 +140,20 @@ permanently by `unique_review_indices` and `test_no_review_text_appears_in_both_
 ## Five-line handoff ritual (fill in each session)
 
 ```
+Session date:      2026-11-02 (session "nlp 3", targets met), merged to main (PRs #1 and #2)
+Model:             Claude Sonnet 5.5
+What we did:       PR #2 (series, Anime shelf, Japanese 5:3:2) merged after CI; downloaded the 30,501 series with
+                   50-199 votes (cache now 61,136 series) and built artifacts/v7 (manifest 13179d3c1cde): 26,105
+                   titles (19,901 films, 6,204 series), EVERY target met including Japanese anime 2,500, movies
+                   1,500, live-action 1,000 (D-031). v7 is in the demo's artifacts/ (start.bat serves it).
+What's left:       1) Nothing is open from the original plan except what was parked: region and age shelves,
+                   aspect-finder labelling. 2) The last 146 anime and 425 live-action series rest on 50-199
+                   votes (shown last). 3) Recent series have no reviews (ebD ends ~2020): ratings-only.
+                   4) No season or episode level. 5) /shelves is about 450 ms (first request 1 s).
+Watch out for:     artifacts/ is git-ignored: v3..v7 exist only on this machine (v5, v6, v7 also in the dev
+                   folder). The TMDB cache (Data/raw/series/tmdb_tv.jsonl) is not in git either; rebuilding needs
+                   it, the IMDb dumps, and MovieLens. Stop servers by PID.
+
 Session date:      2026-11-01 (session "nlp 3", series), branch feature/series in D:\NLPPROJECT-dev
 Model:             Claude Sonnet 5.5
 What we did:       TV series (D-030) and the Japanese 5:3:2 split (D-031), on top of merged main. IMDb list +
