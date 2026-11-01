@@ -12,6 +12,7 @@ import api.main as api_main
 from cinewhy.artifacts.manifest import load_manifest, verify
 from cinewhy.data import spine
 from cinewhy.recsys.catalogue import load_catalogue
+from tests.dumps import tmdb_row
 from tests.test_build_end_to_end import N_FILMS, _build
 from tests.test_series import _BASICS_HEADER, _EN_DASH, _RATINGS_HEADER, _gz
 
@@ -72,11 +73,18 @@ def _build_selects_japanese(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(spine, "LANGUAGES", ("en", "hi", "ja"))
 
 
-def _with_series(tmp_path: Path, **kwargs: object) -> Path:
+def _with_series(
+    tmp_path: Path,
+    *,
+    film_rows: list[dict[str, str]] | None = None,
+    film_ebd: list[tuple[str, str, str]] | None = None,
+    **kwargs: object,
+) -> Path:
     dumps, cache, ebd = _series_files(tmp_path)
     return _build(
         tmp_path,
-        extra_ebd=ebd,
+        extra_tmdb=film_rows,
+        extra_ebd=[*ebd, *(film_ebd or [])],
         series_dumps=dumps,
         series_tmdb=cache,
         ratings_only_min_votes=200,
@@ -131,6 +139,27 @@ def test_japanese_is_split_into_anime_movies_and_live_action(tmp_path: Path) -> 
     assert parts["ja-live-action"]["ratings_only"] == 1  # Drama Show
     assert parts["ja-movies"]["full_receipts"] == parts["ja-movies"]["ratings_only"] == 0
     assert report["series"] == 1
+
+
+def test_a_film_row_carrying_a_series_number_gives_way_to_the_series(tmp_path: Path) -> None:
+    # TMDB lists "films" under IMDb numbers that IMDb files as series. Both were chosen, so one id
+    # was in the catalogue twice and the first real build with series refused it.
+    anime_film = tmdb_row(80, 500, "Anime Show", 2010, lang="ja", runtime=95.0)  # a series' number
+    drama_film = tmdb_row(81, 501, "Drama Show", 2012, lang="ja", runtime=95.0)  # ratings-only dup
+    drama_film["imdb_votes"] = "5000"
+    film_reviews = [
+        ("Anime Show (2010)", f"fr{j}", _REVIEW.format(title="Anime Show", n=j)) for j in range(4)
+    ]
+    out = _with_series(tmp_path, film_rows=[anime_film, drama_film], film_ebd=film_reviews)
+    catalogue = load_catalogue(out, with_meta=True, with_ratings_only=True)
+    kinds = {m.movie_id: m.kind for m in catalogue.movies}
+    assert kinds["cw-0000500"] == "series"  # the film with receipts gave way
+    assert sum(k == "series" for k in kinds.values()) == 2 and len(kinds) == N_FILMS + 2
+    listed = {f.movie.movie_id: f.movie.kind for f in catalogue.ratings_only}
+    assert listed["ro-0000501"] == "series"  # one title for the number, and it is the series
+    assert len([i for i in (f.imdb_id for f in catalogue.ratings_only) if i == 501]) == 1
+    blob = json.loads((out / "eval.json").read_text(encoding="utf-8"))
+    assert blob["gather"]["series"]["films_dropped_for_being_series"] == 1
 
 
 def test_without_series_japanese_keeps_its_single_target(tmp_path: Path) -> None:

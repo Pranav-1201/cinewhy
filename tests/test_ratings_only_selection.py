@@ -198,6 +198,23 @@ def test_series_and_films_compete_on_votes_alone_within_a_language() -> None:
     assert _ids(chosen) == [2, 3]  # the famous series first, then the best-voted film
 
 
+def test_one_imdb_number_is_one_title_and_the_series_wins() -> None:
+    # TMDB's film list can carry a number IMDb files as a TV series. Choosing both put one id in the
+    # catalogue twice, which it refuses (the first real build with series failed on exactly this).
+    film = _title(7, "hi", "film", 9000)
+    series = _title(7, "hi", "series", 5000)
+    other = _title(8, "hi", "film", 400)
+    for order in ([film, series, other], [series, film, other], [other, series, film]):
+        chosen = choose_ratings_only(order, [], {"hi": 5}, min_votes=200)
+        assert _ids(chosen) == [7, 8]
+        assert [c.kind for c in chosen] == ["series", "film"]
+
+
+def test_a_number_that_has_full_receipts_is_never_offered_again_as_either_kind() -> None:
+    candidates = [_title(7, "hi", "film", 9000), _title(7, "hi", "series", 5000)]
+    assert choose_ratings_only(candidates, [7], {"hi": 5}, min_votes=200) == ()
+
+
 def test_a_series_with_no_known_language_is_never_listed() -> None:
     candidates = [_title(1, "", "series", 9000), _title(2, "fr", "series", 9000)]
     assert _ids(choose_ratings_only(candidates, [], {"fr": 5}, min_votes=200)) == [2]
