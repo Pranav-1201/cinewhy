@@ -140,6 +140,21 @@ permanently by `unique_review_indices` and `test_no_review_text_appears_in_both_
 ## Five-line handoff ritual (fill in each session)
 
 ```
+Session date:      2026-11-01 (session "nlp 3", series), branch feature/series in D:\NLPPROJECT-dev
+Model:             Claude Sonnet 5.5
+What we did:       TV series (D-030) and the Japanese 5:3:2 split (D-031), on top of merged main. IMDb list +
+                   TMDB /find cache (Data/raw/series/tmdb_tv.jsonl, 30,635 series) + ebD series reviews; kind on
+                   Movie; Films/Series filter, Series and Anime shelves, "2008 . Series" tiles. Real build
+                   artifacts/v6 (manifest a475a9f294c5): 25,533 titles, 5,438 series (1,546 with receipts). Looked
+                   at in a browser. First v6 build failed on a number that was both a TMDB film and a series;
+                   IMDb now decides type (test added). 587+ tests pass locally, CI not yet run on this branch.
+What's left:       1) Push feature/series and open a PR (CI has not run on it). 2) Japanese anime series 146 short,
+                   live-action 425 short: only series with 200+ votes were downloaded; fetch 50-199 votes
+                   (about 22,000 requests, 40 min) if the targets must be met. 3) Copy v6 to the demo after the
+                   PR merges (start.bat serves the highest vN). 4) Recent series have no reviews (ebD ends ~2020).
+Watch out for:     Downloader needs TMDB_API_TOKEN in the environment and one connection per worker (see D-030).
+                   /shelves is about 450 ms on v6 (first request 1 s). Stop servers by PID.
+
 Session date:      2026-11-01 (session "nlp 3", continued), branch feature/roadmap-v4 in D:\NLPPROJECT-dev
 Model:             Claude Sonnet 5.5
 What we did:       Ratings-only tier (films with IMDb numbers but no reviews; own file, outside the
