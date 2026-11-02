@@ -122,6 +122,22 @@ def wide_quota(language: str, year: int) -> int:
     return 300
 
 
+def widest_quota(language: str, year: int) -> int:
+    """Wider again than `wide_quota`, for the build that reaches the films it still misses.
+
+    Measured on 2026-11-03 (`experiments/floor50_reach.py`, findings in DECISIONS D-033): of the
+    ebD films with 50 or more reviews and a single TMDB film in the five languages, 837 sat outside
+    `wide_quota` (the rest were selected and then lost the spoiler and profanity filter, which the
+    raw ebD count does not apply). A quota of 600 per language and year takes 638 of the 837, 1,500
+    takes 713; beyond that the gain flattens while memory climbs (ebD holds 225,866 films with
+    reviews). One wider gather also serves a later, lower review floor, since the gather cache keeps
+    the reviews of every selected film whatever the floor.
+    """
+    if language == "en":
+        return 1500 if year >= 2000 else 600
+    return 600
+
+
 # Films wanted per original language, English and the three others in the ratio 4:3:2:1 that the
 # owner set (English 10,000; Hindi and Telugu 7,500 split 70/30; Japanese 5,000; French 2,500).
 # These are MINIMUMS the owner wants and the supply cannot always meet: the ratings-only selection

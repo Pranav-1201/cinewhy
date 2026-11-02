@@ -56,6 +56,7 @@ from cinewhy.data.spine import (
     quota,
     read_tmdb_rows,
     wide_quota,
+    widest_quota,
 )
 from cinewhy.recsys.catalogue import (
     Catalogue,
@@ -109,6 +110,9 @@ class BuildConfig:
     languages: tuple[str, ...] | None = None  # None: the spine's English and Hindi
     max_year: int | None = None  # None: the spine's last year
     wide: bool = False  # the wider candidate list (`spine.wide_quota`)
+    # Wider again (`spine.widest_quota`), to reach the films `wide` still misses; takes precedence
+    # over `wide`. Its gather is a new one: the cache key records which quota selected the films.
+    widest: bool = False
     # Fewest IMDb votes for a ratings-only film; None builds no ratings-only tier.
     ratings_only_min_votes: int | None = None
     # A lower floor used only to fill a language still short of its target once the films above
@@ -173,6 +177,13 @@ def select_films(
 def ratings_only_id(imdb_id: int) -> str:
     """CineWhy's id for a film listed with ratings only: distinct from `movie_id_for` on purpose."""
     return f"ro-{imdb_id:07d}"
+
+
+def quota_function(config: BuildConfig) -> Callable[[str, int], int]:
+    """Which films-per-(language, year) rule picks the build's candidates: the widest asked for."""
+    if config.widest:
+        return widest_quota
+    return wide_quota if config.wide else quota
 
 
 def build_targets(config: BuildConfig, *, with_series: bool) -> dict[str, int]:
@@ -460,7 +471,7 @@ def build_artifacts(config: BuildConfig) -> ArtifactManifest:
     out.mkdir(parents=True, exist_ok=True)
 
     _log("gathering films and reviews from TMDB, aclImdb, Rotten Tomatoes and ebD")
-    quota_for = wide_quota if config.wide else quota
+    quota_for = quota_function(config)
     if config.cache_file is None:
         gathered = gather(
             config.sources,
@@ -735,6 +746,11 @@ def main() -> None:
         "--wide", action="store_true", help="the wider candidate list (spine.wide_quota)"
     )
     parser.add_argument(
+        "--widest",
+        action="store_true",
+        help="wider again than --wide (spine.widest_quota); needs a new gather",
+    )
+    parser.add_argument(
         "--ratings-only-min-votes",
         type=int,
         default=None,
@@ -778,6 +794,7 @@ def main() -> None:
             languages=tuple(args.languages.split(",")) if args.languages else None,
             max_year=args.max_year,
             wide=args.wide,
+            widest=args.widest,
             ratings_only_min_votes=args.ratings_only_min_votes,
             ratings_only_fallback_votes=args.ratings_only_fallback_votes,
             series_dumps=args.series_dumps,

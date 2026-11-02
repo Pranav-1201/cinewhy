@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from cinewhy.build import BuildConfig, quota_function
 from cinewhy.data.catalogue_sources import SourcePaths, _cache_key
 from cinewhy.data.spine import (
     CATALOGUE_TARGETS,
@@ -17,6 +18,7 @@ from cinewhy.data.spine import (
     select_ratings_only,
     select_spine,
     wide_quota,
+    widest_quota,
 )
 from tests.dumps import tmdb_row
 
@@ -310,6 +312,31 @@ def test_the_wide_quota_is_wider_and_never_narrower_than_the_shipped_one() -> No
     assert wide_quota("en", 2010) == 1000 and wide_quota("ja", 2010) == 300
 
 
+def test_the_widest_quota_is_wider_than_the_wide_one_in_every_language_and_year() -> None:
+    for language in ("en", "hi", "te", "ja", "fr"):
+        for year in (1934, 1960, 1999, 2000, 2024):
+            assert widest_quota(language, year) >= wide_quota(language, year)
+    # The values the measurement chose (D-033), so a casual edit shows up here.
+    assert (widest_quota("en", 2010), widest_quota("en", 1960)) == (1500, 600)
+    assert {widest_quota(lang, 2010) for lang in ("hi", "te", "ja", "fr")} == {600}
+
+
+def test_the_widest_quota_selects_a_film_the_wide_quota_leaves_out() -> None:
+    # Three English films of one year, most voted first. A quota of 2 keeps the best two; one of 3
+    # keeps all, which is the whole point of widening: the third film was simply never a candidate.
+    rows = [_row(i, "en", votes=1000 - i, year=1999) for i in range(1, 4)]
+    narrow = select_spine(rows, lambda _lang, _year: 2, languages=("en",))
+    wider = select_spine(rows, lambda _lang, _year: 3, languages=("en",))
+    assert _ids(narrow.films) == [1, 2] and _ids(wider.films) == [1, 2, 3]
+
+
+def test_the_build_picks_the_widest_quota_it_is_asked_for() -> None:
+    assert quota_function(BuildConfig()) is quota
+    assert quota_function(BuildConfig(wide=True)) is wide_quota
+    assert quota_function(BuildConfig(widest=True)) is widest_quota
+    assert quota_function(BuildConfig(wide=True, widest=True)) is widest_quota  # widest wins
+
+
 def test_a_gather_cache_is_not_reused_for_another_selection(tmp_path: Path) -> None:
     for name in ("tmdb.csv", "rt.zip", "ebd.zip", "acl.tar.gz"):
         (tmp_path / name).write_bytes(b"x")
@@ -322,6 +349,7 @@ def test_a_gather_cache_is_not_reused_for_another_selection(tmp_path: Path) -> N
     base = _cache_key(paths, 150)
     assert base == _cache_key(paths, 150, quota)
     assert base != _cache_key(paths, 150, wide_quota)
+    assert _cache_key(paths, 150, wide_quota) != _cache_key(paths, 150, widest_quota)
     assert base != _cache_key(paths, 150, quota, ("en", "hi", "fr"))
     assert base != _cache_key(paths, 150, quota, None, 2026)
     # The same languages in another order are the same selection.
