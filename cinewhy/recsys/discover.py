@@ -27,6 +27,7 @@ from pydantic import BaseModel, ConfigDict
 
 from cinewhy.recsys import rank
 from cinewhy.recsys.catalogue import Catalogue
+from cinewhy.recsys.people import person_positions
 from cinewhy.schemas import Aspect, Movie, Reason, TasteProfile
 
 # The most the recency term can add to a score that otherwise runs from 0 to 1. At 0.30 a film
@@ -494,6 +495,7 @@ def select_items(
     exclude: Collection[str] = (),
     order: Sequence[int] | None = None,
     include_ratings_only: bool = True,
+    only: Collection[int] | None = None,
 ) -> tuple[DiscoverItem, ...]:
     """The best films and series for one shelf: `scored`, filtered by language, genre and years.
 
@@ -512,6 +514,8 @@ def select_items(
         order: Film positions in the order to consider them; default is best score first.
         include_ratings_only: False keeps out the films we have ratings for but no reviews, for a
             shelf whose heading promises the sentences behind each pick.
+        only: Catalogue positions to consider and nothing else (a person's titles); None means
+            every title, and an empty collection means none.
 
     Returns:
         Up to `limit` films, in order; fewer (even none) when the filters leave few.
@@ -531,6 +535,10 @@ def select_items(
         allowed &= (years > 0) & (years <= to_year)
     if languages:
         allowed &= np.isin(language_codes(catalogue), list(expand_languages(languages)))
+    if only is not None:
+        considered = np.zeros(n, dtype=bool)
+        considered[list(only)] = True
+        allowed &= considered
     if set(kinds) == {"series"}:
         allowed &= catalogue.is_series
     elif set(kinds) == {"film"}:
@@ -590,6 +598,7 @@ def discover(
     from_year: int | None = None,
     to_year: int | None = None,
     exclude: Sequence[str] = (),
+    person_id: int | None = None,
     manifest: str,
 ) -> DiscoverResult:
     """Rank films for a visitor, with optional era, language and genre filters.
@@ -612,12 +621,15 @@ def discover(
         to_year: Keep only films released in or before this year (films with no known year are
             left out).
         exclude: Film ids never to return.
+        person_id: Only titles this person is billed in, ranked like any other list (an unknown
+            person, or a build with no cast file, gives an empty list).
         manifest: Hash of the artifact set, echoed so a result can be traced to its build.
 
     Returns:
         The ranked list, possibly empty when the filters match nothing.
     """
     scored = score_films(catalogue, profile, recency=recency)
+    only = person_positions(catalogue, person_id) if person_id is not None else None
     items = select_items(
         catalogue,
         scored,
@@ -628,5 +640,6 @@ def discover(
         from_year=from_year,
         to_year=to_year,
         exclude=set(exclude) | set(profile.liked_movie_ids) | set(profile.disliked_movie_ids),
+        only=only,
     )
     return DiscoverResult(items=items, cold_start=scored.cold, manifest=manifest)

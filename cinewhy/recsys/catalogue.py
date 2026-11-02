@@ -18,6 +18,7 @@ from typing import Any, Final
 import numpy as np
 import numpy.typing as npt
 
+from cinewhy.data.cast import CAST_FILE, Cast, load_cast
 from cinewhy.schemas import Aspect, EvidenceSentence, Movie, MovieAspectProfile
 
 CATALOGUE_FILE: Final[str] = "catalogue.json"
@@ -101,6 +102,8 @@ class Catalogue:
     # `meta.json`. Empty when the artifact set has none.
     meta: dict[str, dict[str, Any]] = field(default_factory=dict)
     ratings_only: tuple[RatingsOnlyFilm, ...] = ()
+    # Who is billed in each title, when the build has a cast file (see `cinewhy.data.cast`).
+    cast: Cast | None = None
     # Id to position for full-receipt films only: every row of `similarity` and `aspect_matrix`
     # is one of these, so code indexing them with `index[...]` can never reach a ratings-only film.
     index: dict[str, int] = field(init=False)
@@ -275,7 +278,11 @@ def _dumps(obj: object) -> str:
 
 
 def load_catalogue(
-    directory: Path, *, with_meta: bool = False, with_ratings_only: bool = False
+    directory: Path,
+    *,
+    with_meta: bool = False,
+    with_ratings_only: bool = False,
+    with_cast: bool = False,
 ) -> Catalogue:
     """Read a catalogue from a verified artifact directory.
 
@@ -287,6 +294,7 @@ def load_catalogue(
             sitting in the directory is unverified and must not change what browsers are told.
         with_ratings_only: Also read `ratings_only.json`, on the same condition: only when the
             verified manifest lists it.
+        with_cast: Also read `cast.json`, on the same condition.
 
     Returns:
         The catalogue.
@@ -338,4 +346,7 @@ def load_catalogue(
         raise ValueError(f"profiles/evidence for films not in the catalogue: {sorted(stray)[:3]}")
     similarity = np.load(directory / SIMILARITY_FILE, allow_pickle=False)
     ratings_only = _read_ratings_only(directory / RATINGS_ONLY_FILE) if with_ratings_only else ()
-    return Catalogue(movies, stats, profiles, evidence, similarity, settings, meta, ratings_only)
+    cast = load_cast(directory / CAST_FILE) if with_cast else None
+    return Catalogue(
+        movies, stats, profiles, evidence, similarity, settings, meta, ratings_only, cast
+    )
