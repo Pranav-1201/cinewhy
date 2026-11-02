@@ -162,6 +162,20 @@ def test_a_film_row_carrying_a_series_number_gives_way_to_the_series(tmp_path: P
     assert blob["gather"]["series"]["films_dropped_for_being_series"] == 1
 
 
+def test_an_uncapped_build_reports_no_target_and_nothing_short(tmp_path: Path) -> None:
+    for name in ("a", "b"):
+        (tmp_path / name).mkdir()
+    capped = json.loads((_with_series(tmp_path / "a") / "eval.json").read_text(encoding="utf-8"))
+    out = _with_series(tmp_path / "b", uncapped=True)
+    blob = json.loads((out / "eval.json").read_text(encoding="utf-8"))
+    parts = blob["catalogue"]["ratings_only"]["by_language"]
+    # The buckets (and so the Japanese split) are the same; only the target idea is gone.
+    assert parts.keys() == capped["catalogue"]["ratings_only"]["by_language"].keys()
+    assert all(p["target"] is None and p["short_by"] == 0 for p in parts.values())
+    assert parts["ja-live-action"]["ratings_only"] == 1  # the same title is still listed
+    assert capped["catalogue"]["ratings_only"]["by_language"]["en"]["short_by"] > 0  # control
+
+
 def test_without_series_japanese_keeps_its_single_target(tmp_path: Path) -> None:
     out = _build(tmp_path, ratings_only_min_votes=200)
     blob = json.loads((out / "eval.json").read_text(encoding="utf-8"))

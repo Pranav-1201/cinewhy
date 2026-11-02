@@ -8,6 +8,7 @@ from cinewhy.data.catalogue_sources import SourcePaths, _cache_key
 from cinewhy.data.spine import (
     CATALOGUE_TARGETS,
     JAPANESE_SPLIT,
+    UNCAPPED,
     SpineFilm,
     bucket_of,
     catalogue_targets,
@@ -237,6 +238,56 @@ def test_the_targets_are_the_owners_ratio() -> None:
     assert CATALOGUE_TARGETS["hi"] + CATALOGUE_TARGETS["te"] == 7_500
     assert CATALOGUE_TARGETS["hi"] * 3 == CATALOGUE_TARGETS["te"] * 7
     assert [CATALOGUE_TARGETS[k] for k in ("en", "ja", "fr")] == [10_000, 5_000, 2_500]
+
+
+def test_uncapped_targets_ask_for_every_bucket_and_change_nothing_else() -> None:
+    for split in (False, True):
+        capped = catalogue_targets(split_japanese=split)
+        open_ended = catalogue_targets(split_japanese=split, uncapped=True)
+        assert open_ended.keys() == capped.keys()  # same buckets, so the Japanese split survives
+        assert set(open_ended.values()) == {UNCAPPED}
+    assert catalogue_targets(split_japanese=False) == dict(CATALOGUE_TARGETS)  # default unchanged
+
+
+def test_an_uncapped_language_lists_every_film_above_the_floor_not_just_a_target() -> None:
+    # English with 12 qualifying films and a capped target of 5 would stop at 5; uncapped lists 12.
+    rows = [_row(i, "en", votes=300 + i, year=2024) for i in range(1, 13)]
+    capped = select_ratings_only(rows, taken=[], targets={"en": 5}, min_votes=200)
+    assert len(capped) == 5
+    uncapped = select_ratings_only(rows, taken=[], targets={"en": UNCAPPED}, min_votes=200)
+    assert _ids(uncapped) == list(range(1, 13))
+
+
+def test_an_uncapped_language_already_over_its_old_target_still_gets_new_titles() -> None:
+    # The v7 gap: English was over its target from receipts alone, so the recent films were never
+    # listed. 6 held titles against a target of 5 meant none; uncapped must still add the rest.
+    rows = [_row(i, "en", votes=500, year=2024 if i > 6 else 2005) for i in range(1, 11)]
+    assert select_ratings_only(rows, taken=range(1, 7), targets={"en": 5}, min_votes=200) == ()
+    more = select_ratings_only(rows, taken=range(1, 7), targets={"en": UNCAPPED}, min_votes=200)
+    assert _ids(more) == [7, 8, 9, 10]
+
+
+def test_uncapped_still_respects_the_vote_floor_the_rating_and_receipts_already_held() -> None:
+    rows = [
+        _row(1, "en", votes=199),  # under the floor
+        _row(2, "en", votes=9000, rating="0"),  # no rating
+        _row(3, "en", votes=200),
+        _row(4, "en", votes=5000),  # already has full receipts
+    ]
+    chosen = select_ratings_only(rows, taken=[4], targets={"en": UNCAPPED}, min_votes=200)
+    assert _ids(chosen) == [3]
+
+
+def test_uncapped_keeps_the_japanese_split_buckets_apart() -> None:
+    targets = catalogue_targets(split_japanese=True, uncapped=True)
+    candidates = [
+        _title(1, "ja", "series", 900, _ANIMATION),  # anime series
+        _title(2, "ja", "series", 800),  # live-action series
+        _title(3, "ja", "film", 700, _ANIMATION),  # an anime film is a movie
+        _title(4, "ja", "series", 100, _ANIMATION),  # under the floor
+    ]
+    chosen = choose_ratings_only(candidates, [], targets, min_votes=200)
+    assert _ids(chosen) == [1, 2, 3]
 
 
 def test_select_spine_takes_the_languages_it_is_given() -> None:

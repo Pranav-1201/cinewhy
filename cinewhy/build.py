@@ -120,6 +120,9 @@ class BuildConfig:
     series_dumps: Path | None = None
     series_tmdb: Path | None = None
     series_min_votes: int = 200
+    # List every title that passes the vote floor instead of stopping at a per-language target
+    # (spine.UNCAPPED; DECISIONS D-032). The ratings-only tier's floor then alone sets its size.
+    uncapped: bool = False
 
 
 def movie_id_for(imdb_id: int) -> str:
@@ -161,7 +164,7 @@ def ratings_only_id(imdb_id: int) -> str:
 
 def build_targets(config: BuildConfig, *, with_series: bool) -> dict[str, int]:
     """The wanted size of each bucket: with series in the build, Japanese is split 5 : 3 : 2."""
-    return catalogue_targets(split_japanese=with_series)
+    return catalogue_targets(split_japanese=with_series, uncapped=config.uncapped)
 
 
 def series_candidates(config: BuildConfig) -> list[SpineFilm]:
@@ -275,11 +278,15 @@ def ratings_only_report(
         "series": sum(f.movie.kind == "series" for f in ratings_only),
         "by_language": {
             name: {
-                "target": target,
+                # No target when uncapped: the vote floor, not a number, set the size, so there is
+                # nothing to fall short of.
+                "target": None if config.uncapped else target,
                 "full_receipts": full.get(name, 0),
                 "ratings_only": only.get(name, 0),
                 "of_which_below_the_main_floor": thin.get(name, 0),
-                "short_by": max(0, target - full.get(name, 0) - only.get(name, 0)),
+                "short_by": (
+                    0 if config.uncapped else max(0, target - full.get(name, 0) - only.get(name, 0))
+                ),
             }
             for name, target in build_targets(config, with_series=split).items()
         },
@@ -739,6 +746,11 @@ def main() -> None:
         help="the TMDB series cache written by `python -m cinewhy.data.fetch_series`",
     )
     parser.add_argument("--series-min-votes", type=int, default=200, help="fewest IMDb votes")
+    parser.add_argument(
+        "--uncapped",
+        action="store_true",
+        help="list every title passing the vote floor, not just up to each language's target",
+    )
     args = parser.parse_args()
     build_artifacts(
         BuildConfig(
@@ -758,6 +770,7 @@ def main() -> None:
             series_dumps=args.series_dumps,
             series_tmdb=args.series_tmdb,
             series_min_votes=args.series_min_votes,
+            uncapped=args.uncapped,
         )
     )
 

@@ -142,12 +142,24 @@ JAPANESE_SPLIT: Final[dict[str, int]] = {
 }
 
 
-def catalogue_targets(*, split_japanese: bool) -> dict[str, int]:
-    """The wanted size of each bucket: a language, or one of the three Japanese parts."""
+# A target no catalogue reaches: "list every title that passes the vote floor". The owner dropped
+# the 4:3:2:1 ratio on 2026-11-02 ("I want as much data as possible"). A cap was also why no recent
+# English film was listed: English was already over 10,000 from the receipts tier, so the
+# ratings-only tier added no English title at all (DECISIONS D-032).
+UNCAPPED: Final[int] = 10**9
+
+
+def catalogue_targets(*, split_japanese: bool, uncapped: bool = False) -> dict[str, int]:
+    """The wanted size of each bucket: a language, or one of the three Japanese parts.
+
+    With `uncapped` every bucket asks for `UNCAPPED`, so only the vote floor limits what is listed.
+    """
     targets = dict(CATALOGUE_TARGETS)
     if split_japanese:
         del targets["ja"]
         targets.update(JAPANESE_SPLIT)
+    if uncapped:
+        targets = dict.fromkeys(targets, UNCAPPED)
     return targets
 
 
