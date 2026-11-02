@@ -35,6 +35,87 @@ class TestSplitClauses:
         sentence = "I was bored while watching the slow second act."
         assert split_clauses(sentence) == [sentence]
 
+    # Two statements joined by "and" or a comma, each about its own aspect, used to share one
+    # score: "The acting was great and the plot was dull" scored the ACTING negative.
+    def test_splits_two_statements_about_different_aspects_joined_by_and(self) -> None:
+        assert split_clauses("The acting was great and the plot was dull.") == [
+            "The acting was great",
+            "the plot was dull.",
+        ]
+
+    def test_splits_a_run_of_statements_joined_by_commas_and_and(self) -> None:
+        sentence = "The acting was superb, the plot was dull, and the ending was terrible."
+        assert split_clauses(sentence) == [
+            "The acting was superb",
+            "the plot was dull",
+            "the ending was terrible.",
+        ]
+
+    def test_a_list_sharing_one_verb_is_not_split(self) -> None:
+        # Splitting would leave "The acting, the plot" with no opinion at all.
+        sentence = "The acting, the plot and the pacing were all great."
+        assert split_clauses(sentence) == [sentence]
+
+    def test_a_verb_before_the_aspect_does_not_make_a_list_into_statements(self) -> None:
+        # Found by reading real reviews: "posted" belongs to an earlier clause, and cutting before
+        # ", the acting" left "...that the plot" scored as positive ("I agree") while the list is
+        # all about being bad. The verb of a statement must come AFTER its aspect.
+        sentence = (
+            "I agree with the others who posted that the plot, the acting and the scenery were bad."
+        )
+        assert split_clauses(sentence) == [sentence]
+
+    def test_a_side_of_fewer_than_three_words_is_not_split_off(self) -> None:
+        # The contrast rule keeps "Good, but." whole; the "and" rule follows the same minimum.
+        sentence = "Plot dragged and the pacing was slow."
+        assert split_clauses(sentence) == [sentence]
+
+    def test_a_new_subject_must_be_a_determiner_or_pronoun(self) -> None:
+        # Deliberately narrow (see _JOIN): a bare noun subject is left whole, not guessed at.
+        sentence = "The acting was great and special effects were awful."
+        assert split_clauses(sentence) == [sentence]
+        assert split_clauses("The acting was great and it was shot beautifully.") == [
+            "The acting was great and it was shot beautifully."
+        ]  # no aspect after the join
+
+    def test_a_verb_that_ends_in_ed_counts_as_a_verb(self) -> None:
+        assert split_clauses("The acting impressed me and the plot bored me.") == [
+            "The acting impressed me",
+            "the plot bored me.",
+        ]
+
+    def test_and_so_was_is_not_a_new_statement(self) -> None:
+        sentence = "The acting was great and so was the plot."
+        assert split_clauses(sentence) == [sentence]
+
+    def test_a_side_with_no_aspect_is_not_split_off(self) -> None:
+        sentence = "The acting was great and the weather was nice."
+        assert split_clauses(sentence) == [sentence]
+
+    def test_a_side_with_no_verb_is_not_split_off(self) -> None:
+        sentence = "The acting was great and the plot a mess."
+        assert split_clauses(sentence) == [sentence]
+
+    def test_and_between_two_adjectives_is_not_a_split(self) -> None:
+        sentence = "The plot was dull and tedious."
+        assert split_clauses(sentence) == [sentence]
+
+    def test_a_split_after_and_also_works_alongside_a_contrast_split(self) -> None:
+        sentence = "The acting was great and the plot was dull but the ending was superb."
+        assert split_clauses(sentence) == [
+            "The acting was great",
+            "the plot was dull",
+            "the ending was superb.",
+        ]
+
+    def test_every_clause_stays_a_verbatim_substring_after_the_new_splits(self) -> None:
+        sentence = "The acting was superb, the plot was dull, and the ending was terrible."
+        assert all(clause in sentence for clause in split_clauses(sentence))
+
+    def test_a_negated_verb_counts_as_a_statement(self) -> None:
+        sentence = "The acting wasn't good and the plot didn't work."
+        assert split_clauses(sentence) == ["The acting wasn't good", "the plot didn't work."]
+
 
 def _reviews(*texts: str) -> list[tuple[str, str]]:
     return [(f"rv-{i}", t) for i, t in enumerate(texts)]
@@ -59,6 +140,17 @@ class TestBuildProfile:
         self, keyword_scorer: KeywordScorer
     ) -> None:
         reviews = _reviews(*(["The acting was brilliant but the plot was dull and tedious."] * 3))
+        profile, _ = build_profile("m", reviews, model=keyword_scorer)
+        by_aspect = {s.aspect: s.score for s in profile.scores}
+        assert by_aspect[Aspect.ACTING] == pytest.approx(0.9)
+        assert by_aspect[Aspect.PLOT] == pytest.approx(-0.9)
+
+    def test_two_statements_joined_by_and_each_get_their_own_polarity(
+        self, keyword_scorer: KeywordScorer
+    ) -> None:
+        # Before the "and" split, the scorer saw "great ... dull" as one negative clause and both
+        # aspects came out at -0.9: the acting of a well-acted film was scored as bad.
+        reviews = _reviews(*(["The acting was great and the plot was dull."] * 3))
         profile, _ = build_profile("m", reviews, model=keyword_scorer)
         by_aspect = {s.aspect: s.score for s in profile.scores}
         assert by_aspect[Aspect.ACTING] == pytest.approx(0.9)
