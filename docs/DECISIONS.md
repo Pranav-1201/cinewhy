@@ -661,6 +661,42 @@ anime and 425 live-action series rest on ratings from 50 to 199 voters, and are 
 front page, a Japanese-only view and the series shelf were checked: they lead with the well-voted titles). **Page.** A Films / Series choice, a Series shelf after old school, and an Anime shelf
 (Japanese animation, films and series) after the language shelves.
 
+## D-032: list every title with 200+ votes in the five languages, with no per-language target (2026-11-03, Sonnet 5.5)
+
+The owner dropped the 4:3:2:1 ratio ("I want as much data as possible") and set the floor at 200 IMDb votes; the
+languages stay English, Hindi, Telugu, French and Japanese. **Rule.** `--uncapped` gives every bucket the target
+`spine.UNCAPPED` (a billion), so the vote floor alone decides who is listed; the Japanese split buckets stay, and
+`eval.json` reports `target: null`, `short_by: 0`. `BuildConfig` refuses `uncapped` with a fallback floor: with no
+target to meet, the fallback would never stop lowering the bar and would list every thinly rated title. **Why it
+was needed.** The ratings-only tier stopped at each target, and English was already over 10,000 from the receipts
+tier, so v7 listed no English title that lacked reviews: nothing from 2025-26 and 1,171 films from 2020-24.
+**Result in v8** (`artifacts/v8`, manifest `8d17da05a041`, 19 minutes on the cached gather): 106,069 titles, 11,930
+with full receipts (the same core as v7) and 94,139 ratings-only. English 85,574, French 7,427, Japanese 7,161, Hindi
+4,277, Telugu 1,630. The page now leads "New and now" with 2025-26 English titles. **Costs, stated.** Hindi, Telugu
+and the two Japanese series parts are SMALLER than in v7 (Hindi 5,250 to 4,277, Telugu 2,250 to 1,630, anime series
+2,500 to 2,354, live-action series 1,000 to 575) because the 50-vote fallback that filled them is gone: that is the
+200-vote floor working, not a fault. `/shelves` takes 0.45 to 0.62 s against 0.16 to 0.23 s on v7 (same machine,
+interleaved, six runs each): `all_movies` is rebuilt about 20 times a request and `catalogue_facets` is recomputed
+each time (found by profile, not yet fixed). `/discover` 0.17 s, `/search` 0.27 to 0.34 s. The recommender core is
+unchanged (validation hit@20 0.171, hybrid weight 0.45, as v7), because ratings-only titles sit outside it.
+
+## D-033: a wider candidate list reaches the films the 50-review build still misses (2026-11-03, Sonnet 5.5)
+
+**Measured** (`experiments/floor50_reach.py`): ebD has 13,684 films with 50 or more reviews. 8,256 are in v8; 2,029
+are reachable (one TMDB film in the five languages: English 1,886, French 61, Hindi 40, Japanese 39, Telugu 3); 2,335
+match no TMDB film by title and year; 780 are another language (Italian 112, Spanish 95, German 79); 284 share a key.
+Of the 2,029, **1,192 were selected and then lost**, not missed: `scan_ebd_keys` counts every review "whatever
+its length or spoiler flag", while the gather excludes spoiler-flagged and profane reviews (shown to users as
+evidence). Counted the gather's way, **1,168 of the 1,192 have fewer than 50 usable reviews** (the other 24 are
+not explained by this check). Only **837** sit outside `wide_quota`. **Decision.**
+`spine.widest_quota`: English 1,500 a year from 2000 and 600 before, 600 a year for every other language (a quota of
+600 takes 638 of the 837, 1,500 takes 713; the curve flattens after that while memory climbs). It is an option
+(`--widest`), so v4 to v8 stay reproducible, and it needs a new gather (the cache key records the quota). **Why now:**
+the gather cache keeps the reviews of every selected film whatever the floor, so this one wider gather also serves
+the later floor-20 build. **Expected gain** about 650 films with receipts (837 at the 87% that survive the filter),
+not the 3,300 first quoted: that figure was the raw ebD count, which the filter does not honour. **Not yet run:**
+free memory was 4.4 GB, below what a gather needs.
+
 ## D-029: a 50-vote fallback fills the short languages; the build is v5 (2026-11-01, Sonnet 5.5)
 
 At the 200-vote floor Hindi, Telugu and Japanese were 3,270 films short of the owner's targets (roadmap
