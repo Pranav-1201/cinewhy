@@ -140,6 +140,22 @@ permanently by `unique_review_indices` and `test_no_review_text_appears_in_both_
 ## Five-line handoff ritual (fill in each session)
 
 ```
+Session date:      2026-11-03 (session "nlp 3", scale-up), branch feature/wide-catalogue in D:\NLPPROJECT-dev,
+                   NOT pushed, NOT in the demo
+Model:             Claude Sonnet 5.5
+What we did:       Owner dropped the ratio: 200+ votes, five languages, no cap. --uncapped (D-032) and artifacts/v8
+                   (manifest 8d17da05a041): 106,069 titles = 11,930 with receipts + 94,139 ratings-only; 2025-26
+                   English now present. Measured floor-50 reach (D-033): only ~650 more films are gettable, not
+                   3,300; added --widest (not yet built). 625 tests pass; every planted bug caught.
+What's left:       1) v9 build with --widest (new gather, 40-60 min, needs ~5-6 GB free RAM; 4.4 GB was free).
+                   2) Floor 20 AFTER floor 50: needs a sparse similarity (dense item_sim is 569 MB at 11,930
+                   titles and grows with the square). 3) /shelves is 0.45-0.62 s on v8 (0.16-0.23 s on v7):
+                   cache all_movies and catalogue_facets. 4) Push + PR when the owner says; v8 is not on the demo.
+Watch out for:     NEVER pass --ratings-only-fallback-votes with --uncapped (BuildConfig refuses it). Hindi, Telugu
+                   and the Japanese series parts are smaller than v7 on purpose (no 50-vote fallback). A teammate
+                   will build a full dataset later; do not scrape for it. A raw ebD review count includes
+                   spoiler-flagged reviews: 98% of "missing" films had under 50 usable ones.
+
 Session date:      2026-11-02 (session "nlp 3", targets met), merged to main (PRs #1 and #2)
 Model:             Claude Sonnet 5.5
 What we did:       PR #2 (series, Anime shelf, Japanese 5:3:2) merged after CI; downloaded the 30,501 series with
