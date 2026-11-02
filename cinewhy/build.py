@@ -124,6 +124,19 @@ class BuildConfig:
     # (spine.UNCAPPED; DECISIONS D-032). The ratings-only tier's floor then alone sets its size.
     uncapped: bool = False
 
+    def __post_init__(self) -> None:
+        """Refuse settings that would quietly list thinly rated titles.
+
+        With no target to meet, a fallback floor would never stop lowering the bar: every title
+        above it would be listed. Better a clear error than a silent weak tier.
+        """
+        if self.uncapped and self.ratings_only_fallback_votes is not None:
+            msg = (
+                "uncapped already lists everything above ratings_only_min_votes; "
+                "a fallback floor would only add thinly rated titles"
+            )
+            raise ValueError(msg)
+
 
 def movie_id_for(imdb_id: int) -> str:
     """CineWhy's id for a film: stable, derived from the IMDb number, never reused."""

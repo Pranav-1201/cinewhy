@@ -272,6 +272,14 @@ def test_an_uncapped_build_lists_more_than_the_target_allows(
         assert listed == ({"ro-0000900"} if not uncapped else {f"ro-000090{k}" for k in range(3)})
 
 
+def test_an_uncapped_build_refuses_a_fallback_floor() -> None:
+    # No target is ever met, so a fallback floor would list every thinly rated title above it.
+    with pytest.raises(ValueError, match="fallback"):
+        BuildConfig(ratings_only_min_votes=200, ratings_only_fallback_votes=50, uncapped=True)
+    BuildConfig(ratings_only_min_votes=200, uncapped=True)  # the floor alone is fine
+    BuildConfig(ratings_only_min_votes=200, ratings_only_fallback_votes=50)  # capped keeps it
+
+
 def test_a_fallback_floor_lists_thin_films_and_the_report_counts_them(tmp_path: Path) -> None:
     extras = [
         _extra_row(90, 900, "fr", 5000),  # above the main floor
