@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import re
 from collections import defaultdict
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Final
@@ -110,6 +111,11 @@ class Catalogue:
     # True at the position of every TV series (both tiers), so a "series only" filter is one array
     # lookup per shelf, not a loop over every title.
     is_series: npt.NDArray[np.bool_] = field(init=False)
+    # Results derived from the two tuples of films, kept so a request does not rebuild them: see
+    # `derived`. Not part of the catalogue's identity.
+    _derived: dict[str, tuple[object, object, object]] = field(
+        init=False, repr=False, compare=False, default_factory=dict
+    )
 
     def __post_init__(self) -> None:
         """Derive the id index and the shrunk aspect matrix; validate shapes."""
@@ -133,10 +139,35 @@ class Catalogue:
         self.aspect_matrix = matrix
         self.is_series = np.array([m.kind == "series" for m in self.all_movies], dtype=bool)
 
+    def derived[T](self, name: str, compute: Callable[[], T]) -> T:
+        """A value computed from this catalogue's films, computed once and kept.
+
+        On the 106k-title catalogue, rebuilding the list of every film, the year of every film and
+        the filter counts on each request cost about half of a `/shelves` answer. The key is the
+        identity of the `movies` and `ratings_only` tuples, so replacing either (as tests do on a
+        small world) recomputes; editing inside `meta` after a value was kept is NOT noticed, and a
+        catalogue is not edited after it loads. Callers must treat the result as read-only.
+
+        Args:
+            name: What is being kept ("all_movies", "film_years", ...).
+            compute: Builds the value when it is missing or the films were replaced.
+
+        Returns:
+            The kept value, or the freshly computed one.
+        """
+        entry = self._derived.get(name)
+        if entry is not None and entry[0] is self.movies and entry[1] is self.ratings_only:
+            return entry[2]  # type: ignore[return-value]
+        value = compute()
+        self._derived[name] = (self.movies, self.ratings_only, value)
+        return value
+
     @property
     def all_movies(self) -> tuple[Movie, ...]:
         """Every film, full-receipt first then ratings-only, in position order."""
-        return self.movies + tuple(f.movie for f in self.ratings_only)
+        return self.derived(
+            "all_movies", lambda: self.movies + tuple(f.movie for f in self.ratings_only)
+        )
 
     def is_ratings_only(self, position: int) -> bool:
         """True when this position belongs to a ratings-only film."""
