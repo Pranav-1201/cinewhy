@@ -153,7 +153,12 @@ What's left:       1) v9 (--widest) was built and added only 88 titles with rece
                    titles and grows with the square). 3) /shelves is 0.45-0.62 s on v8 (0.16-0.23 s on v7); the
                    catalogue cache change is committed but its wall-clock gain is unmeasured. 4) Push + PR when
                    the owner says; v8 is not on the demo. 5) Owner's new asks (2026-11-03): cast per title and
-                   actor search, where-to-watch for six platforms, a better Try a review.
+                   actor search, where-to-watch for six platforms, a better Try a review. 6) PARKED OPTION
+                   (owner, 2026-11-03): a sentence-embedding model for similar-word aspect matching, to be
+                   used if it proves the most effective. Order: clause splitting + typo tolerance, then curated
+                   synonyms, then embeddings; measure each on a FRESH random clause sample (not tuned-on A or
+                   B). Costs: a new dependency and ~100 MB model; hours of CPU to re-profile 1.5M reviews
+                   (check for a build-time GPU). It is not RAG: no generation is needed.
 Watch out for:     NEVER pass --ratings-only-fallback-votes with --uncapped (BuildConfig refuses it). Hindi, Telugu
                    and the Japanese series parts are smaller than v7 on purpose (no 50-vote fallback). A teammate
                    will build a full dataset later; do not scrape for it. A raw ebD review count includes
