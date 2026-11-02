@@ -147,10 +147,13 @@ What we did:       Owner dropped the ratio: 200+ votes, five languages, no cap. 
                    (manifest 8d17da05a041): 106,069 titles = 11,930 with receipts + 94,139 ratings-only; 2025-26
                    English now present. Measured floor-50 reach (D-033): only ~650 more films are gettable, not
                    3,300; added --widest (not yet built). 625 tests pass; every planted bug caught.
-What's left:       1) v9 build with --widest (new gather, 40-60 min, needs ~5-6 GB free RAM; 4.4 GB was free).
-                   2) Floor 20 AFTER floor 50: needs a sparse similarity (dense item_sim is 569 MB at 11,930
-                   titles and grows with the square). 3) /shelves is 0.45-0.62 s on v8 (0.16-0.23 s on v7):
-                   cache all_movies and catalogue_facets. 4) Push + PR when the owner says; v8 is not on the demo.
+What's left:       1) v9 (--widest) was built and added only 88 titles with receipts, not ~650 (D-034): do not
+                   re-run it; the v8 cache already has 17,201 films with 20+ reviews against 10,386 at 50+.
+                   2) Floor 20 from the v8 cache: needs a sparse similarity (dense item_sim is 569 MB at 11,930
+                   titles and grows with the square). 3) /shelves is 0.45-0.62 s on v8 (0.16-0.23 s on v7); the
+                   catalogue cache change is committed but its wall-clock gain is unmeasured. 4) Push + PR when
+                   the owner says; v8 is not on the demo. 5) Owner's new asks (2026-11-03): cast per title and
+                   actor search, where-to-watch for six platforms, a better Try a review.
 Watch out for:     NEVER pass --ratings-only-fallback-votes with --uncapped (BuildConfig refuses it). Hindi, Telugu
                    and the Japanese series parts are smaller than v7 on purpose (no 50-vote fallback). A teammate
                    will build a full dataset later; do not scrape for it. A raw ebD review count includes

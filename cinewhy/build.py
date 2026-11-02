@@ -748,7 +748,8 @@ def main() -> None:
     parser.add_argument(
         "--widest",
         action="store_true",
-        help="wider again than --wide (spine.widest_quota); needs a new gather",
+        help="wider again than --wide (spine.widest_quota); needs a new gather. Adds few titles "
+        "with receipts and makes more titles ambiguous (docs/DECISIONS.md D-034)",
     )
     parser.add_argument(
         "--ratings-only-min-votes",

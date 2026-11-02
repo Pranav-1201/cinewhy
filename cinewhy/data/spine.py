@@ -132,6 +132,11 @@ def widest_quota(language: str, year: int) -> int:
     takes 713; beyond that the gain flattens while memory climbs (ebD holds 225,866 films with
     reviews). One wider gather also serves a later, lower review floor, since the gather cache keeps
     the reviews of every selected film whatever the floor.
+
+    **Measured result (D-034): not worth running.** The real build added only 88 titles with
+    receipts (114 gained, 25 lost to more title collisions), not the 650 predicted here; the films
+    it adds are obscure (median 4 TMDB votes). The numbers above describe the prediction, not the
+    outcome.
     """
     if language == "en":
         return 1500 if year >= 2000 else 600

@@ -697,6 +697,28 @@ the later floor-20 build. **Expected gain** about 650 films with receipts (837 a
 not the 3,300 first quoted: that figure was the raw ebD count, which the filter does not honour. **Not yet run:**
 free memory was 4.4 GB, below what a gather needs.
 
+## D-034: the wider candidate list added 88 titles, not 650; D-033's expected gain is withdrawn (2026-11-03, Sonnet 5.5)
+
+**Result** (`artifacts/v9`, manifest `d6cbf7291838`, 57 minutes; `--widest --uncapped`): 134,073 candidate films
+(v8: 91,019), 12,018 titles with receipts (v8: 11,930, **+88**: English 11,187 against 11,105, Japanese movies 147
+against 140, Hindi 426 against 427), 94,057 ratings-only, 106,075 in all. Hit-rate at 20 is 18.1% for both
+collaborative filtering and the hybrid (validation 0.183; the tuned fit weight moved from 0.45 to 0.3, and 10,077 films
+now have MovieLens ratings, so this is not like-for-like with v7). **Why so little** (`cache_diag`, the v8 and v9
+gather caches): the 43,054 added candidates are obscure (median 4 TMDB votes, maximum 73); 33.1% have any review, 15.0%
+five or more, 2.1% (909) twenty or more and **0.3% (114) fifty or more** (107 English, 7 Japanese), against 42.2%,
+30.4%, 18.9% and 11.4% for the 91,019 candidates the old list already had. **Widening also costs links:** title
+collisions rose from 471 to 847, and a popular film that shares its title and year with an obscure candidate is refused
+as ambiguous, so 25 films the old list had fell below 50 reviews (Taras Bulba 1962, The Hunchback of Notre Dame 1996,
+Anastasia 1997 among them; no film rose). 114 gained less 25 lost is 89 against the observed +88; the one-film
+difference is not explained. **What D-033 got wrong.** It predicted about 650 from 837 films outside the old quota at
+an 87% survival rate. That rate came from films the old list already held; at most 114 of the 837 (about 14%) reached
+50 usable reviews. Why obscure films lose more of their reviews to the filters is untested. **Consequences.** (1)
+`--widest` is not worth running and stays an option with that warning. (2) v9 is not recommended: it swaps 25 well-known films
+that lost their reviews for 114 obscure ones, for a net +88, and costs a 57-minute build; v8 stays the build to
+evaluate unless the owner prefers the extra titles (the owner has not decided). (3) D-033's claim that the wider gather also serves floor 20 is withdrawn, and is
+not needed: **the v8 cache already holds 17,201 films with 20 or more merged reviews against 10,386 at 50 or more**
+(+6,815, about +66%), so floor 20 can be built from it once the similarity matrix is made sparse.
+
 ## D-029: a 50-vote fallback fills the short languages; the build is v5 (2026-11-01, Sonnet 5.5)
 
 At the 200-vote floor Hindi, Telugu and Japanese were 3,270 films short of the owner's targets (roadmap
