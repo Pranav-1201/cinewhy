@@ -7,6 +7,7 @@ import { $, clear, h, icon, reducedMotion } from "./dom.js";
 import { clamp, kindLabel, languageName, runtimeLabel } from "./format.js";
 import { requestYears } from "./years.js";
 import { actions } from "./film.js";
+import * as picks from "./picks.js";
 import { starring } from "./people.js";
 import { excludedIds, profileForApi, state } from "./state.js";
 import { poster, tile } from "./tile.js";
@@ -15,6 +16,16 @@ import { hueOf } from "./format.js";
 
 let sequence = 0;
 const scrollMemory = new Map();
+
+// The top pick and "Show me another" (the walk itself is picks.js, tested in Node).
+const MORE_PICKS = 16;
+const queue = picks.makeQueue();
+const byId = new Map(); // id -> the item the server sent, for every title in the queue
+let picksSpec = null; // the picks shelf's heading, to redraw its row as the pick changes
+let lastCtx = null;
+let spotlightSeq = 0;
+let exhausted = false; // the server has no more picks for the current filters
+let busy = false;
 
 /** The filters every shelf shares, from what the visitor has chosen. */
 function shared(facets) {
@@ -62,11 +73,13 @@ function filledRail(spec, items, open) {
 }
 
 async function spotlight(item, open) {
+  const mine = ++spotlightSeq;
   const root = $("#spotlight");
   if (!item) { clear(root); return; }
   const m = item.movie;
   let d = null;
   try { d = await api(`/movie/${encodeURIComponent(m.movie_id)}`); } catch (_) { /* the pick still shows without details */ }
+  if (mine !== spotlightSeq) return; // another pick was asked for while this one loaded
   const chips = [m.year ? String(m.year) : "", kindLabel(m.kind), languageName(item.language), runtimeLabel(d?.runtime_minutes), ...(m.genres || []).slice(0, 2)].filter(Boolean);
   // The top pick carries what the film page carries: who is in it, the answers (like, watched, ...),
   // the links, and where to watch. The reasons live behind the yellow button, not on the pick, so
@@ -74,7 +87,12 @@ async function spotlight(item, open) {
   const why = h("button", { class: "btn primary", type: "button", onclick: () => open(m.movie_id, { toReceipt: true }), text: "Why we chose this" });
   const row = d ? actions(m, d) : h("div", { class: "film-actions" }); // no details: the pick still offers its reasons
   row.classList.add("actions");
-  row.prepend(why);
+  // "Show me another" is for the visitor who has seen this pick, even marked it Want to watch, and
+  // still wants to look at the choices: it steps to the next best and never touches their lists.
+  const finished = exhausted && !picks.hasNext(queue);
+  const another = h("button", { class: "btn", type: "button", text: "Show me another", disabled: finished, onclick: () => showAnother(open) });
+  const back = picks.canGoBack(queue) ? h("button", { class: "btn", type: "button", text: "Previous pick", onclick: () => showPrevious(open) }) : null;
+  row.prepend(...[why, another, back].filter(Boolean));
   const section = h("div", { class: "spotlight", vars: { "--tint": hueOf(m.movie_id) } },
     poster(m, { language: item.language, isNew: item.is_new }),
     h("div", { class: "body" },
@@ -84,13 +102,58 @@ async function spotlight(item, open) {
       d?.overview ? h("p", { class: "overview", text: clamp(d.overview, 300) }) : null,
       starring(d?.cast),
       row,
+      finished ? h("p", { class: "pick-note", text: "That is every pick for these filters. Widen the era, language or genre to see more." }) : null,
       whereToWatch(d?.where_to_watch)));
   root.replaceChildren(section);
+}
+
+/** Draw the title the queue is on, and the row of what comes after it (so no title is on screen twice). */
+function showPick(open) {
+  spotlight(byId.get(picks.currentId(queue)), open);
+  const root = $("#rails");
+  const old = root.querySelector('[data-rail="picks"]');
+  const items = picks.upcoming(queue).map((id) => byId.get(id)).filter(Boolean);
+  if (!items.length || !picksSpec) { old?.remove(); return; }
+  const fresh = filledRail(picksSpec, items, open);
+  if (old) old.replaceWith(fresh); else root.prepend(fresh);
+}
+
+/** Move to the next best pick, asking the server for more when the ranking we hold runs out. */
+async function showAnother(open) {
+  if (busy) return;
+  if (picks.next(queue) === "more") {
+    busy = true;
+    const stamp = sequence;
+    try {
+      // What the server must leave out: what the visitor has watched, plus every title already in the
+      // queue or shown. The queue comes first, so if a huge watched list ever hit the server's cap it
+      // is the tail of that list that is dropped, never a title the visitor has just passed.
+      const ids = [...new Set([...queue.ids, ...queue.seen, ...excludedIds()])].slice(0, 3000);
+      const body = { ...shared(lastCtx.facets), limit: MORE_PICKS, receipts_only: true, exclude_movie_ids: ids };
+      const more = (await post("/discover", body)).items;
+      if (stamp !== sequence) return; // the page was redrawn meanwhile; its own list is the truth
+      for (const item of more) byId.set(item.movie.movie_id, item);
+      if (picks.append(queue, more.map((item) => item.movie.movie_id))) picks.next(queue);
+      else exhausted = true;
+    } catch (err) {
+      const status = $("#status");
+      status.hidden = false;
+      status.textContent = `Could not load more picks. ${err.message}`;
+    } finally {
+      busy = false;
+    }
+  }
+  showPick(open);
+}
+
+function showPrevious(open) {
+  if (picks.previous(queue)) showPick(open);
 }
 
 /** Fetch every shelf and draw it. Safe to call again at any time. */
 export async function renderAll(ctx) {
   const mine = ++sequence;
+  lastCtx = ctx;
   const { facets, open } = ctx;
   const root = $("#rails");
   const status = $("#status");
@@ -110,14 +173,21 @@ export async function renderAll(ctx) {
     const spec = { id: shelf.id, title: shelf.title, sub: shelf.subtitle };
     if (shelf.id === "picks") {
       any = shelf.items.length > 0;
-      spotlight(shelf.items[0], open);
-      if (shelf.items.length > 1) rails.push(filledRail(spec, shelf.items.slice(1), open));
+      // The queue keeps the title on show if it is still ranked (so liking it does not jerk the page),
+      // and otherwise moves on to the first one the visitor has not been shown.
+      picksSpec = spec;
+      byId.clear();
+      for (const item of shelf.items) byId.set(item.movie.movie_id, item);
+      picks.load(queue, shelf.items.map((item) => item.movie.movie_id));
+      exhausted = false;
     } else {
       rails.push(filledRail(spec, shelf.items, open));
     }
   }
   root.replaceChildren(...rails);
+  if (any) showPick(open);
   if (!any) {
+    picks.load(queue, []);
     clear($("#spotlight"));
     status.hidden = false;
     status.textContent = failure

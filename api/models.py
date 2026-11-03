@@ -128,6 +128,8 @@ class DiscoverRequest(BaseModel):
     to_year: int | None = Field(default=None, ge=1880, le=2100)
     # Only the titles this person (an id from `/people`) is billed in, ranked like any other list.
     person_id: int | None = Field(default=None, ge=1, le=2_000_000_000)
+    # Keep out the titles we hold only ratings for (the top pick promises the sentences behind it).
+    receipts_only: bool = False
     # Watched films travel here. The browser caps each of its lists at 3,000 (web/js/profile.js
     # LIST_CAP); this must not be lower, or a long watched list would turn every shelf into a 422.
     exclude_movie_ids: tuple[str, ...] = Field(default=(), max_length=3000)

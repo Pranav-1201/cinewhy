@@ -272,6 +272,7 @@ button { font: inherit; color: inherit; }
 .spotlight .actions { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px; }
 /* The top pick shows the same cast line and where-to-watch block as the film page, at a readable width. */
 .spotlight .starring { max-width: 62ch; }
+.spotlight .pick-note { margin: -6px 0 16px; color: var(--text-2); max-width: 62ch; }
 .spotlight .watch { max-width: 560px; margin-bottom: 0; }
 @media (max-width: 720px) {
   .spotlight { grid-template-columns: 112px minmax(0, 1fr); border-radius: 22px; }

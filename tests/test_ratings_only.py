@@ -23,6 +23,7 @@ from cinewhy.recsys.catalogue import (
 from cinewhy.recsys.discover import (
     DiscoverItem,
     catalogue_facets,
+    discover,
     genre_affinity,
     ratings_only_popularity,
 )
@@ -150,6 +151,25 @@ def test_a_cold_start_pick_is_never_a_ratings_only_film_however_popular() -> Non
     assert result.cold_start is True
     picks = _items(result, "picks")
     assert len(picks) == 16 and not any(i.ratings_only for i in picks)
+
+
+def test_discover_can_keep_ratings_only_films_out_for_the_top_pick_to_walk_on_from() -> None:
+    # Eight Japanese films at the top of popularity: without the flag they lead the list.
+    world = _with_extras(*_japanese(8, rating=9.5, votes=900_000))
+    everything = discover(world, TasteProfile(), limit=20, manifest="m")
+    assert any(i.ratings_only for i in everything.items)  # the default is unchanged
+    receipts = discover(world, TasteProfile(), limit=20, receipts_only=True, manifest="m")
+    assert len(receipts.items) == 20 and not any(i.ratings_only for i in receipts.items)
+    # Same ranking among the films that remain.
+    kept = [i.movie.movie_id for i in everything.items if not i.ratings_only]
+    assert [i.movie.movie_id for i in receipts.items][: len(kept)] == kept
+
+
+def test_the_discover_request_accepts_receipts_only_and_defaults_it_to_false() -> None:
+    from api.models import DiscoverRequest
+
+    assert DiscoverRequest().receipts_only is False
+    assert DiscoverRequest(receipts_only=True).receipts_only is True
 
 
 def test_a_warm_shelf_lists_ratings_only_films_of_the_liked_genre_first() -> None:
