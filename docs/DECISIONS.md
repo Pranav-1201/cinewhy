@@ -778,6 +778,23 @@ itself, was fixed. **Not changed.** The leading `\s*` in `_JOIN`, which the revi
 now keeps its old, single-clause behaviour. v12 and v13 were built BEFORE this change; a rebuild would differ in about
 0.02% of sentences, which is immaterial to the receipts.
 
+## D-042: "Show me another" walks down the picks without touching the visitor's lists (2026-11-03, Sonnet 5.5)
+
+**Owner's brief.** A visitor who has been recommended a title, even marked it Want to watch, and still wants to look at
+the choices gets a button that recommends the next best. **Design.** The picks shelf already ranks 16 titles, so the button
+walks down that ranking (`web/js/picks.js`, pure, tested in Node): a queue of ids, the position, and every id shown, so
+nothing comes back. A "Previous pick" button steps back. When the 16 run out the page asks `/discover` for 16 more with
+`receipts_only: true` (a new optional request field, default false, so every existing call is unchanged; the top pick
+promises the sentences behind it, so ratings-only titles are refused up front, as the picks shelf does) and with every
+queue, shown and watched id excluded; when the server has none the button is disabled with a note saying so. The row under
+the pick lists only what comes AFTER the title on show, so no title is on screen twice. **Behaviour pinned by tests.**
+Marking the pick Want to watch keeps it on the list, the page does not jerk to another title when the visitor answers (a
+redraw keeps the title on show if it is still ranked), and pressing the button never changes a list. Liking the pick moves
+on to the next best, because a liked film leaves the picks (as it did before this change). **Limit.** If a visitor's
+watched list plus the titles shown ever exceeded the server's cap of 3,000 excluded ids, the tail of the watched list would
+be dropped from the request; the queue's own ids go first so a title just passed is never what is lost. Eight planted bugs
+were caught, after two that needed a test of the request itself.
+
 ## D-041: the top pick carries the film page's essentials, and where-to-watch defaults to India (2026-11-03, Sonnet 5.5)
 
 **Owner's brief (2026-11-03).** (1) On the top recommended title show what the film page shows: the Starring line, the
