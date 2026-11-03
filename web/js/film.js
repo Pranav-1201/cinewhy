@@ -7,6 +7,7 @@ import { starring } from "./people.js";
 import { linesFromAspects, receipt } from "./receipt.js";
 import { isWanted, isWatched, opinionOf, setOpinion, setWant, setWatched } from "./state.js";
 import { poster } from "./tile.js";
+import { whereToWatch } from "./watch.js";
 
 /** The yes/no answers the visitor can give about a film, each with its two wordings. */
 function answers(movie) {
@@ -61,6 +62,7 @@ function body(d) {
     d.overview ? h("p", { class: "film-overview", text: d.overview }) : null,
     starring(d.cast),
     actions(m, d),
+    whereToWatch(d.where_to_watch),
     d.ratings_only
       ? h("p", { class: "film-overview ratings-only-note", text: ratingsOnlyNote(m.kind) })
       : d.aspects.length

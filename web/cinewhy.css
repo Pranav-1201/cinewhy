@@ -125,6 +125,16 @@ button { font: inherit; color: inherit; }
 .starring-label { color: var(--muted); }
 .link-btn { padding: 0; background: none; border: 0; font: inherit; color: var(--accent-text); cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
 .link-btn:hover, .link-btn:focus-visible { text-decoration-thickness: 2px; }
+/* Where to watch: a country picker beside the heading, then platform and ways as a two-column list. */
+.watch { margin: 0 0 16px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
+.watch h3 { margin: 0; font-size: 1rem; }
+.watch-head { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.watch select { max-width: 100%; padding: 6px 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface-2); color: var(--text); font: inherit; }
+.watch-list { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; margin: 0; }
+.watch-list dt { font-weight: 600; }
+.watch-list dd { margin: 0; color: var(--text-2); }
+.watch-note { margin: 10px 0 0; color: var(--muted); font-size: 0.78rem; line-height: 1.45; }
+.watch-note a { color: var(--accent-text); }
 .person-grid { display: flex; flex-wrap: wrap; gap: 18px; margin: 16px 0 0; padding: 0; list-style: none; }
 .bar-actions { display: flex; gap: 8px; align-items: center; flex: none; }
 .search { min-width: 200px; }
