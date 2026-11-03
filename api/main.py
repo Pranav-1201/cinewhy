@@ -99,7 +99,24 @@ log = logging.getLogger("cinewhy.api")
 # watched ids (about 13 bytes each, so about 120 KB at the extreme); this leaves room for that.
 _MAX_BODY_BYTES = 160 * 1024
 _RATE_WINDOW_SECONDS = 60.0
-_RATE_LIMIT = 120  # POSTs per client per window; POST is where the real work happens
+
+
+def limit_from_env(name: str, default: int) -> int:
+    """A request limit from the environment, or `default` when it is unset, not a number or below 1.
+
+    Behind a tunnel every friend arrives from one address and shares one budget, so a host with
+    several people can raise it (`CINEWHY_RATE_LIMIT=400`) without touching the code.
+    """
+    try:
+        value = int(os.environ.get(name, ""))
+    except ValueError:
+        return default
+    return value if value >= 1 else default
+
+
+_RATE_LIMIT = limit_from_env(
+    "CINEWHY_RATE_LIMIT", 120
+)  # POSTs per client per window; POST is where the real work happens
 _SWIPE_LIMIT = 240  # swipes per room member per window (about four a second, faster than a hand)
 _SEARCH_LIMIT_MAX = 50
 _PEOPLE_LIMIT_MAX = 20
@@ -448,7 +465,7 @@ def room_view(room: Room, you: str) -> RoomView:
                 watched_count=len(e.member.watched),
                 want_count=len(e.member.want),
                 quiz_done=e.quiz is not None,
-                swipe_count=len(e.swipes) + (1 if e.top else 0),
+                swipe_count=e.answers,
                 has_top=e.top is not None,
             )
             for e in room.members.values()
@@ -735,9 +752,7 @@ def create_app(artifacts: Path | None = None, *, rate_limit: int = _RATE_LIMIT) 
                 entry = rooms.swipe(
                     code, room_token, request.movie_id, request.action, replace=request.replace
                 )
-                return SwipeAck(
-                    swipe_count=len(entry.swipes) + (1 if entry.top else 0), top=entry.top
-                )
+                return SwipeAck(swipe_count=entry.answers, top=entry.top)
         except RoomError as error:
             raise room_failure(error) from None
 

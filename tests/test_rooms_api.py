@@ -211,7 +211,8 @@ def test_the_top_pick_asks_before_it_is_replaced(client: TestClient) -> None:
     refused = _act(client, code, ann, "swipe", movie_id="cw-6", action="top")
     assert refused.status_code == 409 and refused.json()["detail"] == "top_exists"
     replaced = _act(client, code, ann, "swipe", movie_id="cw-6", action="top", replace=True)
-    assert replaced.json()["top"] == "cw-6"
+    # Two titles were answered, so the count is 2 even though only one is the top pick now.
+    assert replaced.json() == {"swipe_count": 2, "top": "cw-6"}
 
 
 def test_a_swipe_on_an_unknown_title_or_with_a_bad_action_is_refused(client: TestClient) -> None:

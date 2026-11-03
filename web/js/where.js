@@ -37,6 +37,16 @@ export function offersIn(where, country) {
   return offers;
 }
 
+/** One sentence for a small space (a swipe card): where it can be watched in one country. Empty when
+    the build has no availability data, and a plain "not on our six" when nothing offers it there. */
+export function watchSummary(where, country, countryLabel = country) {
+  if (!where) return "";
+  const offers = offersIn(where, country);
+  if (!offers.length) return `Not on our six streaming services in ${countryLabel}.`;
+  const named = offers.map((o) => `${o.platform} (${o.ways.join(", ")})`).join("; ");
+  return `Where to watch in ${countryLabel}: ${named}.`;
+}
+
 /** The countries the picker lists: every country the title is offered in, plus the visitor's own
     country even when it is not among them. The page always opens on the visitor's country (India
     unless they chose another), so it must be in the list; for a title not offered there the list

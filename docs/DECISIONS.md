@@ -761,6 +761,49 @@ are NOT known; the evidence is the examples read, and the gold files hold pre-sp
 change. **Consequence.** Receipts change at the next rebuild, which must re-profile every title (hours); nothing on the
 demo changes until then. Typo tolerance ("supeerb") and a semantic matcher (embeddings, parked) are not done.
 
+## D-046: Watch together becomes a mood quiz, swipe cards and a results screen that refreshes only on request (2026-11-04, Sonnet 5.5)
+
+**Owner's brief.** Instead of five identical titles, each person gets a long deck of cards from the pool the group shares, with
+all the title's facts, and answers by swiping: right = want to watch, left = not for me, up = already watched, down = my ONE top
+pick (naming a different one asks for confirmation; the replaced pick keeps a bonus above a plain right swipe but far below the
+new one). The more people swipe, the narrower the offer. A results screen, open to anyone at any time, shows the top titles then
+the next-closest, who wanted or passed on each, and changes only when Refresh is pressed. Before swiping, each person answers a
+mood quiz (films or series, language, genre; not prefilled from the profile, because the profile already carries age, region and
+the like), and a choice made by few people lowers a title without removing it. Everything answered stays in the room and never
+touches a personal library; people are told all of this, and the four swipes, before they begin. **Engine** (`group.py`):
+`Quiz` per member; `quiz_penalties` takes, per category, the share of the people who answered it who chose what the title is
+(for genres its best-liked genre) and subtracts `quiz_penalty` (0.20) x (1 - share): comedy picked by one of three costs two
+thirds of 0.20, a title nobody chose costs all of it, a category nobody answered costs nothing. Right swipes enter the member's
+similarity seeds and want list but NOT "seen" (a real like would be, and the majority rule would then drop the title); left swipes
+count as dislikes; up swipes as watched. The top pick adds `top_bonus` 0.60 (four times `want_bonus` 0.15) and a replaced one
+`former_top_bonus` 0.25, each divided by the group size like the other bonuses. **Store and API** (`rooms.py`, `main.py`): per
+member quiz, swipes, top pick and former top picks, bounded at 5,000 answers; `POST /rooms/{code}/quiz`, `/swipe`, `/deck`,
+`/results`. A second top pick is refused with 409 `top_exists` unless `replace` is true. `/deck` returns the group's best titles
+the member has not answered and is not holding, each card carrying overview, runtime, ratings, cast and where to watch; `/results`
+returns 5 top and 15 close with each member's stand. A member alone in a room is paired with a copy of themself (the engine needs
+two), so their deck is their own taste until a friend joins. `RoomView` shows each member's progress (quiz done, answers, whether
+a top pick is set) and an `activity` counter, never the swipes themselves; those appear on the results screen. **Rate limit.**
+Behind the tunnel every friend arrives from one address, so a shared per-address POST limit would stop a few people swiping;
+swipes skip it and have their own limit per member (240 a minute). **Page.** `swipecore.js` (pure, Node-tested: directions,
+thresholds, the card queue, the rules text, result wording), `cards.js` (one card: mouse and touch drags, flings, a guard that keeps
+a card in place while a top-pick replacement is confirmed), `together.js` (rules once per room, quiz, cards, results). The deck
+refills 20 at a time when six remain; arrow keys and four buttons do the same as the drags. The old `/rooms/{code}/recommend` route,
+its tests and the `canAsk`, `isStale` and `standing` helpers are removed, and joining no longer sends the visitor's own language and
+kind filters; these removals are deliberate. The card shows where to watch as one line for the visitor's own country (the full
+panel was too tall and pushed the overview off the card). **Found and fixed on the way.** Replacing a top pick left the
+"answered" count unchanged (the replaced title was in neither the swipes nor the top slot), now counted by one property; and the
+front-end guard against flying a card before confirming was not pinned until a planted bug showed the server's refusal hid it.
+**Checks.** 12 engine tests, 17 store tests, 12 new or rewritten route tests, 13 swipe Node tests, 14 two-browser tests (rules
+before cards, quiz, buttons, keys, mouse drags, confirmation, results that stay until Refresh, and the personal profile unchanged
+after every answer); planted bugs caught: quiz not applied, a top pick counted as a plain want, a replaced top pick ignored,
+right swipes unused, left swipes not dislikes, kind weighting ignored, replace without asking, former pick forgotten, top slot
+not freed, passes ignored, swipes sharing the address limit, no swipe limit, held cards dealt again, a ghost name for a lone
+member, rules skipped, results refreshing by themselves, a tiny drag counting, and the card guard removed. On the real v13
+catalogue a deck or results call took about 0.25 s and a swipe 5 ms; the screens fit a 390 px phone. **Limits.** The bonus and
+penalty sizes are design choices, not measured; nothing shows that swipes predict what a group enjoys, and the group evaluation
+(D-043) still does not exercise these rules. The cap stays at five and D-043's caution about larger groups stands. Rooms are still
+in memory: a server restart ends them (the next to-do).
+
 ## D-045: rows stay put until the visitor asks; "Show more" adds titles to one row; the film page says what the rating is (2026-11-04, Sonnet 5.5)
 
 **Owner's brief.** Liking or marking a title redrew the whole page 1.2 seconds later, so a visitor browsing a row lost the

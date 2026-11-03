@@ -88,7 +88,15 @@ def rich_server_url(tmp_path_factory: pytest.TempPathFactory) -> Iterator[str]:
 def _serve(artifacts: Path) -> Iterator[str]:
     """Run uvicorn on `artifacts` in its own process, as `start.bat` does; stop it afterwards."""
     port = _free_port()
-    env = {**os.environ, "CINEWHY_ARTIFACTS": str(artifacts), "PYTHONUTF8": "1"}
+    # Every browser test reaches this one server from one address, so they share one request
+    # budget; the real limit (120 a minute) would turn a busy suite into 429s that have nothing to
+    # do with the test. The limit itself is pinned in tests/test_api.py.
+    env = {
+        **os.environ,
+        "CINEWHY_ARTIFACTS": str(artifacts),
+        "PYTHONUTF8": "1",
+        "CINEWHY_RATE_LIMIT": "5000",
+    }
     process = subprocess.Popen(
         [sys.executable, "-m", "uvicorn", "api.main:app", "--port", str(port)],
         cwd=_ROOT,

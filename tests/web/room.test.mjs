@@ -5,11 +5,9 @@ import { test } from "node:test";
 
 import { defaultProfile } from "../../web/js/profile.js";
 import {
-  canAsk, codeFromHash, explain, headcount, inviteLink, isCode, isStale, joinBody,
-  normaliseCode, parseSession, serialiseSession, standing,
+  codeFromHash, explain, headcount, inviteLink, isCode, joinBody, normaliseCode, parseSession,
+  serialiseSession,
 } from "../../web/js/room.js";
-
-const fit = (extra = {}) => ({ name: "Ann", percentile: 0.8, saw_it: false, disliked: false, wants: false, ...extra });
 
 test("a code typed with spaces, dashes or lower case is the same code", () => {
   assert.equal(normaliseCode(" ab2-c d3 "), "AB2CD3");
@@ -48,7 +46,10 @@ test("joining sends the whole library and the agreement", () => {
   assert.deepEqual(body.profile, { aspect_weights: { pacing: 0.5 }, liked_movie_ids: ["cw-1"], disliked_movie_ids: ["cw-2"] });
   assert.deepEqual(body.watched_movie_ids, ["cw-1", "cw-3"]);
   assert.deepEqual(body.want_movie_ids, ["cw-4"]);
-  assert.deepEqual([body.languages, body.kinds], [["en"], ["film"]]);
+  // Deliberate change (D-046): tonight's mood comes from the room quiz, so the visitor's own
+  // language and kind filters are not sent.
+  assert.equal("languages" in body, false);
+  assert.equal("kinds" in body, false);
 });
 
 test("a long name is cut to what the server keeps", () => {
@@ -71,28 +72,8 @@ test("a saved session round-trips, and anything else is ignored", () => {
   }
 });
 
-test("the head count and when a list can be asked for", () => {
+test("the head count says how many people are in the room", () => {
   const room = (n) => ({ max_members: 5, members: Array.from({ length: n }, () => ({})) });
   assert.equal(headcount(room(1)), "1 of 5 person is here");
   assert.equal(headcount(room(3)), "3 of 5 people are here");
-  assert.equal(canAsk(room(1)), false);
-  assert.equal(canAsk(room(2)), true);
-});
-
-test("a list is out of date once the room's version moves on", () => {
-  assert.equal(isStale(null, { version: 3 }), false); // no list yet
-  assert.equal(isStale(3, { version: 3 }), false);
-  assert.equal(isStale(2, { version: 3 }), true);
-});
-
-test("what a member has said comes before how well a title fits", () => {
-  assert.deepEqual(standing(fit({ disliked: true, saw_it: true, wants: true })), { tone: "warn", text: "did not like it" });
-  assert.deepEqual(standing(fit({ saw_it: true, wants: true })), { tone: "warn", text: "has seen it" });
-  assert.deepEqual(standing(fit({ wants: true })), { tone: "good", text: "wants to watch it" });
-  assert.deepEqual(standing(fit({ percentile: 0.876 })), { tone: "plain", text: "88% fit" });
-});
-
-test("a plain fit names the liked title it is closest to, when there is one", () => {
-  assert.equal(standing(fit({ because: "Heat" })).text, "80% fit, like Heat");
-  assert.equal(standing(fit({ because: null })).text, "80% fit");
 });

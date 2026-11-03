@@ -60,6 +60,11 @@ class RoomMember:
     top: str | None = None
     former_tops: list[str] = field(default_factory=list)
 
+    @property
+    def answers(self) -> int:
+        """Titles this member has answered: swipes, the top pick, and the top picks it replaced."""
+        return len(self.swipes) + len(self.former_tops) + (1 if self.top else 0)
+
 
 @dataclass
 class Room:

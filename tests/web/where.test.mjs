@@ -10,6 +10,7 @@ import {
   notInCountry,
   offersIn,
   watchFooter,
+  watchSummary,
   withCountry,
 } from "../../web/js/where.js";
 
@@ -32,6 +33,14 @@ test("countriesOf lists every country on any platform once, sorted", () => {
   assert.deepEqual(countriesOf(WHERE), ["GB", "IN", "US"]);
   assert.deepEqual(countriesOf({ platforms: [] }), []);
   assert.deepEqual(countriesOf(null), []);
+});
+
+test("watchSummary says in one sentence where a title can be watched in the visitor's country", () => {
+  assert.equal(watchSummary(WHERE, "US", "the United States"), "Where to watch in the United States: Netflix (Stream, Rent).");
+  assert.equal(watchSummary(WHERE, "IN", "India"), "Where to watch in India: HBO Max (Stream).");
+  assert.equal(watchSummary(WHERE, "FR", "France"), "Not on our six streaming services in France.");
+  assert.equal(watchSummary(null, "IN", "India"), ""); // a build with no availability data says nothing
+  assert.equal(watchSummary(WHERE, "GB"), "Where to watch in GB: Netflix (Stream)."); // label defaults to the code
 });
 
 test("offersIn gives one country's platforms in the server's order, with the ways in plain words", () => {
