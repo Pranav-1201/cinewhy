@@ -599,6 +599,7 @@ def discover(
     to_year: int | None = None,
     exclude: Sequence[str] = (),
     person_id: int | None = None,
+    receipts_only: bool = False,
     manifest: str,
 ) -> DiscoverResult:
     """Rank films for a visitor, with optional era, language and genre filters.
@@ -623,6 +624,9 @@ def discover(
         exclude: Film ids never to return.
         person_id: Only titles this person is billed in, ranked like any other list (an unknown
             person, or a build with no cast file, gives an empty list).
+        receipts_only: Keep out the titles we hold only ratings for, as the "picks" shelf does,
+            for a list whose promise is the sentences behind each pick (the top pick and the
+            "Show me another" button that walks on from it).
         manifest: Hash of the artifact set, echoed so a result can be traced to its build.
 
     Returns:
@@ -640,6 +644,7 @@ def discover(
         from_year=from_year,
         to_year=to_year,
         exclude=set(exclude) | set(profile.liked_movie_ids) | set(profile.disliked_movie_ids),
+        include_ratings_only=not receipts_only,
         only=only,
     )
     return DiscoverResult(items=items, cold_start=scored.cold, manifest=manifest)
