@@ -114,3 +114,49 @@ def test_memory_follows_the_rated_films_not_the_catalogue_size() -> None:
     output = n_items * n_items * 4  # the float32 result itself
     assert sim.shape == (n_items, n_items)
     assert peak < 2.5 * output, f"peak {peak / 1e6:.0f} MB for a {output / 1e6:.0f} MB output"
+
+
+def _whole_matrix_reference(
+    users: np.ndarray, items: np.ndarray, stars: np.ndarray, n_items: int, shrink: float
+) -> np.ndarray:
+    """The similarity computed the plain way, all at once.
+
+    This is what the builder did before it worked in blocks, kept as the definition the blocked
+    version must reproduce.
+    """
+    keep = np.bincount(users)[users] >= 5
+    users, items, stars = users[keep], items[keep], stars[keep]
+    centred = stars - (np.bincount(users, weights=stars) / np.maximum(np.bincount(users), 1))[users]
+    r = np.zeros((users.max() + 1, n_items))
+    b = np.zeros_like(r)
+    np.add.at(r, (users, items), centred)
+    np.add.at(b, (users, items), 1.0)
+    dot, co = r.T @ r, b.T @ b
+    norms = np.sqrt(np.diag(dot))
+    inverse = np.divide(1.0, norms, out=np.zeros_like(norms), where=norms > 0)
+    sim = dot * inverse[:, None] * inverse[None, :] * (co / (co + shrink))
+    np.fill_diagonal(sim, 0.0)
+    return sim.astype(np.float32)
+
+
+@pytest.mark.parametrize("block_rows", [1, 7, 1024])
+def test_the_block_size_changes_the_memory_peak_and_never_the_result(block_rows: int) -> None:
+    users, items, stars = _ratings(n_rated=40, n_users=120, per_user=9)
+    blocked = build_item_similarity(users, items, stars, 40, shrink=5.0, block_rows=block_rows)
+    expected = _whole_matrix_reference(users, items, stars, 40, shrink=5.0)
+    np.testing.assert_allclose(blocked, expected, rtol=1e-5, atol=1e-7)
+    assert not np.diag(blocked).any()  # the zero diagonal holds across block edges
+    np.testing.assert_array_equal(blocked, blocked.T)  # and so does symmetry
+
+
+def test_blocks_hold_the_peak_near_the_size_of_the_result() -> None:
+    n_items = 800  # every film rated, so the old whole-matrix route needed several n x n float64
+    users, items, stars = _ratings(n_rated=n_items, n_users=400, per_user=20)
+    tracemalloc.start()
+    try:
+        build_item_similarity(users, items, stars, n_items, shrink=3.0, block_rows=32)
+        _, peak = tracemalloc.get_traced_memory()
+    finally:
+        tracemalloc.stop()
+    output = n_items * n_items * 4
+    assert peak < 2.5 * output, f"peak {peak / 1e6:.1f} MB for a {output / 1e6:.1f} MB output"

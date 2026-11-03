@@ -761,6 +761,22 @@ are NOT known; the evidence is the examples read, and the gold files hold pre-sp
 change. **Consequence.** Receipts change at the next rebuild, which must re-profile every title (hours); nothing on the
 demo changes until then. Typo tolerance ("supeerb") and a semantic matcher (embeddings, parked) are not done.
 
+## D-037: spelling repair for the polarity model was measured and is NOT shipped (2026-11-03, Sonnet 5.5)
+
+**Idea.** "Try a review" scored "supeerb" at +0.48 against +0.99 for "superb", because a misspelt word is not in the
+polarity model's vocabulary. A repair step would replace an unknown word (5+ letters, letters only) with the most
+frequent vocabulary word one edit away (delete, swap, replace or insert one letter). **Measured** on 30,000 real review
+sentences (377,336 tokens; 6.1% of tokens are unknown to the model; probe in the session scratchpad, not committed).
+(1) Repairing toward any vocabulary word fired 3,857 times on 2,455 distinct words, and of 70 sampled repairs I judged
+about a fifth right (pleasent, beleiving, mediochre, adolesence, millionare, whirpool) and the rest wrong: real rare
+words turned into other words (stocky to stock, parlance to palance, seance to stance, nooks to looks) and names (konrad
+to conrad, mcmann to mcgann). (2) Limited to targets among the 1,500 most polar words it fired 363 times (0.1% of
+tokens) and about 45% of the 70 sampled were still wrong (dented to rented, coker to cover, saeed to saved, pater to
+later). **Decision.** Not built: a wrong repair is as likely as a right one, and the right ones touch about one token in a
+thousand. **What could work instead (untested).** A character n-gram polarity model reads misspellings natively, but it
+needs a retrain and a full re-profile; it belongs with the parked embeddings option, to be compared on a fresh random
+clause sample. No dictionary was available to separate a real rare word from a typo; adding one is a new dependency.
+
 ## D-029: a 50-vote fallback fills the short languages; the build is v5 (2026-11-01, Sonnet 5.5)
 
 At the 200-vote floor Hindi, Telugu and Japanese were 3,270 films short of the owner's targets (roadmap
