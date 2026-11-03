@@ -25,6 +25,13 @@ from cinewhy.schemas import TasteProfile
 from tests.test_shelves import _world
 
 
+def test_the_default_strategy_is_the_one_the_evaluation_chose() -> None:
+    # Pinned on purpose (D-043): the group evaluation chose "mean" on validation groups before the
+    # test groups were opened. Changing the default means re-running that evaluation, so this fails
+    # until D-043 is superseded rather than letting the default drift.
+    assert GroupConfig().strategy == "mean"
+
+
 def _vectors(
     pct: list[float],
     *,

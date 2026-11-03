@@ -80,7 +80,10 @@ class Member:
 class GroupConfig:
     """The knobs of a group request; the defaults are the measured and chosen ones."""
 
-    strategy: Strategy = "blend"
+    # "mean", chosen on validation groups of 2, 3 and 5 by the rule fixed in `group_eval` before the
+    # run (D-043). It is the simplest of the candidates and was never measurably behind the best;
+    # it is NOT shown to beat the others at 2 or 3, where the metric is at its ceiling.
+    strategy: Strategy = "mean"
     # Weight of the group mean against the least-happy member in the "blend" strategy.
     blend: float = 0.5
     recency: float = 0.5
