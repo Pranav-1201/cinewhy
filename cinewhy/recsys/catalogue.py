@@ -18,6 +18,7 @@ from typing import Any, Final
 import numpy as np
 import numpy.typing as npt
 
+from cinewhy.data.availability import AVAILABILITY_FILE, Availability, load_availability
 from cinewhy.data.cast import CAST_FILE, Cast, load_cast
 from cinewhy.schemas import Aspect, EvidenceSentence, Movie, MovieAspectProfile
 
@@ -104,6 +105,8 @@ class Catalogue:
     ratings_only: tuple[RatingsOnlyFilm, ...] = ()
     # Who is billed in each title, when the build has a cast file (see `cinewhy.data.cast`).
     cast: Cast | None = None
+    # Where each title can be watched, when the build has an availability file (a dated snapshot).
+    availability: Availability | None = None
     # Id to position for full-receipt films only: every row of `similarity` and `aspect_matrix`
     # is one of these, so code indexing them with `index[...]` can never reach a ratings-only film.
     index: dict[str, int] = field(init=False)
@@ -283,6 +286,7 @@ def load_catalogue(
     with_meta: bool = False,
     with_ratings_only: bool = False,
     with_cast: bool = False,
+    with_availability: bool = False,
 ) -> Catalogue:
     """Read a catalogue from a verified artifact directory.
 
@@ -295,6 +299,7 @@ def load_catalogue(
         with_ratings_only: Also read `ratings_only.json`, on the same condition: only when the
             verified manifest lists it.
         with_cast: Also read `cast.json`, on the same condition.
+        with_availability: Also read `availability.json`, on the same condition.
 
     Returns:
         The catalogue.
@@ -347,6 +352,16 @@ def load_catalogue(
     similarity = np.load(directory / SIMILARITY_FILE, allow_pickle=False)
     ratings_only = _read_ratings_only(directory / RATINGS_ONLY_FILE) if with_ratings_only else ()
     cast = load_cast(directory / CAST_FILE) if with_cast else None
+    availability = load_availability(directory / AVAILABILITY_FILE) if with_availability else None
     return Catalogue(
-        movies, stats, profiles, evidence, similarity, settings, meta, ratings_only, cast
+        movies,
+        stats,
+        profiles,
+        evidence,
+        similarity,
+        settings,
+        meta,
+        ratings_only,
+        cast,
+        availability,
     )

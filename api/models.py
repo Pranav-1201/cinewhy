@@ -62,6 +62,24 @@ class PersonHit(_Out):
     titles: int
 
 
+class WatchOption(_Out):
+    """One platform and, for each way of watching it, the countries where that way is offered."""
+
+    # Names from `fetch_providers.PLATFORMS` and ways from `WAY_ORDER`; the loader admits no others.
+    platform: str
+    ways: dict[str, tuple[str, ...]]
+
+
+class WhereToWatch(_Out):
+    """Where a title can be watched: a dated snapshot, never a live answer."""
+
+    fetched: str  # ISO date of the snapshot; the page says "as of" this
+    # The title's watch page on TMDB, powered by JustWatch (the page credits it); None when the
+    # title is on none of the six platforms, so there is nothing to link.
+    tmdb_url: str | None = None
+    platforms: tuple[WatchOption, ...]
+
+
 class MovieDetail(_Out):
     """Everything the movie page shows."""
 
@@ -86,6 +104,9 @@ class MovieDetail(_Out):
     imdb_votes: int | None = None
     # The billed actors and actresses, first billed first; empty for a build with no cast file.
     cast: tuple[PersonRef, ...] = ()
+    # Where it can be watched among the six platforms we cover; None for a build with no
+    # availability file, and present-but-empty `platforms` when it is on none of them.
+    where_to_watch: WhereToWatch | None = None
 
 
 class DiscoverRequest(BaseModel):
@@ -145,6 +166,8 @@ class Facets(_Out):
     newest_year: int | None
     # True when this build has a cast file, so the page knows people can be searched.
     cast: bool = False
+    # True when this build knows where titles can be watched.
+    availability: bool = False
 
 
 class AnalyzeRequest(BaseModel):

@@ -49,6 +49,8 @@ from api.models import (
     PersonRef,
     SentenceAnalysis,
     ShelvesRequest,
+    WatchOption,
+    WhereToWatch,
 )
 from cinewhy.absa.extract import (
     MIN_OPINION,
@@ -59,10 +61,11 @@ from cinewhy.absa.extract import (
 )
 from cinewhy.absa.polarity import PolarityModel
 from cinewhy.artifacts.manifest import load_manifest, verify
+from cinewhy.data.fetch_providers import PLATFORMS, WAY_ORDER
 from cinewhy.recsys import discover, rank
 from cinewhy.recsys.catalogue import Catalogue, load_catalogue
 from cinewhy.recsys.discover import DiscoverResult
-from cinewhy.recsys.people import cast_of, search_people
+from cinewhy.recsys.people import cast_of, imdb_number, search_people
 from cinewhy.recsys.shelves import ShelvesResult, build_shelves
 from cinewhy.schemas import (
     ArtifactManifest,
@@ -151,6 +154,7 @@ def load_artifacts(directory: Path | None = None) -> ArtifactManifest:
         with_meta="meta.json" in manifest.files,
         with_ratings_only="ratings_only.json" in manifest.files,
         with_cast="cast.json" in manifest.files,
+        with_availability="availability.json" in manifest.files,
     )
     _state = _State(manifest, catalogue, metrics, polarity)
     log.info(
@@ -222,6 +226,42 @@ def _cast(catalogue: Catalogue, movie_id: str) -> tuple[PersonRef, ...]:
     return tuple(PersonRef(id=person, name=name) for person, name in cast_of(catalogue, movie_id))
 
 
+_TMDB_PAGE = re.compile(r"(?:movie|tv)/[0-9]{1,9}")
+
+
+def _where(catalogue: Catalogue, movie_id: str) -> WhereToWatch | None:
+    """Where a title can be watched among the six platforms, or None when the build has no data.
+
+    A title missing from a build that has the data is on none of the six, so it gets an empty
+    list (the page says so) rather than None (which would mean "we do not know"). The TMDB path
+    comes from a hash-verified file, but only a plain `movie/123` or `tv/123` may become a link.
+    Platforms and ways come out in the fixed order of `PLATFORMS` and `WAY_ORDER`: the file is
+    written with sorted keys, so its own order says nothing.
+    """
+    number = imdb_number(movie_id)
+    if catalogue.availability is None or number is None:
+        return None
+    fetched = catalogue.availability.fetched
+    found = catalogue.availability.titles.get(number)
+    if found is None:
+        return WhereToWatch(fetched=fetched, tmdb_url=None, platforms=())
+    link = f"https://www.themoviedb.org/{found.tmdb}/watch"
+    return WhereToWatch(
+        fetched=fetched,
+        tmdb_url=link if _TMDB_PAGE.fullmatch(found.tmdb) else None,
+        platforms=tuple(
+            WatchOption(
+                platform=platform,
+                ways={
+                    way: found.on[platform][way] for way in WAY_ORDER if way in found.on[platform]
+                },
+            )
+            for platform in PLATFORMS
+            if platform in found.on
+        ),
+    )
+
+
 def _ratings_only_detail(catalogue: Catalogue, movie_id: str) -> MovieDetail:
     """The movie page for a film we hold only ratings for: facts and IMDb numbers, no receipt."""
     film = catalogue.ratings_only_at(catalogue.all_index[movie_id])
@@ -240,6 +280,7 @@ def _ratings_only_detail(catalogue: Catalogue, movie_id: str) -> MovieDetail:
         imdb_rating=film.imdb_rating,
         imdb_votes=film.imdb_votes,
         cast=_cast(catalogue, movie_id),
+        where_to_watch=_where(catalogue, movie_id),
     )
 
 
@@ -278,6 +319,7 @@ def movie_detail(movie_id: str) -> MovieDetail:
             for s in sorted(profile.scores, key=lambda s: (-s.support, s.aspect.value))
         ),
         cast=_cast(state.catalogue, movie_id),
+        where_to_watch=_where(state.catalogue, movie_id),
     )
 
 
@@ -349,7 +391,11 @@ def facets() -> Facets:
     """Counts for the UI's filters, and whether this build has a cast file."""
     catalogue = _loaded().catalogue
     return Facets.model_validate(
-        {**discover.catalogue_facets(catalogue), "cast": catalogue.cast is not None}
+        {
+            **discover.catalogue_facets(catalogue),
+            "cast": catalogue.cast is not None,
+            "availability": catalogue.availability is not None,
+        }
     )
 
 
