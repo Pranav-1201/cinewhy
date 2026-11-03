@@ -10,18 +10,25 @@ python -m venv venv || goto :fail
 
 echo [2/3] Installing pinned packages...
 call venv\Scripts\activate.bat
+rem "setup.bat serve" installs only what is needed to RUN the site (a much smaller install).
+if /i "%~1"=="serve" (
+  pip install -r requirements-serve.txt || goto :fail
+  echo [3/3] Skipped the test tools ^(serve only^).
+  goto :done
+)
 pip install -r requirements.txt || goto :fail
 
 echo [3/3] Installing the project and its test tools...
 pip install -e ".[dev]" || goto :fail
 
+:done
 echo.
 echo ====================================
 echo   Setup complete
 echo ====================================
 echo.
 echo Next:
-echo   1. Put the ready-made build in artifacts\v3  (see README.md step 5)
+echo   1. Put the ready-made data in artifacts\v13  (README.md, "Get the data")
 echo   2. start.bat
 echo   Checks:  venv\Scripts\python.exe -m pytest -p no:cacheprovider
 echo.

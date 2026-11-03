@@ -10,171 +10,306 @@
 
 ## Status: working demo
 
-Everything below runs on a laptop with `start.bat`. Nothing is deployed to the internet.
+Everything below runs on a laptop (Windows or Mac) with `start.bat` or `bash start.sh`. Nothing is
+deployed to the internet; to let a friend in, you make a temporary public link
+([Share it with a friend](#share-it-with-a-friend)).
+
+The current data build is **v13** (manifest `16c1ba2b4576`, built from TMDB, IMDb, MovieLens 32M,
+Rotten Tomatoes and IMDb user reviews).
 
 | Part | What it does |
 |---|---|
-| **Catalogue** | 11,065 English and Hindi films from 1950 to 2025: the most-voted films per language and year on TMDB (fewer per year before 2000, more after), each with at least 5 usable reviews. 3,757 are from 2012 on. |
-| **Reviews** | 1.72 million reviews from aclImdb, IMDb (to about 2020) and Rotten Tomatoes users (to mid-2024), joined to films by IMDb number or by title, year and runtime. 179,807 sentences were kept as quotable evidence. |
-| **Ratings** | MovieLens 32M: 26.6 million ratings of 10,229 of the catalogue films. |
+| **Catalogue** | 106,115 titles (86,181 films and 19,934 series) in English, French, Japanese, Hindi and Telugu: every title with 200 or more IMDb votes. 20,485 of them carry **receipts** (at least 20 usable reviews and quotable sentences); the rest are **ratings-only**: listed and recommendable, but with no review sentences to quote. |
+| **Reviews** | Reviews from aclImdb, IMDb and Rotten Tomatoes users, joined to titles by IMDb number or by title, year and runtime. 282,397 sentences were kept as quotable evidence. |
+| **Ratings** | MovieLens 32M: about 29 million ratings, used for the similarity between titles. |
+| **Cast and where to watch** | Who is in each title (search by actor) and a dated snapshot of where it streams, by country (from TMDB, credited to JustWatch). |
 | **Polarity model** | Logistic regression on 1-2 word TF-IDF, trained on aclImdb plus Rotten Tomatoes and IMDb reviews (whole films held out by hash) through a harness that makes the leakage / test-reuse / spread rules structural. |
 | **Aspect analysis** | Splits reviews into clauses, finds which of 7 aspects (acting, plot, pacing, visuals, ending, soundtrack, rewatchability) each is about, scores it, and keeps the strongest sentences as verbatim evidence. |
 | **Recommender** | Item-item collaborative filtering blended with aspect fit, plus a bounded "how new" lift, evaluated on held-out users against a popularity baseline. |
-| **API** | FastAPI. Verifies SHA-256 hashes of every artifact at boot and refuses to start on a mismatch. Serves posters from TMDB (nothing is stored here). |
-| **Web UI** | A poster wall: a spotlight pick, shelves (tonight's picks, new and now, Hindi picks, classics), a film drawer with the full "receipt", taste dials, an optional first-visit sheet, and a *How it works* page whose every number comes from `eval.json`. Plain ES modules, no build step. |
+| **Watch together** | Two to five people join a temporary room by code or invite link, each agrees to share their library, and the room gets one combined list. Rooms live in the server's memory only. |
+| **API** | FastAPI. Verifies SHA-256 hashes of every data file at boot and refuses to start on a mismatch. Serves posters from TMDB (nothing is stored here). |
+| **Web UI** | A poster wall: a spotlight pick with *Show me another*, shelves, a film drawer with the full "receipt", a library, taste dials, an optional first-visit sheet, and a *How it works* page whose every number comes from `eval.json`. Plain ES modules, no build step. |
 
-## Set up on a new machine (start here if you are joining the project)
+---
 
-You can work on the website and the API **without downloading any dataset**: you only need the
-ready-made build (`artifacts\v3`) from Pranav. Datasets are needed only to rebuild that build.
-The commands below are for Windows; for macOS or Linux use `source venv/bin/activate` instead of
-`venv\Scripts\activate` and `python3` for `python`.
+## Set up on a new machine (start here)
+
+This is the whole path for a fresh Windows or Mac computer: install the tools, get the code, install
+the packages, get the data, run it. Allow about 15 minutes plus the data download.
+
+**You need:** about **6 GB of free disk** (the data is 913 MB zipped and 1.8 GB unzipped), **at least
+4 GB of free RAM** (the running server holds about 3 GB), and internet (for installing, and for the
+film posters, which load from `image.tmdb.org`). You do **not** need an account anywhere: the code is
+public, so cloning needs no login.
 
 ### 1. Install the tools (once)
 
-| Tool | Version | Get it | Check it |
-|---|---|---|---|
-| Git | any recent | <https://git-scm.com/downloads> | `git --version` |
-| Python | **3.13** (the project needs 3.13 or newer) | <https://www.python.org/downloads/> (on Windows tick *Add python.exe to PATH*) | `python --version` |
-| Node.js | 20 or newer (24 was used) | <https://nodejs.org> (LTS) | `node --version` |
-| A code editor | any | VS Code, Cursor or Antigravity | |
+| Tool | Version | Why |
+|---|---|---|
+| Git | any recent | to download the code |
+| Python | **3.13 or newer** | runs the server |
+| Node.js | 20 or newer (optional) | only for the developer tests of the browser code; skip it if you just want to run the site |
 
-Node is used for one thing only: the tests of the browser-side helpers (`node --test`, built into
-Node). **There is no `npm install` and no `node_modules` folder**: the front end has no packages
-and no build step.
+**Windows** (open *Command Prompt* or *PowerShell*; `winget` comes with Windows 10 and 11):
 
-You also need a GitHub account that Pranav has added as a collaborator on
-`Pranav-1201/cinewhy` (repository *Settings, Collaborators*), and a Kaggle account only if you
-plan to rebuild the data.
+```bat
+winget install --id Git.Git -e
+winget install --id Python.Python.3.13 -e
+```
+
+Then **close the terminal and open a new one** so the new programs are found, and check:
+
+```bat
+git --version
+python --version
+```
+
+`python --version` must say 3.13 or newer. (If it says 3.11 or nothing, try `py -3.13 --version`; if
+that works, use `py -3.13` wherever this guide says `python`. Installing Python from
+<https://www.python.org/downloads/> also works: tick *Add python.exe to PATH*.)
+
+**Mac** (open *Terminal*). If you do not have Homebrew, install it first from <https://brew.sh>
+(it prints the exact line to run), then:
+
+```bash
+brew install git python@3.13
+```
+
+Open a new Terminal window and check:
+
+```bash
+git --version
+python3.13 --version
+```
 
 ### 2. Get the code
 
-```bat
+Windows or Mac, the same:
+
+```bash
 git clone https://github.com/Pranav-1201/cinewhy.git
 cd cinewhy
-git config user.name "Your Name"
-git config user.email "you@example.com"
 ```
 
-Later, every time you sit down to work, **before anything else**:
+(To change the code and push it back you also need to be added as a collaborator on
+`Pranav-1201/cinewhy`; to run it you do not.)
 
-```bat
-git fetch
-git status
-git pull --ff-only
-```
+### 3. Install the Python packages (once)
 
-If `git pull --ff-only` refuses, stop and ask: it means your copy and the remote have diverged.
+This makes a private Python environment in a folder called `venv` and installs the pinned packages
+into it. It does not change anything else on your computer.
 
-### 3. Create the Python environment (once, and again if `requirements.txt` changes)
+| | Just run the site (small, recommended) | Everything: also the tests and dev tools |
+|---|---|---|
+| **Windows** | `setup.bat serve` | `setup.bat` |
+| **Mac / Linux** | `bash setup.sh serve` | `bash setup.sh` |
+
+In PowerShell write `.\setup.bat serve`. The script finds Python 3.13 and says so if it cannot.
+If you prefer the steps by hand, `setup.bat serve` is exactly:
 
 ```bat
 python -m venv venv
 venv\Scripts\activate
-pip install -r requirements.txt
-pip install -e ".[dev]"
+pip install -r requirements-serve.txt
+```
+
+(Mac: `python3.13 -m venv venv`, then `source venv/bin/activate`, then the same `pip install`.)
+`requirements-serve.txt` is the 19 packages the running site imports; `requirements.txt` is the full
+development set (Jupyter, plotting and so on) plus `pip install -e ".[dev]"` for pytest, ruff and mypy.
+
+### 4. Get the data
+
+The site needs one folder of ready-made data, `artifacts/v13` (the current build). It is **not in the
+git repository**: it contains material derived from MovieLens and Rotten Tomatoes, whose licences
+do not allow it to be republished. So the owner (Pranav) shares it privately.
+
+1. Ask Pranav for **`cinewhy-artifacts-v13.zip`** (913 MB) and save it, for example in your Downloads
+   folder.
+2. Check it arrived intact. The SHA-256 must be
+   `1288510D82C1280D075F7E54C5A0C5F4221145E8BF2D03AF869B56A553CC0CA9`:
+
+   Windows (PowerShell): `Get-FileHash "$HOME\Downloads\cinewhy-artifacts-v13.zip" -Algorithm SHA256`
+   Mac: `shasum -a 256 ~/Downloads/cinewhy-artifacts-v13.zip`
+
+3. Unzip it **into** `artifacts/v13` inside the project folder, so that this file exists:
+   `artifacts/v13/manifest.json`.
+
+   Windows (PowerShell, about a minute):
+
+   ```powershell
+   New-Item -ItemType Directory -Force artifacts\v13
+   Expand-Archive -Path "$HOME\Downloads\cinewhy-artifacts-v13.zip" -DestinationPath artifacts\v13
+   ```
+
+   Mac:
+
+   ```bash
+   mkdir -p artifacts/v13
+   unzip -q ~/Downloads/cinewhy-artifacts-v13.zip -d artifacts/v13
+   ```
+
+The folder `artifacts/` is git-ignored, so it never gets committed. When the owner publishes a newer
+build it arrives the same way as a `cinewhy-artifacts-vN.zip` unpacked into `artifacts/vN`; the
+server always loads the highest-numbered one. The server checks the SHA-256 of every file inside
+at start and refuses to boot if one is missing or changed (`ManifestMismatchError`): unzip again if
+that happens.
+
+### 5. Run it
+
+| | |
+|---|---|
+| **Windows** | double-click `start.bat`, or run `start.bat` in a terminal inside the project folder |
+| **Mac / Linux** | `bash start.sh` |
+
+The first start checks about 1.8 GB of files and takes up to a minute; your browser then opens
+<http://localhost:8000/> by itself. Press **Ctrl+C in that terminal window** to stop it. The terminal
+also prints a short reminder of how to make the temporary public link (next section).
+
+Without the scripts: `python -m uvicorn api.main:app --port 8000` (add `--reload` while editing
+Python). The server loads `$CINEWHY_ARTIFACTS` if set, else the highest-numbered `artifacts/vN` that
+has a manifest, else `artifacts/`. Editing `web/` files needs no restart: refresh the browser.
+
+### Share it with a friend
+
+**Why this is needed.** Watch together rooms live in the memory of the one server that created them,
+so everybody has to use *the same* running server. A friend who clones the project and runs their
+own copy gets a separate server, and your room code does not exist there. The simplest fix is a
+**temporary public link** to the server on your computer, made with Cloudflare's free quick tunnel.
+No account and no change to the project are needed, and your friend needs nothing installed: they
+just open the link in a browser.
+
+**Install the tunnel tool (once).**
+
+Windows (in a terminal, then close it and open a new one):
+
+```bat
+winget install --id Cloudflare.cloudflared
+```
+
+Mac: `brew install cloudflared`. Other systems:
+<https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/>.
+
+**Make a link (every time).**
+
+1. Start the site as above (`start.bat` or `bash start.sh`) and **leave that window open**: it is the
+   server.
+2. Open a **second** terminal (any folder) and run:
+
+   ```bash
+   cloudflared tunnel --url http://localhost:8000
+   ```
+
+3. After a few seconds it prints an address that ends in `trycloudflare.com`, for example
+   `https://some-random-words.trycloudflare.com`. **Open that address in your own browser** (not
+   `localhost`), then *Profile*, *Watch together*, *Start a room*. The invite link it shows is built
+   from the address you opened, so it works for your friend.
+4. Send your friend the invite link. They open it, tick the agreement box and join.
+5. When you are done, press **Ctrl+C in the second terminal** to close the link, and Ctrl+C in the
+   server window to stop the site.
+
+**Good to know.**
+
+* The address is **new every time**: send the new one each session.
+* Both windows must stay open and your computer must stay on while your friend uses it.
+* While the link is up, **anyone who has it can open the app**. Treat it as a temporary demo; do not
+  post it publicly. Rooms are protected by their code and each member's secret, but there is no
+  login.
+* If you send your friend a `localhost` address it will not work for them: always open the
+  `trycloudflare.com` address first.
+* Rooms are lost when the server restarts, so keep the server window open for the whole session.
+
+### 6. Check that everything works (developers)
+
+Needs the full install (`setup.bat` / `bash setup.sh` without `serve`). Windows commands shown;
+on a Mac use `venv/bin/python` and `export PYTHONUTF8=1`.
+
+```bat
 set PYTHONUTF8=1
+venv\Scripts\python.exe -m pytest -p no:cacheprovider
+venv\Scripts\python.exe -m ruff check .
+venv\Scripts\python.exe -m mypy
 ```
 
-`requirements.txt` pins every runtime package to the exact version the results were produced with;
-`.[dev]` adds pytest, ruff and mypy. (`setup.bat` does steps 3 in one go.) `set PYTHONUTF8=1`
-must be repeated in each new terminal (Windows prints with cp1252 otherwise and scripts that print
-quotes crash with `UnicodeEncodeError`).
+Expected: every test passes (about 880, plus the browser tests if Playwright is installed), `All
+checks passed!`, and `Success: no issues found`. The tests need no data and no internet. If anything
+fails on a fresh clone, stop and tell Pranav before changing anything. `PYTHONUTF8=1` must be set
+in each new Windows terminal (it prints with cp1252 otherwise and scripts that print quotes crash
+with `UnicodeEncodeError`).
 
-### 4. Check that everything works
+### 7. Rebuilding the data (only if you change the data pipeline)
 
-```bat
-python -m pytest -p no:cacheprovider
-python -m ruff check cinewhy api tests
-python -m mypy
-```
+Skip this unless you are changing `cinewhy/data`, `cinewhy/absa` or `cinewhy/build.py`. Almost
+nobody needs it: use the ready-made zip above.
 
-Expected: `409 passed` (or more as tests are added), `All checks passed!`, and
-`Success: no issues found`. The tests need no data and no internet. If the count is lower, or
-anything fails on a fresh clone, stop and tell Pranav before changing anything.
+Be aware that **v13 is not one command.** It is a base build plus several later steps (more
+languages and series, ratings-only titles, the cast file, and where-to-watch from TMDB). The
+where-to-watch step alone takes about nine hours and needs a TMDB API token (kept in an environment
+variable, never in a file or a commit). The recipe, flags and decisions are recorded in
+[`docs/HANDOVER.md`](docs/HANDOVER.md) and [`docs/DECISIONS.md`](docs/DECISIONS.md) (D-027 to
+D-038). Budget **about 15 GB of free disk and 5 GB of free RAM** for the base build.
 
-### 5. Get the ready-made build and run the site
-
-Ask Pranav for **`cinewhy-artifacts-v3.zip`** (365 MB, SHA-256
-`071CC4241C2D8B4608EE0351EBD59452AF658620BE4DF63F1CA806FE16984D47`; check it with
-`certutil -hashfile cinewhy-artifacts-v3.zip SHA256`). Unzip it **into** `artifacts\v3\` so that
-this file exists: `artifacts\v3\manifest.json`. The folder `artifacts\` is git-ignored, so it never
-gets committed. Then:
-
-```bat
-start.bat
-```
-
-It opens <http://localhost:8000/>. The server checks the SHA-256 of every artifact file at start
-and refuses to boot if one is missing or changed (`ManifestMismatchError`): unzip again if that
-happens. The film posters load from `image.tmdb.org`, so you need internet for them.
-
-Without `start.bat`: `python -m uvicorn api.main:app --port 8000` (add `--reload` while editing
-Python). The server loads `$CINEWHY_ARTIFACTS` if set, else the highest-numbered `artifacts\vN` that has a manifest,
-else `artifacts\`. Editing `web\` files needs no restart: refresh the browser.
-
-### 6. Rebuilding the data (only if you change the data pipeline)
-
-Skip this unless you are changing `cinewhy\data`, `cinewhy\absa` or `cinewhy\build.py`. You need
-**about 15 GB free disk, 5 GB free RAM, and about an hour**. The raw files are git-ignored. Put
-them exactly here (create the folders). Kaggle needs you to be logged in; use the *Download*
-button in the browser (the Kaggle command-line and `kagglehub` have been unreliable for the TMDB
-file: they hang at "awaiting compression").
+The base build reads five raw files, saved exactly here (create the folders; they are git-ignored).
+Kaggle needs you to be logged in; use the *Download* button in the browser (the Kaggle command line
+and `kagglehub` have been unreliable for the TMDB file).
 
 | Save it as | Size | Where to get it |
 |---|---|---|
-| `Data\raw\tmdb1m\TMDB_all_movies.csv` | 0.8 GB | <https://www.kaggle.com/datasets/alanvourch/tmdb-movies-daily-updates> (the file `TMDB_all_movies.csv` inside the download) |
-| `Data\raw\rt_mother\rt_mother.zip` | 4.3 GB | <https://www.kaggle.com/datasets/bwandowando/rotten-tomatoes-9800-movie-critic-and-user-reviews> (the downloaded `archive.zip`, renamed; do **not** unzip it) |
-| `Data\raw\imdb_ebd\imdb_ebd.zip` | 2.9 GB | <https://www.kaggle.com/datasets/ebiswas/imdb-review-dataset> (the downloaded `archive.zip`, renamed; do **not** unzip it) |
-| `Data\raw\aclImdb_v1.tar.gz` | 84 MB | <https://ai.stanford.edu/~amaas/data/sentiment/aclImdb_v1.tar.gz> (do not unpack) |
-| `Data\raw\ml32m\ml-32m.zip` | 239 MB | <https://files.grouplens.org/datasets/movielens/ml-32m.zip> (do not unzip) |
+| `Data/raw/tmdb1m/TMDB_all_movies.csv` | 0.8 GB | <https://www.kaggle.com/datasets/alanvourch/tmdb-movies-daily-updates> (the file `TMDB_all_movies.csv` inside the download) |
+| `Data/raw/rt_mother/rt_mother.zip` | 4.3 GB | <https://www.kaggle.com/datasets/bwandowando/rotten-tomatoes-9800-movie-critic-and-user-reviews> (the downloaded `archive.zip`, renamed; do **not** unzip it) |
+| `Data/raw/imdb_ebd/imdb_ebd.zip` | 2.9 GB | <https://www.kaggle.com/datasets/ebiswas/imdb-review-dataset> (the downloaded `archive.zip`, renamed; do **not** unzip it) |
+| `Data/raw/aclImdb_v1.tar.gz` | 84 MB | <https://ai.stanford.edu/~amaas/data/sentiment/aclImdb_v1.tar.gz> (do not unpack) |
+| `Data/raw/ml32m/ml-32m.zip` | 239 MB | <https://files.grouplens.org/datasets/movielens/ml-32m.zip> (do not unzip) |
 
-If a download is slow, blocked or Kaggle misbehaves, ask Pranav to send the file from his
-`Data\raw\` folder instead. Licences and what each file supplies: [`docs/DATASET.md`](docs/DATASET.md).
+Licences and what each file supplies: [`docs/DATASET.md`](docs/DATASET.md). The base build, which
+gives the smaller original catalogue unless you add the flags from the docs above:
 
 ```bat
-python -m cinewhy.absa.polarity --out artifacts\polarity.joblib       rem the aclImdb-only baseline model
-python -m cinewhy.absa.polarity_mixed --old-model artifacts\polarity.joblib --out-dir artifacts\v3   rem retrain on all sources (about 45 min the first time)
-python -m cinewhy.absa.polarity_mixed --old-model artifacts\polarity.joblib --out-dir artifacts\v3 --domain-only   rem held-out-film report
-python -m cinewhy.build --out artifacts\v3          rem about 40 minutes with the cache, 5 GB RAM
-python -m cinewhy.recsys.recency_check --artifacts artifacts\v3   rem recency cost; needs 5 GB free RAM
+python -m cinewhy.absa.polarity --out artifacts\polarity.joblib
+python -m cinewhy.absa.polarity_mixed --old-model artifacts\polarity.joblib --out-dir artifacts\v14
+python -m cinewhy.build --out artifacts\v14
 ```
 
-The first build caches its slow gathering step in `Data\raw\_cache\`; later builds take about 35
-minutes. A TMDB token is **not** needed for any of this (posters load straight from TMDB). Never
-put a token or key in a file or in a commit; if one is ever needed use an environment variable.
-
-### 7. Working together
+### 8. Working together
 
 * Work on a branch (`git switch -c your-topic`), not on `main`; open a pull request on GitHub.
-* Before every push run the three checks in step 4. CI runs the same ones.
-* Stage files by name (`git add path\to\file`), never `git add -A`: stray files and data would
-  slip in. Never commit anything from `Data\` or `artifacts\`.
-* Rules, the Pranav / Lakshay split and the contract in `cinewhy\schemas.py` (changing it is a
+* Every time you sit down to work, **before anything else**: `git fetch`, `git status`, then
+  `git pull --ff-only`. If the pull refuses, stop and ask: your copy and the remote have diverged.
+* Set your name once: `git config user.name "Your Name"` and `git config user.email "you@example.com"`.
+* Before every push run the three checks in step 6. CI runs the same ones.
+* Stage files by name (`git add path/to/file`), never `git add -A`: stray files and data would
+  slip in. Never commit anything from `Data/` or `artifacts/`.
+* Rules, the Pranav / Lakshay split and the contract in `cinewhy/schemas.py` (changing it is a
   two-person decision): [`CONTRIBUTING.md`](CONTRIBUTING.md). Where things stand and what is left:
-  [`docs\HANDOVER.md`](docs/HANDOVER.md). Why things are the way they are:
-  [`docs\DECISIONS.md`](docs/DECISIONS.md).
+  [`docs/HANDOVER.md`](docs/HANDOVER.md). Why things are the way they are:
+  [`docs/DECISIONS.md`](docs/DECISIONS.md).
 
-### 8. If something goes wrong
+### 9. If something goes wrong
 
 | Symptom | Cause and fix |
 |---|---|
-| `python` is not recognised, or is 3.11 | Install Python 3.13 and reopen the terminal; try `py -3.13 -m venv venv`. |
-| `UnicodeEncodeError` | `set PYTHONUTF8=1` in that terminal. |
-| `ManifestMismatchError` at start | `artifacts\v3` is incomplete or edited: unzip the build again. |
-| `start.bat` says no artifacts found | The zip is not unpacked into `artifacts\v3\` (check `artifacts\v3\manifest.json` exists). |
-| Port 8000 is busy | Another copy is running: close it, or use `--port 8001`. |
+| `python` is not recognised, or is older than 3.13 | Install Python 3.13 (step 1), open a **new** terminal; on Windows try `py -3.13`, on a Mac use `python3.13`. |
+| `setup` says Python 3.13 was not found | Same: install it, then open a new terminal and run setup again. |
+| `UnicodeEncodeError` | `set PYTHONUTF8=1` (Windows) or `export PYTHONUTF8=1` (Mac) in that terminal. |
+| `start` says "No data found" | The zip is not unpacked into `artifacts/v13` (check that `artifacts/v13/manifest.json` exists). |
+| `ManifestMismatchError` at start | `artifacts/v13` is incomplete or edited: check the zip's SHA-256 (step 4) and unzip it again. |
+| The server dies or the machine slows right after "Starting" | Not enough free RAM (it needs about 3 GB): close Chrome and other programs. |
+| Port 8000 is busy | Another copy is running: close it (Ctrl+C in its window), or run the server on another port with `--port 8001`. To find the program: `netstat -ano \| findstr ":8000"` (Windows) or `lsof -iTCP:8000` (Mac). |
+| `cloudflared` is not recognised | Close the terminal and open a new one after installing; check with `cloudflared --version`. |
+| The tunnel address shows an error page | The site is not running: start `start.bat` / `bash start.sh` first and wait for it to open. |
+| My friend sees "room closed or expired" | The server restarted or the room sat idle for three hours: start a new room and send the new link. |
 | Posters are grey boxes | No internet, or `image.tmdb.org` is blocked by a network filter. The site still works. |
-| Build runs out of memory | Needs 5 GB free; close Chrome and other programs. |
+
+---
 
 ## Run it (short version)
 
 ```bat
-start.bat      rem serves the newest artifacts\vN (else artifacts\) at http://localhost:8000/
+setup.bat serve        rem once. Mac: bash setup.sh serve
+rem put the data in artifacts\v13 (step 4), then:
+start.bat              rem Mac: bash start.sh   (opens http://localhost:8000/)
 ```
 
-Everything else is in the setup guide above. Posters need no key: the front end loads
-`image.tmdb.org` URLs directly.
+Posters need no key: the front end loads `image.tmdb.org` URLs directly.
 
 ## Test it yourself
 
@@ -220,6 +355,9 @@ Open <http://localhost:8000/>.
 8. **Phone.** Resize the window below 640 px: the top bar keeps the search box and the theme
    button and a bottom bar holds Home, Search, Rate, Library and Profile.
 9. **How it works.** Every number on this page is read from `eval.json`, including the limits.
+10. **Watch together** (Profile sheet, then *Watch together*). Start a room, tick the agreement box, and
+    send the invite link (see *Share it with a friend* above). A second person joins in another
+    browser; the host presses *Find something for us* and both see one list.
 
 ### 3. Poke the API
 
@@ -239,7 +377,7 @@ Interactive docs: <http://localhost:8000/docs>.
 
 ### 4. Try to break it
 
-* **Tamper test.** Stop the server, open `artifacts\v3\profiles.json`, change one character, start
+* **Tamper test.** Stop the server, open `artifacts\v13\profiles.json`, change one character, start
   the server again. It must refuse to boot with `ManifestMismatchError`. Restore the file (or
   rebuild) to recover.
 * **Abuse test.** Send a body over 160 KB (413), more than 120 POSTs in a minute (429), or text
@@ -253,7 +391,7 @@ gives the same numbers. Datasets are checked against pinned SHA-256 hashes where
 
 ## What was measured
 
-All numbers come from `artifacts/v3/eval.json`. Intervals are 95%.
+These numbers come from the earlier **v3** evaluation (11,065 films); the current build's figures are on the *How it works* page and in `artifacts/v13/eval.json`. The method is the same. Intervals are 95%.
 
 | Question | Result |
 |---|---|
@@ -294,7 +432,7 @@ All numbers come from `artifacts/v3/eval.json`. Intervals are 95%.
   `python -m cinewhy.absa.agreement` to get agreement and independent accuracy.
 * The polarity model is trained on whole reviews and applied to clauses. A cue layer handles
   explicit negation ("aren't terrible") but did not measurably improve accuracy on clean data.
-* The catalogue is the popular top of each year, not all films; an obscure film will not be found.
+* The catalogue is every title with 200 or more IMDb votes in five languages, not all titles; an obscure one will not be found.
 * Age, region and language answers only set defaults (how new, which shelf leads, which language).
   Nothing is inferred about taste from them: a held-out test on MovieLens-1M found age and sex add
   about a tenth of a point of hit rate on a 6.5% base, so that feature is off (`docs/DECISIONS.md`
@@ -324,7 +462,8 @@ web/            index.html, cinewhy.css, js/ (ES modules, no build step), fonts/
 tests/          pytest suite (plus tests/web for the browser helpers); tests/data holds the
                 hand-labelled gold clauses
 docs/           HANDOVER, DECISIONS, DATASET, FEATURE-004/005, ARCHITECTURE, MODEL_CARD, ...
-start.bat       run the demo locally
+start.bat / start.sh      run the demo locally (Windows / Mac)
+setup.bat / setup.sh      one-time Python setup (Windows / Mac); `serve` installs only what running needs
 archive/        the original notebook and report, kept for history (see archive/README.md)
 ```
 
