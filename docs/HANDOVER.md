@@ -140,6 +140,24 @@ permanently by `unique_review_indices` and `test_no_review_text_appears_in_both_
 ## Five-line handoff ritual (fill in each session)
 
 ```
+Session date:      2026-11-04 (session "nlp 3", tunnel and setup docs), branch docs/tunnel-and-setup
+Model:             Claude Sonnet 5.5
+What we did:       PRs #5 to #8 are merged into main (another-pick, group engine, Watch together); D:\NLPPROJECT
+                   is on main and start.bat serves v13. Added the temporary-public-link help to start.bat, new
+                   start.sh and setup.sh for Mac/Linux, a `serve` option on both setup scripts, and a README
+                   rewritten for v13 (tools, clone, packages, data zip with size and SHA-256, run, tunnel, fixes).
+                   Rehearsed from an empty folder: setup in serve mode, unzip the real zip, boot, manifest
+                   16c1ba2b4576. The data zip (913 MB) is shared privately, NOT in the repo (licences).
+What's left:       OWNER'S FOUR IMPROVEMENTS, planned, awaiting answers before any code: (1) no auto-refresh of
+                   rows after like/watched; a per-row "Show more" instead; (2) rework Watch together into a
+                   quiz plus swipe cards plus a manual-refresh results screen; (3) the film page's "adjusted
+                   mean" wording; (4) rows reset to the start on a filter refresh (the cause is scrollMemory in
+                   rails.js, which exists only because of the auto-refresh in item 1).
+                   TO-DO AFTER THOSE: (a) rooms end on a server restart (they are in memory); (b) refresh the five
+                   Word documents with the new features. Not verified: the Mac steps were not run on a Mac.
+Watch out for:     Never push the data zip or any file from artifacts/ or Data/. The tunnel link makes the app
+                   public while it is up. The browser tests need playwright (not in the venv).
+
 Session date:      2026-11-03 (session "nlp 3", Watch together), three LOCAL branches in D:\NLPPROJECT-dev, none
                    pushed, none in the demo: feature/another-pick, feature/group-engine, feature/watch-together
                    (watch-together contains group-engine; another-pick is separate)
