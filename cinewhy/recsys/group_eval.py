@@ -213,6 +213,7 @@ def _build_users(  # pragma: no cover - needs the real build inputs
         for p, s in enumerate(catalogue.stats)
     )
     cat = replace(catalogue, similarity=sim, stats=stats)
+    del catalogue  # frees the shipped similarity (1.7 GB); `cat` holds the held-out one
     candidates = np.arange(n)
     movie_id = [m.movie_id for m in cat.movies]
     built: list[EvalUser] = []
