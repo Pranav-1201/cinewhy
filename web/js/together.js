@@ -157,7 +157,7 @@ function drawConsent(code, message = "") {
         h("li", { text: "the films you have watched and the ones you want to watch" }),
         h("li", { text: "the films you liked and the ones that were not for you" }),
         h("li", { text: "your taste settings" })),
-      h("p", { text: "The people in the room can see which films you liked. Then you will answer a quiz and swipe cards: those answers stay in the room too, and nothing here changes your own profile. You can leave at any time and everything of yours goes with you." })),
+      h("p", { text: "The people in the room can see which films you liked. Then you will answer a quiz and swipe cards: those answers stay in the room too, and nothing here changes your own profile. While the room is open it is also saved on the computer that runs CineWhy, so a restart does not end it, and it is deleted when the room ends. You can leave at any time and everything of yours goes with you." })),
     h("label", { class: "tg-agree", for: "tg-agree" }, agree, h("span", { text: "I agree to share this with the people in the room, for as long as I am in it." })),
     h("div", { class: "sheet-actions" },
       go, h("button", { class: "btn", type: "button", text: "Back", onclick: () => drawStart() })),

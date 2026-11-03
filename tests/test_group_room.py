@@ -6,10 +6,13 @@ Drama, Comedy, Action; every fourth film is Hindi).
 
 from __future__ import annotations
 
+from typing import Any
+
 import numpy as np
 import pytest
 
 from cinewhy.recsys import group as group_module
+from cinewhy.recsys import rank
 from cinewhy.recsys.discover import language_codes
 from cinewhy.recsys.group import (
     GroupConfig,
@@ -190,3 +193,35 @@ def test_the_member_whose_top_pick_it_is_is_marked_on_that_title() -> None:
     assert [(f.name, f.top) for f in fits] == [("Ann", True), ("Ben", False)]
     other = next(g.members for g in result.items if g.item.movie.movie_id == "cw-31")
     assert not any(f.top for f in other)
+
+
+def test_a_nominated_title_stays_in_the_list_even_when_there_is_nothing_to_say_about_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The usual filter drops a title with no aspect evidence once a list is personalised.
+
+    Someone's top pick (and only that) is exempt: it is the title they most want to watch.
+    """
+    world = _world(60)
+    real = rank.reasons_for
+
+    def silent(catalogue: Any, movie_id: str, weights: Any, **kwargs: Any) -> Any:
+        if movie_id in {"cw-30", "cw-31"}:
+            return ()
+        return real(catalogue, movie_id, weights, **kwargs)
+
+    monkeypatch.setattr(rank, "reasons_for", silent)
+    taste = TasteProfile(liked_movie_ids=("cw-1",))
+    liker = Member("Ann", taste, top="cw-30", signals_liked=("cw-30",))
+    result = recommend_group(world, [liker, _member("Ben")], limit=60)
+    shown = _ids(result)
+    assert "cw-30" in shown  # her top pick is there
+    assert "cw-31" not in shown  # an ordinary title with nothing to say still is not
+    top = next(g for g in result.items if g.item.movie.movie_id == "cw-30")
+    assert [m.top for m in top.members] == [True, False]
+
+
+def test_a_top_pick_the_group_rules_out_is_not_forced_back_in() -> None:
+    world = _world(60)
+    pair = [_member("Ann", top="cw-30"), _member("Ben", watched=frozenset({"cw-30"}))]
+    assert "cw-30" not in _ids(recommend_group(world, pair, limit=60))  # Ben has seen it

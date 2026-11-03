@@ -103,6 +103,9 @@ test("the rules tell people everything before they begin", () => {
   assert.match(RULES.privacy.join(" "), /nothing changes in your own profile/i);
   assert.match(RULES.privacy.join(" "), /not a like/);
   assert.match(RULES.privacy.join(" "), /three hours/);
+  // Rooms are saved on the host's computer so a restart does not end them (D-047): say so.
+  assert.match(RULES.privacy.join(" "), /saved on the computer that runs CineWhy/);
+  assert.match(RULES.privacy.join(" "), /restart/);
 });
 
 test("a results list is stale once the room has more answers than it was made with", () => {

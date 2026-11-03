@@ -22,7 +22,7 @@ and is gone.
 from __future__ import annotations
 
 from collections.abc import Collection, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Final, Literal
 
 import numpy as np
@@ -378,6 +378,43 @@ def _group_weights(weights: Sequence[dict[Aspect, float]]) -> dict[Aspect, float
     return total
 
 
+def _with_top_picks(
+    catalogue: Catalogue,
+    scored_group: Scored,
+    items: tuple[DiscoverItem, ...],
+    members: Sequence[Member],
+    full: npt.NDArray[np.float64],
+    order: list[int],
+    limit: int,
+    config: GroupConfig,
+) -> tuple[DiscoverItem, ...]:
+    """Make sure every member's top pick is in the list, whatever the usual filters think of it.
+
+    `select_items` leaves out a title it has "nothing real to say" about (no aspect evidence for the
+    group's tastes) once a list is personalised. A title someone named as the one they most want to
+    watch must not vanish for that reason, so any top pick still allowed by the group's rules
+    (not ruled out by the majority rule or a filter) is added and the list re-ordered by score.
+    """
+    shown = {item.movie.movie_id for item in items}
+    positions: list[int] = []
+    for member in members:
+        position = catalogue.all_index.get(member.top) if member.top else None
+        if position is not None and np.isfinite(full[position]) and member.top not in shown:
+            positions.append(position)
+    if not positions:
+        return items
+    extra = select_items(
+        catalogue,
+        replace(scored_group, cold=True),  # no "nothing to say" filter for a nominated title
+        limit=len(positions),
+        include_ratings_only=not config.receipts_only,
+        order=order,
+        only=list(dict.fromkeys(positions)),
+    )
+    merged = sorted([*items, *extra], key=lambda item: -item.score)
+    return tuple(merged[:limit])
+
+
 def recommend_group(
     catalogue: Catalogue,
     members: Sequence[Member],
@@ -432,6 +469,7 @@ def recommend_group(
         include_ratings_only=not config.receipts_only,
         order=order,
     )
+    items = _with_top_picks(catalogue, scored_group, items, members, full, order, limit, config)
     slot = {int(p): k for k, p in enumerate(candidates)}
     out: list[GroupItem] = []
     for item in items:

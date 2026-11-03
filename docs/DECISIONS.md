@@ -761,6 +761,41 @@ are NOT known; the evidence is the examples read, and the gold files hold pre-sp
 change. **Consequence.** Receipts change at the next rebuild, which must re-profile every title (hours); nothing on the
 demo changes until then. Typo tolerance ("supeerb") and a semantic matcher (embeddings, parked) are not done.
 
+## D-047: open rooms are kept in a file, so a server restart does not end them (2026-11-04, Sonnet 5.5)
+
+**Owner's to-do.** "Restarts end rooms: rooms live in memory, so a server restart ends them" (D-044's first limit). **Design.**
+`RoomSaver` (`rooms.py`) keeps one JSON copy of the OPEN rooms at `Data/rooms.json` (git-ignored; `$CINEWHY_ROOMS_FILE` chooses
+another place, and `off`, `none` or empty keeps rooms in memory only). A background thread looks every two seconds and writes only
+when the content changed; shutdown writes once more; start reads the file back. The write goes to a `.partial` file and is renamed
+into place, so a reader sees the old file or the new one, never half. The file holds each room's code, size, host, version and
+activity counter, last-use time, and for each member their name, SECRET, shared library, quiz, swipes, top pick and replaced top
+picks; a room that is closed, left empty or expired is gone from the next write, and an empty store writes an empty list. **Time.**
+Idle time is measured in-process on a monotonic clock, which does not survive a restart, so the file carries the last use as
+calendar time (rounded to the minute so polls do not rewrite it every few seconds) and the restart counts the time down as idle: a
+room that would have expired still does, and one down for most of its allowance keeps only what was left. **A file is not trusted.**
+A missing, unreadable, over 64 MB or other-layout file restores nothing; each room is validated (code format, host is a member,
+secrets are non-empty strings, swipes only want/pass/seen and within the cap, quiz lists within bounds, taste validated by the
+schema) and a bad room is skipped without costing the good ones; restoring stops at the server's room limit; a failed write is
+logged and retried. None of these can stop the server starting. **Privacy.** Rooms now touch the disk of the computer running the
+server, which D-044 said they did not, so the consent paragraph and the rules screen say it before anyone joins ("saved on the
+computer that runs CineWhy, so a restart does not end it ... deleted when you leave, the host closes the room, or it has been idle
+three hours"). The secrets are in that file in clear, as they were in memory: it is as private as the computer. **A bug found
+on the way.** A title someone named as their top pick could vanish from the group's picks: `select_items` drops a title it has
+"nothing real to say" about once a list is personalised (no aspect evidence for the group's tastes), and a nominated title with
+little evidence fell under that. On the real catalogue this is rare (nearly every title with receipts has aspects) but on the
+six-film test fixture it hid a top pick entirely. `_with_top_picks` now adds back any top pick the group's rules still allow
+(a title a pair has watched stays out) and re-orders by score. **Also.** `CINEWHY_RATE_LIMIT` (default 120) raises the per-address
+POST limit; behind a tunnel every friend shares one address, and the browser tests share one server. **Checks.** 41 persistence
+tests (round trip with every secret and answer, expiry across downtime, 16 kinds of damaged room, atomic write, only-when-changed,
+background writer, failed write), 7 route-level restart tests with two real app instances on one file, the engine guarantee
+for top picks; planted bugs caught: downtime ignored, polls rewriting the file, writing when unchanged, the format ignored, expired
+rooms restored, a non-atomic write, a bad swipe accepted, and the top-pick guarantee removed. Live on the real v13 catalogue: a room
+with a quiz, a top pick and a want was killed with a hard process kill, a new server started on the same file, and both people's secrets
+still worked with their answers and top pick intact (a second top pick still asked first). **Limits.** A hard crash can lose the
+last two seconds of swipes. With several server processes each would write the same file and overwrite the other's rooms (the app
+runs one). The file is rewritten about every two seconds only while something changes, which includes every swipe. Nothing here
+encrypts the file.
+
 ## D-046: Watch together becomes a mood quiz, swipe cards and a results screen that refreshes only on request (2026-11-04, Sonnet 5.5)
 
 **Owner's brief.** Instead of five identical titles, each person gets a long deck of cards from the pool the group shares, with

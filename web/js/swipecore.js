@@ -113,7 +113,7 @@ export const RULES = {
     "The group's picks list does not change by itself while people swipe. Press Refresh to bring it up to date. Anyone can open it at any time and sees who wanted, passed on or has seen each title.",
   privacy: [
     "Everything you answer here stays in this room. Nothing changes in your own profile or library: a right swipe is not a like, and an up swipe does not mark the title as watched in your library.",
-    "The people in the room see your answers on the group's picks list only. Your answers are deleted when you leave, when the host closes the room, or when it has been idle for three hours.",
+    "The people in the room see your answers on the group's picks list only. While the room is open it is also saved on the computer that runs CineWhy, so a restart does not end it. Your answers are deleted when you leave, when the host closes the room, or when it has been idle for three hours.",
   ],
   mouse: "On a computer you can drag a card, press the buttons under it, or use the arrow keys. On a phone, swipe.",
 };

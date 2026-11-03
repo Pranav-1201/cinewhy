@@ -82,7 +82,7 @@ from cinewhy.recsys.catalogue import Catalogue, load_catalogue
 from cinewhy.recsys.discover import DiscoverItem, DiscoverResult
 from cinewhy.recsys.group import Member, Quiz, recommend_group
 from cinewhy.recsys.people import cast_of, imdb_number, search_people
-from cinewhy.recsys.rooms import Room, RoomError, RoomStore
+from cinewhy.recsys.rooms import Room, RoomError, RoomSaver, RoomStore
 from cinewhy.recsys.shelves import ShelvesResult, build_shelves
 from cinewhy.schemas import (
     ArtifactManifest,
@@ -568,22 +568,55 @@ class _RateLimiter:
         return True
 
 
-def create_app(artifacts: Path | None = None, *, rate_limit: int = _RATE_LIMIT) -> FastAPI:
+def default_rooms_file() -> Path | None:
+    """Where open Watch together rooms are kept between restarts.
+
+    `$CINEWHY_ROOMS_FILE` if set (`off`, `none` or empty turns it off), else `Data/rooms.json`,
+    which is git-ignored. The file holds only rooms that are open, on the computer running the
+    server, and is rewritten without a room as soon as it ends.
+    """
+    chosen = os.environ.get("CINEWHY_ROOMS_FILE")
+    if chosen is None:
+        return Path("Data") / "rooms.json"
+    return None if chosen.strip().lower() in {"", "off", "none"} else Path(chosen)
+
+
+def create_app(
+    artifacts: Path | None = None,
+    *,
+    rate_limit: int = _RATE_LIMIT,
+    rooms_file: Path | None = None,
+) -> FastAPI:
     """Build the FastAPI application.
 
     Args:
         artifacts: Artifact directory to load at startup (default: see `load_artifacts`).
         rate_limit: POST requests per minute per client.
+        rooms_file: Where to keep open Watch together rooms between restarts; None keeps them in
+            memory only (what the tests use). Read when the server starts, written while it runs.
 
     Returns:
         The app. Artifacts are verified when the server starts, not at import time, so
         importing this module never touches the disk.
     """
+    # Watch together rooms: in memory, and (when `rooms_file` is given) copied to that file every
+    # couple of seconds and at shutdown, so a restart does not end them (D-047). Sync routes run on
+    # a thread pool and the store is not thread-safe, so every touch of it goes through this lock.
+    rooms = RoomStore()
+    rooms_lock = threading.Lock()
+    saver = RoomSaver(rooms, rooms_lock, rooms_file) if rooms_file else None
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         load_artifacts(artifacts)
-        yield
+        if saver:
+            log.info("rooms restored from %s: %d", saver.path, saver.load())
+            saver.start()
+        try:
+            yield
+        finally:
+            if saver:
+                saver.stop()  # one last write, so a clean shutdown loses nothing
 
     app = FastAPI(title="CineWhy", version="0.1.0", lifespan=lifespan)
     limiter = _RateLimiter(rate_limit, _RATE_WINDOW_SECONDS)
@@ -665,9 +698,6 @@ def create_app(artifacts: Path | None = None, *, rate_limit: int = _RATE_LIMIT) 
     # --- Watch together: temporary rooms, in memory, no accounts (D-044) -----------------------
     # Sync routes run on a thread pool and the store is not thread-safe, so every touch of it
     # goes through this one lock. The slow part (scoring) happens outside it, on a snapshot.
-    rooms = RoomStore()
-    rooms_lock = threading.Lock()
-
     def room_failure(error: RoomError) -> HTTPException:
         status = {
             "not_found": 404,
@@ -843,4 +873,4 @@ def create_app(artifacts: Path | None = None, *, rate_limit: int = _RATE_LIMIT) 
     return app
 
 
-app = create_app()
+app = create_app(rooms_file=default_rooms_file())

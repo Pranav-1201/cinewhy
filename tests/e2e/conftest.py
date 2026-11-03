@@ -96,6 +96,8 @@ def _serve(artifacts: Path) -> Iterator[str]:
         "CINEWHY_ARTIFACTS": str(artifacts),
         "PYTHONUTF8": "1",
         "CINEWHY_RATE_LIMIT": "5000",
+        # Rooms made by the tests must not be written into the project's own Data folder.
+        "CINEWHY_ROOMS_FILE": str(artifacts.parent / "rooms.json"),
     }
     process = subprocess.Popen(
         [sys.executable, "-m", "uvicorn", "api.main:app", "--port", str(port)],
