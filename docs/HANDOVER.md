@@ -146,19 +146,26 @@ Model:             Claude Sonnet 5.5
 What we did:       Owner dropped the ratio: 200+ votes, five languages, no cap. --uncapped (D-032) and artifacts/v8
                    (manifest 8d17da05a041): 106,069 titles = 11,930 with receipts + 94,139 ratings-only; 2025-26
                    English now present. Measured floor-50 reach (D-033): only ~650 more films are gettable, not
-                   3,300; added --widest (not yet built). 625 tests pass; every planted bug caught.
-What's left:       1) v9 (--widest) was built and added only 88 titles with receipts, not ~650 (D-034): do not
-                   re-run it; the v8 cache already has 17,201 films with 20+ reviews against 10,386 at 50+.
-                   2) Floor 20 from the v8 cache: needs a sparse similarity (dense item_sim is 569 MB at 11,930
-                   titles and grows with the square). 3) /shelves is 0.45-0.62 s on v8 (0.16-0.23 s on v7); the
-                   catalogue cache change is committed but its wall-clock gain is unmeasured. 4) Push + PR when
-                   the owner says; v8 is not on the demo. 5) Owner's new asks (2026-11-03): cast per title and
-                   actor search, where-to-watch for six platforms, a better Try a review. 6) PARKED OPTION
-                   (owner, 2026-11-03): a sentence-embedding model for similar-word aspect matching, to be
-                   used if it proves the most effective. Order: clause splitting + typo tolerance, then curated
-                   synonyms, then embeddings; measure each on a FRESH random clause sample (not tuned-on A or
-                   B). Costs: a new dependency and ~100 MB model; hours of CPU to re-profile 1.5M reviews
-                   (check for a build-time GPU). It is not RAG: no generation is needed.
+                   3,300; added --widest (built as v9: only +88, D-034). THEN the owner's three asks, all built
+                   and committed on this branch (744 tests pass): (a) CAST: cast.json from IMDb's non-commercial
+                   dumps, "Starring" line, People group in search, a person's top titles (v10, manifest
+                   f269a42c0c3e). (b) WHERE TO WATCH: TMDB providers for six platforms, every country, 74,561 of
+                   106,069 titles on at least one; a country picker, dated and credited to JustWatch (D-035; v11 =
+                   v10 + availability.json, manifest 9ea566ea1455). (c) TRY A REVIEW: statements joined by "and"
+                   are scored separately and nine phrases added (D-036); receipts change only at the next rebuild.
+What's left:       1) v11 is the build to put on the demo when the owner says (it holds v8's titles + cast +
+                   availability); it is NOT there yet and nothing is pushed. 2) Try a review: typo tolerance
+                   ("supeerb") and polarity on figurative praise are not done; then embeddings (PARKED OPTION,
+                   owner 2026-11-03: a sentence-embedding model for similar-word matching, if it proves the most
+                   effective; measure each step on a FRESH random clause sample; costs a new dependency, ~100 MB
+                   model, hours of CPU to re-profile 1.5M reviews, check for a build-time GPU; it is not RAG).
+                   A re-profile (rebuild) is needed before the splitter and phrase changes reach any receipt.
+                   3) Floor 20 from the v8 cache needs a sparse similarity (dense item_sim is 569 MB at 11,930
+                   titles and grows with the square). 4) /shelves is 0.45-0.62 s on v8 (0.16-0.23 s on v7);
+                   wall-clock gain of the catalogue cache is unmeasured. 5) Availability is a snapshot dated
+                   2026-11-03; refresh = re-run fetch_providers then availability (about 9 hours). 6) The Word
+                   documents still describe v9 as untested and do not mention the three new features. 7) Rotate
+                   the TMDB token the owner pasted in chat (it is in no commit and no file).
 Watch out for:     NEVER pass --ratings-only-fallback-votes with --uncapped (BuildConfig refuses it). Hindi, Telugu
                    and the Japanese series parts are smaller than v7 on purpose (no 50-vote fallback). A teammate
                    will build a full dataset later; do not scrape for it. A raw ebD review count includes

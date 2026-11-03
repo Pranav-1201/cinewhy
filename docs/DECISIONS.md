@@ -719,6 +719,28 @@ evaluate unless the owner prefers the extra titles (the owner has not decided). 
 not needed: **the v8 cache already holds 17,201 films with 20 or more merged reviews against 10,386 at 50 or more**
 (+6,815, about +66%), so floor 20 can be built from it once the similarity matrix is made sparse.
 
+## D-035: where to watch covers six platforms in every country TMDB lists, as a dated snapshot (2026-11-03, Sonnet 5.5)
+
+**Owner's brief.** On opening a title, show where it can be watched, only on Netflix, Apple TV, Amazon Prime Video,
+Disney+ Hotstar, Crunchyroll and HBO Max; region "every country TMDB lists". **Source.** TMDB's watch-providers
+endpoint, one request per title, which returns every country at once and is powered by JustWatch (the page credits it,
+as TMDB's terms require). **Platform mapping** (`fetch_providers.PLATFORMS`, TMDB provider ids): Netflix 8 and 1796
+(with-ads variant); Apple TV 350 and 2; Amazon Prime Video 119, 9, 2100, 613, 10; Disney+ Hotstar 122 and 2336;
+Crunchyroll 283; HBO Max 1899. **Left out on purpose:** Amazon Channel add-ons (1968, 1825: a third party sold through
+Amazon), HBO Max sold through U-Next (2284), plain Disney+ (337, a different product from Hotstar) and Netflix Kids
+(175). Ways shown: stream (flatrate), free (including ads), rent and buy. **Result** (v11, manifest `9ea566ea1455`,
+`availability.json` 17 MB, fetch 105,843 answers in about 9 hours at 25 requests a second): 74,561 of 106,069 titles
+(70%) are on at least one of the six in some country; by platform Prime 65,663, Apple TV 49,961, Netflix 10,921, HBO
+Max 5,454, Hotstar 4,829, Crunchyroll 1,694; 139 countries appear. A title missing from the file is "none of the six",
+shown as such with no link, never as "unknown". **Limits.** (1) It is a snapshot: availability changes daily, so the file
+and the page carry the fetch date and tell the visitor to check the service. (2) Prime counts include titles that are
+only rent or buy there, and the page says Rent or Buy, never "included". (3) The first guess of country is the visitor's
+last choice, then their browser region; it is a guess, and the picker lists only countries where the title is offered.
+(4) The data is TMDB's and is not independently checked; no spot-check against the services themselves was done.
+(5) `availability.json` is read only when the verified manifest lists it, and only a plain `movie/N` or `tv/N` path can
+become a link. **Next.** Refreshing is a re-run of `fetch_providers` and `availability` into a new folder (about 9 hours
+at the same rate); nothing re-fetches while a visitor waits.
+
 ## D-036: "Try a review" and the receipts read two statements joined by "and" separately, and know nine more phrases (2026-11-03, Sonnet 5.5)
 
 **Problem.** The owner's example ("the performances were fantastic, the storyline was captivating, and the ending was
