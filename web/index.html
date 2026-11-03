@@ -28,6 +28,10 @@
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12a1 1 0 0 1 1 1v17l-7-4.5L5 21V4a1 1 0 0 1 1-1z"/></svg>
         <span class="label">Library</span>
       </button>
+      <button id="together-btn" class="btn text-btn" type="button" title="Watch together" aria-haspopup="dialog">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><circle cx="17" cy="9" r="2.8"/><path d="M2.5 20c0-3.6 2.9-5.5 6.5-5.5s6.5 1.9 6.5 5.5M15.5 14.8c.5-.2 1-.3 1.5-.3 3 0 4.5 1.6 4.5 4.5"/></svg>
+        <span class="label">Together</span>
+      </button>
       <button id="profile-btn" class="btn text-btn" type="button" title="Profile" aria-haspopup="dialog">
         <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-6 8-6s8 2 8 6"/></svg>
         <span class="label">Profile</span>
@@ -91,6 +95,7 @@
       <div class="tool-list">
         <button class="btn tool" type="button" data-open="library">Open your library</button>
         <button class="btn tool" type="button" data-open="rate">Rate more films</button>
+        <button class="btn tool" type="button" data-open="together">Watch together</button>
         <button class="btn tool" type="button" data-tool="taste">Your taste</button>
         <button class="btn tool" type="button" data-tool="review">Try a review</button>
         <button class="btn tool" type="button" data-tool="about">How it works</button>
@@ -116,6 +121,11 @@
       <div class="segmented" id="library-tabs" role="group" aria-label="Library lists"></div>
       <div id="library-list" aria-live="polite"></div>
     </div>
+  </dialog>
+
+  <dialog id="together-dialog" class="sheet" aria-labelledby="together-title">
+    <button class="btn icon-btn close" type="button" data-close aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    <div class="dialog-pad" id="together-body"></div>
   </dialog>
 
   <dialog id="rate-dialog" class="sheet" aria-labelledby="rate-title">
