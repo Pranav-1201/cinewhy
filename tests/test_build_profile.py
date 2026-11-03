@@ -149,6 +149,75 @@ class TestSplitClauses:
         assert split_clauses(long) == [long]
         assert calls == []  # it never even looked: the work does not grow with a long span
 
+    def test_two_short_verdicts_pointing_opposite_ways_are_cut(self) -> None:
+        # The blended score here used to make a well-cast film's acting come out negative.
+        assert split_clauses("Great cast, terrible script.") == ["Great cast", "terrible script."]
+        assert split_clauses("Great cast and terrible script.") == [
+            "Great cast",
+            "terrible script.",
+        ]
+
+    def test_a_run_of_verdicts_is_cut_where_the_direction_changes(self) -> None:
+        assert split_clauses("Great cast, terrible script, and a weak ending.") == [
+            "Great cast",
+            "terrible script, and a weak ending.",
+        ]
+
+    def test_verdicts_that_agree_are_left_whole(self) -> None:
+        # They already share the right score, and two-word clauses score too weakly to count.
+        assert split_clauses("Good acting, good plot.") == ["Good acting, good plot."]
+        assert split_clauses("Bad acting and a bad story.") == ["Bad acting and a bad story."]
+
+    def test_a_list_with_one_opinion_is_left_whole(self) -> None:
+        sentence = "Great acting, plot, and soundtrack."
+        assert split_clauses(sentence) == [sentence]
+
+    def test_a_negator_flips_the_side_it_governs(self) -> None:
+        assert split_clauses("Good acting, not a good plot") == ["Good acting", "not a good plot"]
+        # "not terrible" is mildly positive, so the two sides agree and nothing is cut.
+        sentence = "Great cast, not terrible script"
+        assert split_clauses(sentence) == [sentence]
+
+    def test_both_sides_must_name_an_aspect_to_be_cut(self) -> None:
+        # "Awful weather" has an opinion but is about no aspect of the film, so there is no verdict
+        # to separate from "great script".
+        sentence = "Pretty awful weather, great script."
+        assert split_clauses(sentence) == [sentence]
+
+    def test_two_full_statements_are_left_to_the_statement_rule(self) -> None:
+        # The statement rule is deliberately narrow about a bare-noun subject (D-036); the verdict
+        # rule must not widen it. With a verbless side, the same pair of opinions is cut.
+        whole = "The acting was great and special effects were awful."
+        assert split_clauses(whole) == [whole]
+        assert split_clauses("The acting was great and special effects awful.") == [
+            "The acting was great",
+            "special effects awful.",
+        ]
+
+    def test_a_side_too_long_to_be_a_verdict_is_not_cut(self) -> None:
+        sentence = "The whole cast of this film was really truly great, terrible script"
+        assert split_clauses(sentence) == [sentence]
+
+    def test_verdict_clauses_stay_verbatim_substrings(self) -> None:
+        sentence = "Great cast, terrible script, and a weak ending."
+        assert all(clause in sentence for clause in split_clauses(sentence))
+
+    def test_the_verdict_work_is_bounded(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        calls: list[str] = []
+        real = extract_module._verdict_sign
+
+        def counting(piece: str) -> int:
+            calls.append(piece)
+            return real(piece)
+
+        monkeypatch.setattr(extract_module, "_verdict_sign", counting)
+        sentence = ("x, bad " * 140)[:980].strip()  # 140 candidates, under the character limit
+        split_clauses(sentence)
+        assert 0 < len(calls) <= 120  # 60 candidates, two looks each: a literal, not the constant
+        calls.clear()
+        split_clauses(("x, bad " * 200)[:1400])  # past the limit: never even looked at
+        assert calls == []
+
     def test_a_crafted_five_thousand_character_text_does_almost_no_work(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:

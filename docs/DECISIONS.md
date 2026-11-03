@@ -761,6 +761,45 @@ are NOT known; the evidence is the examples read, and the gold files hold pre-sp
 change. **Consequence.** Receipts change at the next rebuild, which must re-profile every title (hours); nothing on the
 demo changes until then. Typo tolerance ("supeerb") and a semantic matcher (embeddings, parked) are not done.
 
+## D-040: a blind-labelled sentence set, and a rule for "Great cast, terrible script" that changes almost nothing (2026-11-03, Sonnet 5.5)
+
+**Why a new set.** Every earlier gold set is clause-level, taken AFTER splitting, so none can score a splitting change.
+`aspect_gold_sentences.jsonl` is 200 whole sentences: 150 drawn uniformly at random (stratum U) and 50 at random among
+sentences where the detector finds 2+ aspects (stratum M, the only place a split can show). Drawn with seed 20261103 from
+IMDb and Rotten Tomatoes film reviews (not the aclImdb text of the older sets), sentences of 4+ words and at most 400
+characters, skipping anything overlapping an older gold file (a test pins that). **Protocol.** The labels were written
+BEFORE any code was run on the rows, from the text alone, to rules fixed beforehand: an aspect is labelled only if the
+sentence evaluates it for the film (+1, -1, or 0 for no clear direction); plot summary, other films, and topics outside
+the seven aspects (direction, editing, humour) are not labelled. **The labeller is the assistant, not an independent human**
+(each row says so): the known weakness, so read these as an audit by one labeller. Of 151 labelled mentions in 91
+sentences. **Baseline** (current code, v13 polarity model; Wilson 95%): on U, mention recall 53.2% [39.2, 66.7] (n=47) and
+end-to-end 38.6% [25.7, 53.4] (n=44); over all 200, sign accuracy 85.4% [77.4, 91.0] (n=103) and end-to-end 62.4% [54.2,
+70.0] (n=141), where "end-to-end" is the share of all labelled positive or negative aspects that were found, given an
+opinion and given the right sign. **Stratum M's recall and precision (93%) are inflated by how M was chosen and must not be
+quoted**; only its sign and end-to-end rates are fair. **The rule.** `_split_verdicts` cuts at a comma or "and" between two
+short pieces (2 to 7 words) that each name an aspect, lean OPPOSITE ways (existing cue lists plus good, bad, nice, solid...,
+negation honoured) and are not both full verbal statements. First version cut any two verdicts and was REJECTED on 120,000
+real sentences: 124 changed, 10 sign flips (5 right, 3 wrong), 18 correct opinions lost to silence for 4 gained (two-word
+clauses score too weakly to count). Final version: **6 of 120,000 sentences change (0.005%)**: 4 sign flips of which 3 are
+right ("Despite the great cast, weak writing did this film in", "great cast, ridiculous premise but fun", "Good-looking and
+well-cast, but utterly tedious") and 1 wrong (a run-on missing the space after a full stop), 0 opinions lost. **The 200-row
+set is unchanged by it (0 of 200 sentences affected), so the set can neither confirm nor refute it**; the evidence is the
+corpus reading above. The rule is kept because it is safe and right where it fires, not because it is valuable: the
+pattern is rare. A guard test (a bare-noun second subject stays whole, D-036) was NOT edited: the rule steps aside when
+both sides are full statements. Tests count work, pin literals, and eight planted bugs were caught after one survivor (the
+aspect requirement) got its own test. **Where the pipeline fails** (read AFTER the rule was final; the 200 rows are a
+DEVELOPMENT set from here on, and the next change must be judged on a new fresh sample): of 141 labelled positive or
+negative aspects, 88 (62.4%) are right end to end; 28 (19.9%) were never flagged, 15 (10.6%) have the wrong sign and 10
+(7.1%) were flagged but too weak to count. Most misses look like wording outside the lexicon ("talks in monologues", "hams
+it up", "off the charts", "every frame is magic", "the look of", "theme tune", "wastes none of its three hour run time");
+the wrong signs are polarity errors ("slow-paced, drawn-out thriller" scored +0.68; "depressing, frightening, shocking...
+original" scored negative as praise). **What this means for embeddings (not decided).** Finding aspects by meaning could
+address the largest single loss, but fixing every miss with the right sign could add at most 19.9 points (to about 82%): a
+ceiling, not an estimate. The 25 wrong or weak polarities would remain, because they are a polarity-model problem
+embeddings do not solve. Costs unchanged: a new dependency (needs the owner's approval), a model of about 100 MB, and
+hours to re-read about 1.8M reviews. **Not measured:** agreement with an independent human; any effect on the shipped
+receipts (nothing was rebuilt).
+
 ## D-039: the "and" splitter does bounded work (2026-11-03, Sonnet 5.5)
 
 **Finding.** An automated security review of the pushed branch flagged `_split_statements` (D-036): for every "and" or

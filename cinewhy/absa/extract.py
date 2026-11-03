@@ -18,6 +18,7 @@ import re
 from collections import defaultdict
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
+from itertools import islice
 from pathlib import Path
 from typing import TYPE_CHECKING, Final, Protocol
 
@@ -254,6 +255,72 @@ def _split_statements(text: str, start: int, end: int) -> list[tuple[int, int]]:
     return pieces
 
 
+# Short verdicts side by side: "Great cast, terrible script." Neither side has a verb, so
+# `_split_statements` leaves it whole and both aspects take one blended score (here both come out
+# negative, which scores a well-cast film's acting as bad). A piece counts as a verdict when it is
+# short, names an aspect and leans one way, so a list ("great acting, plot and music") is left
+# whole: "plot" and "music" alone say nothing.
+_VERDICT_JOIN: Final[re.Pattern[str]] = re.compile(
+    r"\s*(?:,\s*(?:and\s+)?|\s+and\s+)", re.IGNORECASE
+)
+_VERDICT_POS: Final[re.Pattern[str]] = re.compile(
+    r"\b(?:good|nice|fine|solid|strong|decent|lovely)\b", re.IGNORECASE
+)
+_VERDICT_NEG: Final[re.Pattern[str]] = re.compile(
+    r"\b(?:bad|stupid|flat|stale|corny)\b", re.IGNORECASE
+)
+_MAX_VERDICT_WORDS: Final[int] = 7
+# Only pieces that point OPPOSITE ways are cut. Two that agree ("good plot, decent cast") already
+# share the right score, and cutting them leaves two-word clauses the polarity model scores too
+# weakly to count: on 120,000 real sentences the first version of this rule, which cut any two
+# verdicts, lost 18 correct opinions to silence for 4 gained (D-040).
+
+
+def _verdict_sign(piece: str) -> int:
+    """+1 or -1 for a short piece that names an aspect and leans one way; 0 otherwise.
+
+    The cue words are the ones `apply_cues` uses plus a few plain ones kept out of that list on
+    purpose ("good" would change how every clause is scored). A negator in the three words before
+    a cue flips it, as in `apply_cues`.
+    """
+    if not 2 <= len(piece.split()) <= _MAX_VERDICT_WORDS:
+        return 0
+    if not any(p.search(piece) for p in _ASPECT_PATTERNS.values()):
+        return 0
+    net = 0
+    for patterns, sign in (((_NEG_CUES, _VERDICT_NEG), -1), ((_POS_CUES, _VERDICT_POS), 1)):
+        for pattern in patterns:
+            for found in pattern.finditer(piece):
+                lead = _CLAUSE_BREAK.split(piece[: found.start()])[-1]
+                negated = bool(_NEGATOR.search(" ".join(lead.split()[-_NEGATION_WINDOW:])))
+                net += -sign if negated else sign
+    return (net > 0) - (net < 0)
+
+
+def _split_verdicts(text: str, start: int, end: int) -> list[tuple[int, int]]:
+    """Cut text[start:end] between two short verdicts joined by a comma or "and".
+
+    The right side runs only to the next join, so a run of verdicts ("great cast, terrible script,
+    and a weak ending") is cut at each join in turn. The same work bounds as `_split_statements`.
+    """
+    if end - start > _MAX_SPLIT_CHARS:
+        return [(start, end)]
+    joins = list(islice(_VERDICT_JOIN.finditer(text, start, end), _MAX_JOINS))
+    pieces: list[tuple[int, int]] = []
+    current = start
+    for i, join in enumerate(joins):
+        stop = joins[i + 1].start() if i + 1 < len(joins) else end
+        left, right = text[current : join.start()], text[join.end() : stop]
+        # Two full statements ("The acting was great and special effects were awful") belong to the
+        # statement rule and its deliberate narrowness (D-036); this rule is for verbless pieces.
+        both_verbal = _PREDICATE.search(left) is not None and _PREDICATE.search(right) is not None
+        if not both_verbal and _verdict_sign(left) * _verdict_sign(right) < 0:
+            pieces.append((current, join.start()))
+            current = join.end()
+    pieces.append((current, end))
+    return pieces
+
+
 def split_clauses(sentence: str) -> list[str]:
     """Split a sentence into clauses that can be scored separately.
 
@@ -291,7 +358,12 @@ def split_clauses(sentence: str) -> list[str]:
             merged[-1] = (merged[-1][0], span[1])
         else:
             merged.append(span)
-    cut = [piece for s, e in merged for piece in _split_statements(text, s, e)]
+    cut = [
+        piece
+        for s, e in merged
+        for statement in _split_statements(text, s, e)
+        for piece in _split_verdicts(text, *statement)
+    ]
     return [c for s, e in cut if (c := text[s:e].strip())] or [text]
 
 
