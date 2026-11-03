@@ -7,10 +7,10 @@ import {
   NOT_ON_SIX,
   PLATFORM_NAMES,
   countriesOf,
+  notInCountry,
   offersIn,
-  pickCountry,
-  regionOf,
   watchFooter,
+  withCountry,
 } from "../../web/js/where.js";
 
 const WHERE = {
@@ -46,22 +46,17 @@ test("an unknown platform or way is shown as sent, never dropped or renamed", ()
   assert.deepEqual(offersIn(odd, "US"), [{ platform: "newco", ways: ["barter"] }]);
 });
 
-test("regionOf reads the country out of a language tag", () => {
-  assert.equal(regionOf("en-IN"), "IN");
-  assert.equal(regionOf("hi_in"), "IN");
-  assert.equal(regionOf("fr-CA"), "CA");
-  assert.equal(regionOf("en"), null);
-  assert.equal(regionOf(""), null);
-  assert.equal(regionOf(undefined), null);
+test("withCountry keeps the visitor's own country in the picker even when the title is not offered there", () => {
+  assert.deepEqual(withCountry(["GB", "US"], "US"), ["GB", "US"]); // already there: unchanged
+  assert.deepEqual(withCountry(["GB", "US"], "IN"), ["GB", "IN", "US"]); // added, in order
+  assert.deepEqual(withCountry([], "IN"), ["IN"]);
 });
 
-test("pickCountry prefers the visitor's choice, then their region, and only a country on offer", () => {
-  const countries = ["GB", "IN", "US"];
-  assert.equal(pickCountry(countries, "US", "IN"), "US");
-  assert.equal(pickCountry(countries, "FR", "IN"), "IN"); // the chosen country is not on offer here
-  assert.equal(pickCountry(countries, null, "ZZ"), "GB"); // nothing preferred is on offer
-  assert.equal(pickCountry(countries), "GB");
-  assert.equal(pickCountry([], "US"), null);
+test("the not-offered line names the country and tells the visitor what to do", () => {
+  const line = notInCountry("India");
+  assert.match(line, /in India\./);
+  assert.match(line, /Choose another country/);
+  for (const name of Object.values(PLATFORM_NAMES)) assert.ok(line.includes(name), name);
 });
 
 test("the footer always states the date and credits the source", () => {

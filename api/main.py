@@ -372,6 +372,7 @@ def discover_films(request: DiscoverRequest) -> DiscoverResult:
         to_year=request.to_year,
         exclude=request.exclude_movie_ids,
         person_id=request.person_id,
+        receipts_only=request.receipts_only,
         manifest=state.manifest.manifest_hash,
     )
 

@@ -825,6 +825,45 @@ ruled out for being seen); MovieLens users sharing a similarity are not friends 
 proxy for "would enjoy it". Intervals come from resampling groups, which are drawn from only 300 users, so groups of 10 and 20
 reuse the same people heavily. Raw numbers: `group_eval_results.json` from `python -m cinewhy.recsys.group_eval` (seed 2026).
 
+## D-040: a blind-labelled sentence set, and a rule for "Great cast, terrible script" that changes almost nothing (2026-11-03, Sonnet 5.5)
+
+**Why a new set.** Every earlier gold set is clause-level, taken AFTER splitting, so none can score a splitting change.
+`aspect_gold_sentences.jsonl` is 200 whole sentences: 150 drawn uniformly at random (stratum U) and 50 at random among
+sentences where the detector finds 2+ aspects (stratum M, the only place a split can show). Drawn with seed 20261103 from
+IMDb and Rotten Tomatoes film reviews (not the aclImdb text of the older sets), sentences of 4+ words and at most 400
+characters, skipping anything overlapping an older gold file (a test pins that). **Protocol.** The labels were written
+BEFORE any code was run on the rows, from the text alone, to rules fixed beforehand: an aspect is labelled only if the
+sentence evaluates it for the film (+1, -1, or 0 for no clear direction); plot summary, other films, and topics outside
+the seven aspects (direction, editing, humour) are not labelled. **The labeller is the assistant, not an independent human**
+(each row says so): the known weakness, so read these as an audit by one labeller. Of 151 labelled mentions in 91
+sentences. **Baseline** (current code, v13 polarity model; Wilson 95%): on U, mention recall 53.2% [39.2, 66.7] (n=47) and
+end-to-end 38.6% [25.7, 53.4] (n=44); over all 200, sign accuracy 85.4% [77.4, 91.0] (n=103) and end-to-end 62.4% [54.2,
+70.0] (n=141), where "end-to-end" is the share of all labelled positive or negative aspects that were found, given an
+opinion and given the right sign. **Stratum M's recall and precision (93%) are inflated by how M was chosen and must not be
+quoted**; only its sign and end-to-end rates are fair. **The rule.** `_split_verdicts` cuts at a comma or "and" between two
+short pieces (2 to 7 words) that each name an aspect, lean OPPOSITE ways (existing cue lists plus good, bad, nice, solid...,
+negation honoured) and are not both full verbal statements. First version cut any two verdicts and was REJECTED on 120,000
+real sentences: 124 changed, 10 sign flips (5 right, 3 wrong), 18 correct opinions lost to silence for 4 gained (two-word
+clauses score too weakly to count). Final version: **6 of 120,000 sentences change (0.005%)**: 4 sign flips of which 3 are
+right ("Despite the great cast, weak writing did this film in", "great cast, ridiculous premise but fun", "Good-looking and
+well-cast, but utterly tedious") and 1 wrong (a run-on missing the space after a full stop), 0 opinions lost. **The 200-row
+set is unchanged by it (0 of 200 sentences affected), so the set can neither confirm nor refute it**; the evidence is the
+corpus reading above. The rule is kept because it is safe and right where it fires, not because it is valuable: the
+pattern is rare. A guard test (a bare-noun second subject stays whole, D-036) was NOT edited: the rule steps aside when
+both sides are full statements. Tests count work, pin literals, and eight planted bugs were caught after one survivor (the
+aspect requirement) got its own test. **Where the pipeline fails** (read AFTER the rule was final; the 200 rows are a
+DEVELOPMENT set from here on, and the next change must be judged on a new fresh sample): of 141 labelled positive or
+negative aspects, 88 (62.4%) are right end to end; 28 (19.9%) were never flagged, 15 (10.6%) have the wrong sign and 10
+(7.1%) were flagged but too weak to count. Most misses look like wording outside the lexicon ("talks in monologues", "hams
+it up", "off the charts", "every frame is magic", "the look of", "theme tune", "wastes none of its three hour run time");
+the wrong signs are polarity errors ("slow-paced, drawn-out thriller" scored +0.68; "depressing, frightening, shocking...
+original" scored negative as praise). **What this means for embeddings (not decided).** Finding aspects by meaning could
+address the largest single loss, but fixing every miss with the right sign could add at most 19.9 points (to about 82%): a
+ceiling, not an estimate. The 25 wrong or weak polarities would remain, because they are a polarity-model problem
+embeddings do not solve. Costs unchanged: a new dependency (needs the owner's approval), a model of about 100 MB, and
+hours to re-read about 1.8M reviews. **Not measured:** agreement with an independent human; any effect on the shipped
+receipts (nothing was rebuilt).
+
 ## D-039: the "and" splitter does bounded work (2026-11-03, Sonnet 5.5)
 
 **Finding.** An automated security review of the pushed branch flagged `_split_statements` (D-036): for every "and" or
@@ -841,6 +880,47 @@ itself, was fixed. **Not changed.** The leading `\s*` in `_JOIN`, which the revi
 0.0 ms, so it is not exploitable here. The build runs the same code, so a review that is one huge unpunctuated sentence
 now keeps its old, single-clause behaviour. v12 and v13 were built BEFORE this change; a rebuild would differ in about
 0.02% of sentences, which is immaterial to the receipts.
+
+## D-042: "Show me another" walks down the picks without touching the visitor's lists (2026-11-03, Sonnet 5.5)
+
+**Owner's brief.** A visitor who has been recommended a title, even marked it Want to watch, and still wants to look at
+the choices gets a button that recommends the next best. **Design.** The picks shelf already ranks 16 titles, so the button
+walks down that ranking (`web/js/picks.js`, pure, tested in Node): a queue of ids, the position, and every id shown, so
+nothing comes back. A "Previous pick" button steps back. When the 16 run out the page asks `/discover` for 16 more with
+`receipts_only: true` (a new optional request field, default false, so every existing call is unchanged; the top pick
+promises the sentences behind it, so ratings-only titles are refused up front, as the picks shelf does) and with every
+queue, shown and watched id excluded; when the server has none the button is disabled with a note saying so. The row under
+the pick lists only what comes AFTER the title on show, so no title is on screen twice. **Behaviour pinned by tests.**
+Marking the pick Want to watch keeps it on the list, the page does not jerk to another title when the visitor answers (a
+redraw keeps the title on show if it is still ranked), and pressing the button never changes a list. Liking the pick moves
+on to the next best, because a liked film leaves the picks (as it did before this change). **Limit.** If a visitor's
+watched list plus the titles shown ever exceeded the server's cap of 3,000 excluded ids, the tail of the watched list would
+be dropped from the request; the queue's own ids go first so a title just passed is never what is lost. Eight planted bugs
+were caught, after two that needed a test of the request itself.
+
+## D-041: the top pick carries the film page's essentials, and where-to-watch defaults to India (2026-11-03, Sonnet 5.5)
+
+**Owner's brief (2026-11-03).** (1) On the top recommended title show what the film page shows: the Starring line, the
+Like / Not for me / I've watched it / Want to watch buttons with IMDb and Rotten Tomatoes, and Where to watch; drop the
+"why we picked this" receipts excerpt; rename the yellow button "Why we chose this", which opens the receipts. (2) Where to
+watch defaults to India, and a profile's country defaults to India too. **Change 1.** `spotlight()` in `rails.js` reuses
+`actions`, `starring` and `whereToWatch` from the film page (the pick already fetched `/movie/{id}`, so no new request);
+the yellow button calls `openFilm(id, { toReceipt: true })`, which scrolls the drawer to the receipt. With no details
+the pick still shows the yellow button. No existing test pinned the old wording. **Change 2.** The profile gains
+`country`, an ISO two-letter capital code, default `IN` (`DEFAULT_COUNTRY`); an older save without it, or any invalid value,
+reads as India; `setCountry` ignores anything but a valid code; the profile version is not bumped (the field is optional
+on read); a taste reset keeps it (a setting, not a taste). `watch.js` opens on `state.country`, keeps that country in the
+picker even when the title is not offered there, and in that case SAYS SO ("Not on Netflix... in India. Choose another
+country...") instead of silently showing another country. A pick in the picker is saved to the profile. **Supersedes
+D-035's limit (3)**: the first guess is no longer the browser's region and the separate browser-storage key
+`cinewhy.country` is gone (a visitor who had chosen a country there starts on India once). **Tests.** `regionOf` and
+`pickCountry` were removed with their tests, and two browser tests that encoded the browser-language default were
+replaced, deliberately and on the owner's instruction; new Node tests pin the default, the validation, export and import
+and the reset, and the browser tests pin India with an `en-US` browser, saving the pick, and the not-offered message.
+Fourteen planted bugs across both changes were caught after two survivors (the scroll to the receipts) got a test with a
+window short enough to need it. **Limits.** The first-visit sheet asks only a coarse region ("India", "North America"...)
+and still has no country question, so every new visitor is India until they pick; a real profile with accounts (not
+built) will adopt this field. "India only" was read as a default, not a removal of the picker: say if it should go.
 
 ## D-038: the review floor drops from 50 to 20 (build v12), which adds 8,555 thinner receipts (2026-11-03, Sonnet 5.5)
 

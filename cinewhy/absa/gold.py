@@ -26,7 +26,13 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from cinewhy.absa.extract import PolarityScorer, aspect_polarity, detect_aspects
+from cinewhy.absa.extract import (
+    MIN_OPINION,
+    PolarityScorer,
+    aspect_polarity,
+    detect_aspects,
+    split_clauses,
+)
 from cinewhy.schemas import Aspect
 
 _Z95 = 1.96
@@ -194,4 +200,102 @@ def evaluate_gold(rows: Sequence[GoldRow], scorer: PolarityScorer) -> GoldReport
         polarity_accuracy=Proportion(sum(correct), len(correct)),
         polarity_accuracy_confident=Proportion(sum(confident), len(confident)),
         n_rows=len(rows),
+    )
+
+
+@dataclass(frozen=True)
+class SentenceRow:
+    """One whole sentence with every aspect it evaluates, labelled before any code saw it.
+
+    `stratum` is "U" for a uniformly random sentence and "M" for one drawn at random from the
+    sentences the detector found two or more aspects in (the only place a clause-splitting change
+    can show). An aspect labelled 0 is discussed without a clear direction.
+    """
+
+    id: int
+    stratum: str
+    text: str
+    aspects: dict[Aspect, int]
+
+
+@dataclass(frozen=True)
+class SentenceReport:
+    """The whole pipeline (clause splitting, detection, polarity) against sentence labels.
+
+    Unlike the clause-level sets, this scores the splitting itself: a sentence is handed to the
+    pipeline whole and its clauses are formed by `split_clauses`. Three rates, each with its n:
+    `mention_recall` and `mention_precision` for finding the right aspects, `sign_accuracy` for the
+    sign of an opinion the pipeline did express, and `end_to_end` for the share of ALL labelled
+    positive or negative aspects that were found, given an opinion and given the right sign (so
+    staying silent counts against it).
+    """
+
+    n_sentences: int
+    mention_recall: Proportion
+    mention_precision: Proportion
+    sign_accuracy: Proportion
+    end_to_end: Proportion
+
+
+def load_sentence_gold(path: Path) -> list[SentenceRow]:
+    """Read a sentence-level gold JSONL file; a malformed row raises, never shrinks the set."""
+    rows: list[SentenceRow] = []
+    for line_no, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+        if not line.strip():
+            continue
+        raw = json.loads(line)
+        aspects = {Aspect(k): int(v) for k, v in raw["aspects"].items()}
+        if raw["stratum"] not in ("U", "M") or any(v not in (-1, 0, 1) for v in aspects.values()):
+            raise ValueError(f"{path}:{line_no}: bad stratum or polarity")
+        rows.append(SentenceRow(raw["id"], raw["stratum"], raw["text"], aspects))
+    return rows
+
+
+def predict_sentence(text: str, scorer: PolarityScorer) -> dict[Aspect, float | None]:
+    """What the pipeline concludes about one sentence, as the build and `/analyze` would.
+
+    Returns each flagged aspect with the mean of the clause opinions that reached `MIN_OPINION`,
+    or None when it was flagged but no clause carried an opinion.
+    """
+    clauses = split_clauses(text)
+    scores = scorer.score_many(clauses)
+    opinions: dict[Aspect, list[float]] = {}
+    for clause, score in zip(clauses, scores, strict=True):
+        for aspect in detect_aspects(clause):
+            polarity = aspect_polarity(aspect, clause, score)
+            bucket = opinions.setdefault(aspect, [])
+            if abs(polarity) >= MIN_OPINION:
+                bucket.append(polarity)
+    return {a: (sum(v) / len(v) if v else None) for a, v in opinions.items()}
+
+
+def evaluate_sentences(
+    rows: Sequence[SentenceRow], scorer: PolarityScorer, *, stratum: str | None = None
+) -> SentenceReport:
+    """Score the pipeline on sentence-level labels, optionally one stratum only."""
+    chosen = [r for r in rows if stratum is None or r.stratum == stratum]
+    truth_total = flagged_total = both = 0
+    decided = decided_right = signed_total = signed_right = 0
+    for row in chosen:
+        predicted = predict_sentence(row.text, scorer)
+        truth_total += len(row.aspects)
+        flagged_total += len(predicted)
+        both += len(set(row.aspects) & set(predicted))
+        for aspect, label in row.aspects.items():
+            if label == 0:
+                continue
+            signed_total += 1
+            opinion = predicted.get(aspect)
+            if opinion is None:
+                continue  # missed, or flagged without an opinion: silent, so not decided
+            decided += 1
+            if (opinion > 0) == (label == 1):
+                decided_right += 1
+                signed_right += 1
+    return SentenceReport(
+        n_sentences=len(chosen),
+        mention_recall=Proportion(both, truth_total),
+        mention_precision=Proportion(both, flagged_total),
+        sign_accuracy=Proportion(decided_right, decided),
+        end_to_end=Proportion(signed_right, signed_total),
     )

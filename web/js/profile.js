@@ -19,6 +19,10 @@ const REGIONS = ["india", "north-america", "europe", "elsewhere"];
 const SEXES = ["female", "male", "other"];
 const LANGUAGES = ["en", "hi", "ja", "fr"];
 const KINDS = ["film", "series"];
+// The country where-to-watch is shown for: an ISO 3166 code, India until the visitor picks another.
+// A profile made in future (with an account) starts here too, so every new profile means India.
+export const DEFAULT_COUNTRY = "IN";
+const COUNTRY = /^[A-Z]{2}$/;
 // Profiles saved before the year-range bar stored one of four fixed choices; each becomes a start year.
 const LEGACY_ERA_FROM = { new: 2021, 2012: 2012, 2000: 2000 };
 
@@ -29,6 +33,7 @@ export const defaultProfile = () => ({
   recency: 0.5, recencyTouched: false,
   age: null, region: null, sex: null, hindiFirst: false, onboarded: false,
   hideWatched: true,
+  country: DEFAULT_COUNTRY,
 });
 
 const idList = (value) => {
@@ -88,6 +93,14 @@ export function migrate(raw) {
   p.hindiFirst = raw.hindiFirst === true;
   p.onboarded = raw.onboarded === true;
   p.hideWatched = raw.hideWatched !== false; // hidden unless the visitor switched it off
+  // A profile saved before the field existed, or with anything but a two-letter code, is India's.
+  p.country = typeof raw.country === "string" && COUNTRY.test(raw.country) ? raw.country : DEFAULT_COUNTRY;
+  return p;
+}
+
+/** Set the country where-to-watch is shown for. Anything but a two-letter capital code is ignored. */
+export function setCountry(p, code) {
+  if (typeof code === "string" && COUNTRY.test(code)) p.country = code;
   return p;
 }
 

@@ -37,22 +37,17 @@ export function offersIn(where, country) {
   return offers;
 }
 
-/** The region of a language tag: "en-IN" is "IN", "en" is null. */
-export function regionOf(languageTag) {
-  const match = /^[A-Za-z]{2,3}[-_]([A-Za-z]{2})\b/.exec(String(languageTag ?? ""));
-  return match ? match[1].toUpperCase() : null;
+/** The countries the picker lists: every country the title is offered in, plus the visitor's own
+    country even when it is not among them. The page always opens on the visitor's country (India
+    unless they chose another), so it must be in the list; for a title not offered there the list
+    says so rather than quietly showing some other country. */
+export function withCountry(countries, chosen) {
+  return countries.includes(chosen) ? countries : [...countries, chosen].sort();
 }
 
-/** The country to show first: the first preferred one the title is offered in (the visitor's own
-    choice, then their browser's region), else the first country it is offered in. Only a country
-    the title is offered in can be picked, so the answer is never an empty page for a title that
-    is available somewhere. */
-export function pickCountry(countries, ...preferred) {
-  for (const code of preferred) {
-    if (code && countries.includes(code)) return code;
-  }
-  return countries[0] ?? null;
-}
+/** The line shown when none of the six services offers the title in the visitor's country. */
+export const notInCountry = (name) =>
+  `Not on Netflix, Apple TV, Amazon Prime Video, Disney+ Hotstar, Crunchyroll or HBO Max in ${name}. Choose another country to see where else it is.`;
 
 /** The line shown when the title is on none of the six anywhere. */
 export const NOT_ON_SIX =
