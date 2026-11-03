@@ -15,8 +15,8 @@ set FOUND=
 for /d %%D in (artifacts\v*) do if exist "%%D\manifest.json" set FOUND=1
 if exist artifacts\manifest.json set FOUND=1
 if not defined FOUND (
-  echo No artifacts found. Unzip the ready-made build into artifacts\v3 ^(README.md, step 5^), or
-  echo build one from the raw datasets ^(README.md, step 6^):  %PY% -m cinewhy.build --out artifacts\v3
+  echo No data found. Unzip the ready-made data zip into artifacts\v13 so that
+  echo artifacts\v13\manifest.json exists. Steps: README.md, "Get the data".
   exit /b 1
 )
 
@@ -33,6 +33,28 @@ if not errorlevel 1 (
 
 echo Starting CineWhy. The first load checks about 1.8 GB of data files and takes up to a minute;
 echo the browser opens by itself as soon as the site is ready. Press Ctrl+C here to stop it.
+echo.
+echo ------------------------------------------------------------------
+echo  WANT A FRIEND TO JOIN YOU? Make a temporary public link:
+echo ------------------------------------------------------------------
+echo  Once, ever: install the free tool. Open a NEW terminal and run
+echo      winget install --id Cloudflare.cloudflared
+echo  then close that terminal and open a fresh one.
+echo.
+echo  Every time you want a new link:
+echo    1. Leave THIS window open. It is the server.
+echo    2. Open a SECOND terminal and run
+echo           cloudflared tunnel --url http://localhost:8000
+echo    3. After a few seconds it prints an address that ends in
+echo       trycloudflare.com . Open THAT address in your browser ^(not
+echo       localhost^), then Profile, Watch together, Start a room, and
+echo       send your friend the invite link.
+echo    4. Ctrl+C in the second terminal closes the link. A new link is
+echo       made each time, so send the new one.
+echo  While the link is up, anyone who has it can open the app.
+echo  Full guide: README.md, "Share it with a friend".
+echo ------------------------------------------------------------------
+echo.
 rem Open the browser only once the server answers: it needs about 30 seconds to start, and a
 rem browser opened sooner shows a "can't connect" page that looks like a broken site.
 start "" powershell -NoProfile -WindowStyle Hidden -Command "for ($i = 0; $i -lt 240; $i++) { try { Invoke-WebRequest -UseBasicParsing -Uri 'http://127.0.0.1:8000/health' -TimeoutSec 5 | Out-Null; Start-Process 'http://localhost:8000/'; break } catch { Start-Sleep -Seconds 1 } }"

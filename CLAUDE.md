@@ -61,6 +61,12 @@ replace it.
 - Stage explicit paths. Never `git add -A`.
 - Never edit a test to make a change pass — a failing guard test *is* the finding.
 - No new dependency without asking. Use a throwaway venv for one-off tooling.
+- **The data zip always matches the data.** Whenever anything in an `artifacts/vN` folder is changed,
+  added or removed (a new build, an edited file, a new version number), re-run
+  `python -m cinewhy.artifacts.package` in the same session, so `D:\NLPPROJECT\artifacts\cinewhy-artifacts-vN.zip`
+  is current, and put its new SHA-256 and size in README step 4. The zip is what a teammate downloads
+  and unpacks after `git clone`. Never upload it anywhere public (MovieLens and Rotten Tomatoes licences).
+  Never report a data change as done while the zip is stale.
 
 ---
 
