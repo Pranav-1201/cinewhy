@@ -159,9 +159,12 @@ What we did:       Owner dropped the ratio: 200+ votes, five languages, no cap. 
                    (median 30 reviews, 3.9 aspects each). v13 (manifest 16c1ba2b4576) = v12 + cast + availability:
                    106,115 titles; on it /shelves is 0.12 s warm, the server holds 2.9 GB. The five Word documents
                    were regenerated with all of this and validated.
-What's left:       1) v13 (floor 20 + cast + where to watch) is the build to put on the demo when the owner
-                   says (v11 is the same minus floor 20); it is NOT there yet and nothing is pushed. The demo
-                   host must hold a 1.7 GB similarity matrix. 2) Try a review: typo tolerance
+What's left:       1) v13 IS ON THE DEMO (owner said "Put v13 on the demo", 2026-11-03): D:\NLPPROJECT main was
+                   fast-forwarded to this branch (local only, rollback: git reset --hard e81629c) and
+                   artifacts\v13 copied in byte-identical; start.bat serves the highest vN, so v13. Checked: it
+                   boots in 16 s, manifest 16c1ba2b4576, cast and availability on. v7 stays beside it as a
+                   rollback (moving artifacts\v13 away serves v7 again; the new code works with v7 and just shows no cast or where-to-watch).
+                   NOTHING IS PUSHED to GitHub; origin/main is still PR #3. A host must hold a 1.7 GB matrix. 2) Try a review: typo tolerance
                    ("supeerb") and polarity on figurative praise are not done; then embeddings (PARKED OPTION,
                    owner 2026-11-03: a sentence-embedding model for similar-word matching, if it proves the most
                    effective; measure each step on a FRESH random clause sample; costs a new dependency, ~100 MB

@@ -31,7 +31,7 @@ if not errorlevel 1 (
   exit /b 0
 )
 
-echo Starting CineWhy. The first load checks about 560 MB of data files and takes up to a minute;
+echo Starting CineWhy. The first load checks about 1.8 GB of data files and takes up to a minute;
 echo the browser opens by itself as soon as the site is ready. Press Ctrl+C here to stop it.
 rem Open the browser only once the server answers: it needs about 30 seconds to start, and a
 rem browser opened sooner shows a "can't connect" page that looks like a broken site.
