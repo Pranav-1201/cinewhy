@@ -91,6 +91,7 @@
       <div class="tool-list">
         <button class="btn tool" type="button" data-open="library">Open your library</button>
         <button class="btn tool" type="button" data-open="rate">Rate more films</button>
+        <button class="btn tool" type="button" data-open="together">Watch together</button>
         <button class="btn tool" type="button" data-tool="taste">Your taste</button>
         <button class="btn tool" type="button" data-tool="review">Try a review</button>
         <button class="btn tool" type="button" data-tool="about">How it works</button>
@@ -116,6 +117,11 @@
       <div class="segmented" id="library-tabs" role="group" aria-label="Library lists"></div>
       <div id="library-list" aria-live="polite"></div>
     </div>
+  </dialog>
+
+  <dialog id="together-dialog" class="sheet" aria-labelledby="together-title">
+    <button class="btn icon-btn close" type="button" data-close aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    <div class="dialog-pad" id="together-body"></div>
   </dialog>
 
   <dialog id="rate-dialog" class="sheet" aria-labelledby="rate-title">

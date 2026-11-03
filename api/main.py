@@ -19,6 +19,7 @@ import json
 import logging
 import os
 import re
+import threading
 import time
 import uuid
 from collections import defaultdict, deque
@@ -26,9 +27,9 @@ from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
 
-from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi import FastAPI, Header, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -47,6 +48,13 @@ from api.models import (
     MovieDetail,
     PersonHit,
     PersonRef,
+    RoomCreated,
+    RoomCreateRequest,
+    RoomJoined,
+    RoomJoinRequest,
+    RoomMemberView,
+    RoomRecommendRequest,
+    RoomView,
     SentenceAnalysis,
     ShelvesRequest,
     WatchOption,
@@ -65,7 +73,9 @@ from cinewhy.data.fetch_providers import PLATFORMS, WAY_ORDER
 from cinewhy.recsys import discover, rank
 from cinewhy.recsys.catalogue import Catalogue, load_catalogue
 from cinewhy.recsys.discover import DiscoverResult
+from cinewhy.recsys.group import MIN_GROUP, GroupResult, Member, recommend_group
 from cinewhy.recsys.people import cast_of, imdb_number, search_people
+from cinewhy.recsys.rooms import Room, RoomError, RoomStore
 from cinewhy.recsys.shelves import ShelvesResult, build_shelves
 from cinewhy.schemas import (
     ArtifactManifest,
@@ -408,6 +418,30 @@ def people(query: str, limit: int = 8) -> list[PersonHit]:
     ]
 
 
+_LIKES_SHOWN = 50  # how many of a member's likes their friends can see; the count is not capped
+
+
+def room_view(room: Room, you: str) -> RoomView:
+    """A room as the member `you` sees it: everyone's name and likes (friends see each other's)."""
+    return RoomView(
+        code=room.code,
+        version=room.version,
+        max_members=room.max_members,
+        members=tuple(
+            RoomMemberView(
+                member_id=e.member_id,
+                name=e.name,
+                is_host=e.member_id == room.host_id,
+                is_you=e.member_id == you,
+                liked_movie_ids=e.member.taste.liked_movie_ids[:_LIKES_SHOWN],
+                watched_count=len(e.member.watched),
+                want_count=len(e.member.want),
+            )
+            for e in room.members.values()
+        ),
+    )
+
+
 def analyze(request: AnalyzeRequest) -> AnalyzeResponse:
     """Break a pasted review into clauses, aspects and polarities.
 
@@ -561,6 +595,101 @@ def create_app(artifacts: Path | None = None, *, rate_limit: int = _RATE_LIMIT) 
     @app.get("/facets")
     def facets_route() -> Facets:
         return facets()
+
+    # --- Watch together: temporary rooms, in memory, no accounts (D-044) -----------------------
+    # Sync routes run on a thread pool and the store is not thread-safe, so every touch of it
+    # goes through this one lock. The slow part (scoring) happens outside it, on a snapshot.
+    rooms = RoomStore()
+    rooms_lock = threading.Lock()
+
+    def room_failure(error: RoomError) -> HTTPException:
+        status = {"not_found": 404, "full": 409, "forbidden": 403, "busy": 503}
+        return HTTPException(status_code=status.get(error.kind, 400), detail=error.kind)
+
+    @app.post("/rooms")
+    def room_create_route(request: RoomCreateRequest) -> RoomCreated:
+        try:
+            with rooms_lock:
+                room = rooms.create(request.max_members)
+        except RoomError as error:
+            raise room_failure(error) from None
+        return RoomCreated(code=room.code, max_members=room.max_members)
+
+    @app.post("/rooms/{code}/join")
+    def room_join_route(code: str, request: RoomJoinRequest) -> RoomJoined:
+        # Consent is enforced here, on the server: a client that skips its own dialog still cannot
+        # put a library into a room without saying it agreed.
+        if not request.consent:
+            raise HTTPException(status_code=400, detail="consent required")
+        member = Member(
+            name="",
+            taste=request.profile,
+            watched=frozenset(request.watched_movie_ids),
+            want=frozenset(request.want_movie_ids),
+            languages=request.languages,
+            kinds=request.kinds,
+        )
+        try:
+            with rooms_lock:
+                entry = rooms.join(code, request.name, member)
+                view = room_view(rooms.get(code), entry.member_id)
+        except RoomError as error:
+            raise room_failure(error) from None
+        return RoomJoined(token=entry.token, member_id=entry.member_id, room=view)
+
+    @app.get("/rooms/{code}")
+    def room_get_route(
+        code: str, room_token: Annotated[str, Header(alias="X-Room-Token")] = ""
+    ) -> RoomView:
+        try:
+            with rooms_lock:
+                room, entry = rooms.authenticate(code, room_token)
+                return room_view(room, entry.member_id)
+        except RoomError as error:
+            raise room_failure(error) from None
+
+    @app.post("/rooms/{code}/recommend")
+    def room_recommend_route(
+        code: str,
+        request: RoomRecommendRequest,
+        room_token: Annotated[str, Header(alias="X-Room-Token")] = "",
+    ) -> GroupResult:
+        try:
+            with rooms_lock:
+                room, _ = rooms.authenticate(code, room_token)
+                members = RoomStore.members_of(room)
+        except RoomError as error:
+            raise room_failure(error) from None
+        if len(members) < MIN_GROUP:
+            raise HTTPException(status_code=409, detail="need_more_people")
+        return recommend_group(
+            _loaded().catalogue,
+            members,
+            limit=request.limit,
+            exclude=request.exclude_movie_ids,
+        )
+
+    @app.post("/rooms/{code}/leave")
+    def room_leave_route(
+        code: str, room_token: Annotated[str, Header(alias="X-Room-Token")] = ""
+    ) -> dict[str, str]:
+        try:
+            with rooms_lock:
+                rooms.leave(code, room_token)
+        except RoomError as error:
+            raise room_failure(error) from None
+        return {"status": "left"}
+
+    @app.post("/rooms/{code}/close")
+    def room_close_route(
+        code: str, room_token: Annotated[str, Header(alias="X-Room-Token")] = ""
+    ) -> dict[str, str]:
+        try:
+            with rooms_lock:
+                rooms.close(code, room_token)
+        except RoomError as error:
+            raise room_failure(error) from None
+        return {"status": "closed"}
 
     @app.post("/analyze")
     def analyze_route(request: AnalyzeRequest) -> AnalyzeResponse:

@@ -11,6 +11,7 @@ import { openPerson } from "./people.js";
 import { openProfile, initProfile } from "./profilesheet.js";
 import { renderAll } from "./rails.js";
 import { openRate } from "./rate.js";
+import { initTogether, openTogether } from "./together.js";
 import { aspectLabels, initTheme, load, save, state, toggleTheme } from "./state.js";
 import { poster } from "./tile.js";
 import { initialsOf, titlesLabel, yearAndKind } from "./format.js";
@@ -166,7 +167,8 @@ async function boot() {
     about: () => { renderAbout(); $("#about-dialog").showModal(); },
     theme: toggleTheme,
   };
-  const opens = { library: () => openLibrary(ctx), rate: () => openRate(), profile: () => openProfile() };
+  const inviteCode = initTogether(ctx); // a friend's link opens straight to the room
+  const opens = { library: () => openLibrary(ctx), rate: () => openRate(), profile: () => openProfile(), together: () => openTogether(ctx) };
   for (const [name, open] of Object.entries(opens)) {
     for (const id of [`#${name}-btn`, `#nav-${name}`]) $(id)?.addEventListener("click", open);
   }
@@ -181,7 +183,8 @@ async function boot() {
   // A like or skip changes the ranking, but not while the visitor is still browsing the rails.
   document.addEventListener("cinewhy:opinion", debounce(() => renderAll(ctx), 1200));
   await renderAll(ctx);
-  if (!state.onboarded) openOnboarding(ctx);
+  if (inviteCode) openTogether(ctx, inviteCode);
+  else if (!state.onboarded) openOnboarding(ctx);
 }
 
 boot();

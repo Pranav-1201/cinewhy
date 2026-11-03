@@ -455,6 +455,40 @@ footer { padding: 28px var(--gutter) 48px; color: var(--muted); font-size: 0.85r
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 }
+/* ---- watch together: the room dialog ---------------------------------------------------------- */
+.tg-start { display: grid; gap: 14px; margin-top: 6px; }
+.tg-join { display: flex; gap: 8px; }
+.tg-join input, .field input[type="text"], .tg-invite input {
+  flex: 1; min-width: 0; min-height: 42px; padding: 0 14px; border-radius: 12px;
+  border: 1px solid var(--line); background: var(--surface); color: var(--text); font: inherit;
+}
+.tg-join input { text-transform: uppercase; letter-spacing: 0.12em; }
+.field label { display: block; font-weight: 700; margin-bottom: 8px; }
+.field input[type="text"] { width: 100%; }
+.tg-share { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 12px 16px; margin-bottom: 16px; color: var(--text-2); font-size: 0.95rem; }
+.tg-share ul { margin: 6px 0 10px 1.1em; }
+.tg-agree { display: flex; gap: 10px; align-items: flex-start; font-weight: 600; cursor: pointer; }
+.tg-agree input { width: 20px; height: 20px; margin-top: 2px; accent-color: var(--accent); flex: none; }
+.tg-code { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin: 6px 0 12px; }
+.tg-code strong { font-size: 1.7rem; letter-spacing: 0.18em; font-variant-numeric: tabular-nums; }
+.tg-invite { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+.tg-members { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.tg-member { display: flex; gap: 4px 10px; flex-wrap: wrap; align-items: center; padding: 10px 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
+.tg-name { font-weight: 800; }
+.tg-member .sub, .tg-card .sub { color: var(--muted); font-size: 0.85rem; }
+.tg-member .sub:last-child { flex-basis: 100%; }
+.tg-list { list-style: none; margin: 18px 0 0; padding: 0; display: grid; gap: 12px; }
+.tg-card { display: grid; grid-template-columns: 84px minmax(0, 1fr); gap: 14px; padding: 10px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); }
+.tg-poster { background: none; border: 0; padding: 0; cursor: pointer; }
+.tg-card .poster { width: 100%; }
+.tg-card .name { background: none; border: 0; padding: 0; text-align: left; font-weight: 800; font-size: 1.1rem; cursor: pointer; line-height: 1.2; }
+.tg-card .name:hover { text-decoration: underline; }
+.tg-fits { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.tg-fit { padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line); font-size: 0.82rem; color: var(--text-2); }
+.tg-fit.good { border-color: var(--accent); color: var(--accent-text); }
+.tg-fit.warn { border-style: dashed; color: var(--muted); }
+@media (max-width: 520px) { .tg-card { grid-template-columns: 68px minmax(0, 1fr); } .tg-join { flex-wrap: wrap; } }
+
 @media (forced-colors: active) {
   .chip[aria-pressed="true"], .tile-act[aria-pressed="true"] { forced-color-adjust: none; outline: 2px solid CanvasText; }
   .dbar .fill.pos { background: Highlight; }

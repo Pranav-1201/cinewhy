@@ -761,6 +761,70 @@ are NOT known; the evidence is the examples read, and the gold files hold pre-sp
 change. **Consequence.** Receipts change at the next rebuild, which must re-profile every title (hours); nothing on the
 demo changes until then. Typo tolerance ("supeerb") and a semantic matcher (embeddings, parked) are not done.
 
+## D-044: Watch together is a temporary in-memory room, joined by code or link, with no accounts (2026-11-03, Sonnet 5.5)
+
+**Owner's brief.** Two or more people connect, both must agree before their libraries are combined, the combining is for
+one sitting only, everything in the library counts (watched with stars, want, liked, disliked, taste), friends may see each
+other's likes, five people now and twenty eventually, link and live joining both supported, accounts later. **Design.** A
+room lives in the server's memory (`cinewhy/recsys/rooms.py`): a six-character code from an alphabet without 0, O, 1, I, L;
+members in join order; a version number that changes with the membership. A room ends when the host closes it, when its last
+member leaves (a leaving host hands over to the longest-standing member), or after three idle hours; at most 200 rooms are
+held, then the server says it is busy. Nothing is written to disk. **Consent** is enforced twice: the dialog's join button
+stays disabled until the box is ticked and nothing is sent before that (tested in a real browser), and the server refuses a
+join that does not say `consent: true` (HTTP 400), so a client that skips the dialog cannot put a library in a room. **Entry point.**
+A header button was built first and removed: `test_header_fits_at_every_width` pins exactly three top-bar tools, and a failing
+guard is a finding, not something to edit. Watch together is reached from the Profile sheet and from invite links; a fourth
+header button is a decision for the owner (it needs that guard re-pinned on purpose). **Secrets.**
+Joining returns a secret that travels in an `X-Room-Token` header, never in an address, is kept in the tab's sessionStorage so a
+reload does not drop the person, and is compared in constant time; a wrong secret and an unknown room give the same 404 so a
+guess learns nothing. **Joining.** An invite link carries the code after `#` (so no server log sees it); the code is read and
+removed from the address. "Live" is polling every four seconds while the dialog is open, not websockets: for five people it is
+simpler and needs no new dependency. **Stars** are not sent as such; four and five stars are already likes and one and two are
+dislikes in the profile, which is how the ranking reads them. **Size.** The server clamps a requested size to `MAX_GROUP` (5);
+the store can be built for 20, and nothing else in the code assumes five, but see D-043 before raising it. **Concurrency.**
+Routes run on a thread pool and the store is not thread-safe, so every touch of it holds one lock; scoring runs outside it on a
+copy. **Checks.** 23 store tests, 15 route tests, 12 Node tests, 7 two-profile browser tests, and planted bugs (off-by-one
+size, no expiry, anyone may close, any secret accepted, no host handover, consent not enforced, a lone person may ask,
+likes hidden, join enabled before agreeing, polling off, close shown to everyone) were each caught. **Limits.** Server memory
+is lost on a restart, which ends every room; with several workers each would hold its own rooms (the app runs one). A person who
+closes the tab stays in the room until it expires, because a leave request cannot carry the secret header on page close. Cold
+libraries give every title the same "100% fit", which is true but uninformative. The room is not rate-limited beyond the
+existing per-client POST budget. Accounts (Supabase magic links, guest import) are not built.
+
+## D-043: a group's members are combined by their mean percentile; this is a tie-break, not a win (2026-11-03, Sonnet 5.5)
+
+**Owner's brief.** A group of two to five (twenty eventually) watches together; each member's library is combined for
+one sitting. Pranav's rule for titles somebody has seen or disliked: with two people either one's seen or disliked
+excludes it; with three or more a title is kept, with a small penalty per person, until a majority (n // 2 + 1) is in that
+position. That rule and the want-to-watch bonus are decided by rule (`cinewhy/recsys/group.py`), not measured. How the
+members' scores are COMBINED was measured, because the plausible answers disagree: mean, least misery (the unhappiest
+member decides), geometric mean, blends of mean and least-misery, a lower quartile, and a naive baseline that keeps titles
+in every member's own top 50. **Protocol, fixed in `group_eval.py` before any result was read.** There is no data on real
+friends, so groups are built from MovieLens users. 300 validation and 300 test users are held out; item similarity and
+popularity are rebuilt from every other user. A user's profile is 10 liked films and up to 10 they rated 1 or 2; the other
+films they rated are "watched"; the liked films hidden from the profile are the targets. A member is hit when one of their
+targets is in the group's top 20. Groups of 2, 3, 5, 10 and 20, drawn at random and as friends (an anchor and the users
+most like them), 400 groups per cell, seed 2026. **Selection.** On VALIDATION groups only: the best average member hit
+rate over sizes 2, 3 and 5; of the strategies within one standard error of it, the simplest. Best was `intersection`
+(0.9325), `mean` 0.9301, `geometric` 0.9300, `blend` 0.925, `least_misery` 0.921: `mean` is within one standard error and
+simplest, so it is the default (`GroupConfig.strategy`, pinned by a test). **Test result (opened once; mean hit rate per
+member, 95% bootstrap interval).** Size 2 random: mean 0.951 [0.935, 0.966], blend 0.943, least-misery 0.939. Size 3
+random: mean 0.909 [0.889, 0.927], least-misery 0.884 [0.863, 0.907]. Size 5 random: mean 0.858 [0.838, 0.877], geometric
+0.857, blend 0.828 [0.804, 0.850], least-misery 0.821 [0.797, 0.844]. **What this does and does not show.** At sizes 2 and
+3 every strategy is within noise of the others: a member's own top 20 already holds a target for 98% (validation) to 100%
+(test) of members, so the metric is at its ceiling and cannot separate strategies there. `mean` is the default because the
+rule says the simplest of the tied, not because it is shown better. At size 5, `mean` and `geometric` are ahead of the
+blend, least-misery and lower-quartile rules, whose intervals sit below. **The inconvenient result.** The naive
+intersection baseline is level with `mean` at 5 (random 0.867 [0.846, 0.887]; friends 0.981 against 0.974) and far ahead at
+10 and 20 for friend-like groups (size 20 friends, share of groups where every member is hit: 0.393 [0.345, 0.440] against
+0.048 for `mean`; size 10 friends 0.757 against 0.480). The default was chosen on 2, 3 and 5 as the rule required, so it is
+`mean`; but the cap should not be raised past five on the strength of this default. Before it is, re-run with the selection
+sizes extended and compare `intersection`, `mean` and a blend of the two. **Limits.** The targets are films a member liked
+and had not told us about, so the seen, disliked and want rules and their penalties are NOT exercised (a target is never
+ruled out for being seen); MovieLens users sharing a similarity are not friends choosing a film together; hit at 20 is a
+proxy for "would enjoy it". Intervals come from resampling groups, which are drawn from only 300 users, so groups of 10 and 20
+reuse the same people heavily. Raw numbers: `group_eval_results.json` from `python -m cinewhy.recsys.group_eval` (seed 2026).
+
 ## D-040: a blind-labelled sentence set, and a rule for "Great cast, terrible script" that changes almost nothing (2026-11-03, Sonnet 5.5)
 
 **Why a new set.** Every earlier gold set is clause-level, taken AFTER splitting, so none can score a splitting change.

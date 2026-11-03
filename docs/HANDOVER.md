@@ -140,6 +140,25 @@ permanently by `unique_review_indices` and `test_no_review_text_appears_in_both_
 ## Five-line handoff ritual (fill in each session)
 
 ```
+Session date:      2026-11-03 (session "nlp 3", Watch together), three LOCAL branches in D:\NLPPROJECT-dev, none
+                   pushed, none in the demo: feature/another-pick, feature/group-engine, feature/watch-together
+                   (watch-together contains group-engine; another-pick is separate)
+Model:             Claude Sonnet 5.5
+What we did:       Owner's first three of four asks (accounts deferred). (1) "Show me another" on the top pick
+                   (D-042). (2) A group engine measured on held-out MovieLens groups (D-043): default strategy is
+                   MEAN by a pre-registered tie-break, not a proven win. (3) Watch together rooms (D-044): in-memory,
+                   code or link, consent enforced in the dialog and on the server, polling every 4 s, max 5. Full
+                   suite on watch-together: 847 passed, 1 skipped (incl. 7 two-browser tests); visual check on v13
+                   at 1200 and 390 px.
+What's left:       Owner to decide: (a) a 4th header button for Watch together (needs test_layout's three-tool pin
+                   re-pinned on purpose; today it lives in the Profile sheet); (b) whether to raise the cap past 5:
+                   D-043 shows the naive intersection baseline beating mean at 10 and 20 for friend-like groups, so
+                   re-measure first. Then PRs for the three branches (DECISIONS.md will conflict textually: keep all
+                   of D-042 to D-044), the Word docs refresh, and accounts (Supabase, magic links, guest import).
+Watch out for:     Browser tests need playwright; the venv lacks it (a throwaway `pip install --target` folder on
+                   PYTHONPATH worked). A closed tab stays in its room until the 3-hour idle expiry. Cold libraries
+                   show "100% fit" for every title. Never push these branches without being asked.
+
 Session date:      2026-11-03 (session "nlp 3", scale-up), branch feature/wide-catalogue in D:\NLPPROJECT-dev,
                    NOT pushed, NOT in the demo
 Model:             Claude Sonnet 5.5

@@ -157,6 +157,80 @@ class ShelvesRequest(BaseModel):
     exclude_movie_ids: tuple[str, ...] = Field(default=(), max_length=3000)
 
 
+_ID_LIST = Field(default=(), max_length=3000)
+
+
+class RoomCreateRequest(BaseModel):
+    """Open a room. The size is a request: the server clamps it to what it allows."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    max_members: int | None = Field(default=None, ge=2, le=20)
+
+
+class RoomJoinRequest(BaseModel):
+    """A person joining: their library, and their agreement to share it.
+
+    `consent` has to be true. It is checked in the route, not only here, so a client that leaves
+    it out gets a refusal that names the reason.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: Annotated[str, StringConstraints(max_length=60)] = ""
+    consent: bool = False
+    profile: TasteProfile = Field(default_factory=TasteProfile)
+    watched_movie_ids: tuple[str, ...] = _ID_LIST
+    want_movie_ids: tuple[str, ...] = _ID_LIST
+    languages: tuple[Literal["en", "hi", "ja", "fr"], ...] = Field(default=(), max_length=4)
+    kinds: tuple[Literal["film", "series"], ...] = Field(default=(), max_length=2)
+
+
+class RoomRecommendRequest(BaseModel):
+    """Ask the room for its best titles; `exclude_movie_ids` are the ones already shown."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    limit: int = Field(default=10, ge=1, le=50)
+    exclude_movie_ids: tuple[str, ...] = Field(default=(), max_length=500)
+
+
+class RoomMemberView(_Out):
+    """Who is in a room. Friends see each other's likes, so the liked ids are shown (capped)."""
+
+    member_id: str
+    name: str
+    is_host: bool
+    is_you: bool
+    liked_movie_ids: tuple[str, ...]
+    watched_count: int
+    want_count: int
+
+
+class RoomView(_Out):
+    """A room as one of its members sees it. `version` changes whenever the membership does."""
+
+    code: str
+    version: int
+    max_members: int
+    members: tuple[RoomMemberView, ...]
+
+
+class RoomCreated(_Out):
+    """A new room's code and size."""
+
+    code: str
+    max_members: int
+
+
+class RoomJoined(_Out):
+    """The member's secret (shown once, sent back as the `X-Room-Token` header) and the room."""
+
+    token: str
+    member_id: str
+    room: RoomView
+
+
 class Facets(_Out):
     """Counts the UI shows next to its filters."""
 
