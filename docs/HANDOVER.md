@@ -160,15 +160,21 @@ What we did:       Owner dropped the ratio: 200+ votes, five languages, no cap. 
                    106,115 titles; on it /shelves is 0.12 s warm, the server holds 2.9 GB. The five Word documents
                    were regenerated with all of this and validated.
 What's left:       1) v13 IS ON THE DEMO (owner said "Put v13 on the demo", 2026-11-03): D:\NLPPROJECT main was
-                   fast-forwarded to this branch (local only, rollback: git reset --hard e81629c) and
+                   fast-forwarded to the merged PR #4 (merge commit 3d736c3, on GitHub main) and
                    artifacts\v13 copied in byte-identical; start.bat serves the highest vN, so v13. Checked: it
                    boots in 16 s, manifest 16c1ba2b4576, cast and availability on. v7 stays beside it as a
                    rollback (moving artifacts\v13 away serves v7 again; the new code works with v7 and just shows no cast or where-to-watch).
-                   NOTHING IS PUSHED to GitHub; origin/main is still PR #3. A host must hold a 1.7 GB matrix. 2) Try a review: typo tolerance
-                   ("supeerb") and polarity on figurative praise are not done; then embeddings (PARKED OPTION,
-                   owner 2026-11-03: a sentence-embedding model for similar-word matching, if it proves the most
-                   effective; measure each step on a FRESH random clause sample; costs a new dependency, ~100 MB
-                   model, hours of CPU to re-profile 1.5M reviews, check for a build-time GPU; it is not RAG).
+                   A host must hold a 1.7 GB matrix. 2) Try a review (D-040): a blind-labelled 200-sentence set
+                   now exists (tests/data/aspect_gold_sentences.jsonl, labelled by the assistant, a DEV set from
+                   now on: judge the next change on a NEW fresh sample, same sampler seed logic with a new seed).
+                   The "Great cast, terrible script" rule is in (branch feature/review-comma-fix, not yet a PR)
+                   but changes only 0.005% of sentences. Measured on the set: 62% of labelled positive/negative
+                   aspects are right end to end; 20% are never flagged (wording outside the lexicon), 11% have the
+                   wrong sign, 7% are too weak. EMBEDDINGS ARE NOT DECIDED (PARKED OPTION, owner 2026-11-03: a
+                   sentence-embedding model for similar-word matching, if it proves the most
+                   effective): they could address only the 20% (ceiling about 82%), not the 18% polarity errors;
+                   costs a new dependency (needs the owner's approval), ~100 MB
+                   model, hours of CPU to re-profile 1.8M reviews, check for a build-time GPU; it is not RAG).
                    Typo repair was measured and REJECTED (D-037); do not retry it. The splitter/phrase changes
                    are already in v12 and barely moved old receipts (D-038). 3) The dense similarity (1.68 GB at
                    20,485 titles with receipts) grows with the square: a sparse top-neighbours design is the
