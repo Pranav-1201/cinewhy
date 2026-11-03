@@ -7,12 +7,13 @@ import { renderAbout } from "./about.js";
 import { initDialogs, openOnboarding, openTaste } from "./dialogs.js";
 import { openFilm } from "./film.js";
 import { openLibrary } from "./library.js";
+import { openPerson } from "./people.js";
 import { openProfile, initProfile } from "./profilesheet.js";
 import { renderAll } from "./rails.js";
 import { openRate } from "./rate.js";
 import { aspectLabels, initTheme, load, save, state, toggleTheme } from "./state.js";
 import { poster } from "./tile.js";
-import { yearAndKind } from "./format.js";
+import { initialsOf, titlesLabel, yearAndKind } from "./format.js";
 import { activePreset, describeYears, normaliseYears, presetYears } from "./years.js";
 
 const LANGS = [["en", "English"], ["hi", "Hindi"], ["ja", "Japanese"], ["fr", "French"]];
@@ -100,10 +101,21 @@ function wireSearch() {
     clear(list);
     if (!q) { hide(); return; }
     try {
-      const films = await api(`/search?limit=8&q=${encodeURIComponent(q)}`);
+      // People are searched too when this build knows who is in each title.
+      const [films, people] = await Promise.all([
+        api(`/search?limit=8&q=${encodeURIComponent(q)}`),
+        ctx.facets.cast ? api(`/people?limit=4&q=${encodeURIComponent(q)}`) : Promise.resolve([]),
+      ]);
       list.hidden = false;
       input.setAttribute("aria-expanded", "true");
-      if (!films.length) list.append(h("li", {}, h("p", { class: "note", text: "No film or series by that name in this catalogue." })));
+      if (!films.length && !people.length) list.append(h("li", {}, h("p", { class: "note", text: "No film, series or person by that name in this catalogue." })));
+      if (people.length) list.append(h("li", { class: "group-label", text: "People" }));
+      for (const p of people) {
+        list.append(h("li", {}, h("button", { type: "button", onclick: () => { hide(); input.value = ""; openPerson({ id: p.id, name: p.name }); } },
+          h("span", { class: "thumb person", "aria-hidden": "true", text: initialsOf(p.name) }),
+          h("span", {}, p.name, h("br"), h("small", { text: titlesLabel(p.titles) })))));
+      }
+      if (people.length && films.length) list.append(h("li", { class: "group-label", text: "Films and series" }));
       for (const m of films) {
         list.append(h("li", {}, h("button", { type: "button", onclick: () => { hide(); input.value = ""; openFilm(m.movie_id); } },
           h("span", { class: "thumb" }, m.poster_url ? h("img", { src: m.poster_url, alt: "", loading: "lazy" }) : null),
@@ -136,6 +148,8 @@ async function boot() {
     status.textContent = `The server is not reachable. ${err.message}`;
     return;
   }
+  // Only promise actor search when this build knows who is in each title.
+  if (ctx.facets.cast) $("#q").placeholder = "Search a film, series or actor";
   const refresh = debounce(() => renderAll(ctx), 350);
   ctx.refresh = refresh;
   ctx.syncFilters = renderFilters;

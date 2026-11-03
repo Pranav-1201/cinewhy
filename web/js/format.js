@@ -86,6 +86,17 @@ export const ratingsOnlyNote = (kind) =>
   `We have not read reviews of this ${kind === "series" ? "series" : "film"} yet, so there are no quotes to show. It is placed by its IMDb rating and its genres.`;
 export const RATINGS_ONLY_NOTE = ratingsOnlyNote("film");
 
+/** Up to two capital letters for a person's avatar: the first letters of the first and last names. */
+export function initialsOf(name) {
+  const words = String(name ?? "").trim().split(/\s+/).filter(Boolean);
+  if (!words.length) return "";
+  const letter = (word) => Array.from(word)[0];
+  return (letter(words[0]) + (words.length > 1 ? letter(words[words.length - 1]) : "")).toUpperCase();
+}
+
+/** "1 title" or "1,234 titles": how many titles a person is billed in; empty when unknown. */
+export const titlesLabel = (n) => (n > 0 ? `${count(n)} ${n === 1 ? "title" : "titles"}` : "");
+
 /** "IMDb rating 7.8 from 12,400 votes."; empty when the server sent no rating. */
 export function imdbLine(rating, votes) {
   if (!(rating > 0)) return "";

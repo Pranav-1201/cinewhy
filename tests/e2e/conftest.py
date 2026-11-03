@@ -22,6 +22,7 @@ from typing import Any
 
 import pytest
 
+from cinewhy.data.cast import Cast
 from tests.smoke_artifacts import write_smoke_artifacts
 
 _ROOT = Path(__file__).resolve().parents[2]
@@ -44,6 +45,16 @@ def ratings_only_server_url(tmp_path_factory: pytest.TempPathFactory) -> Iterato
     """The same app on a set that also holds 30 films with ratings but no reviews."""
     artifacts = write_smoke_artifacts(tmp_path_factory.mktemp("e2e-ratings-only"), ratings_only=30)
     yield from _serve(artifacts)
+
+
+@pytest.fixture(scope="session")
+def cast_server_url(tmp_path_factory: pytest.TempPathFactory) -> Iterator[str]:
+    """The same app on a set that also knows who is in films 1 to 5 (cw-1 to cw-5)."""
+    cast = Cast(
+        {1: (1, 2), 2: (1,), 3: (2,), 4: (1,), 5: (3,)},
+        {1: "Ann Actor", 2: "Ben Actor", 3: "Cara Actress"},
+    )
+    yield from _serve(write_smoke_artifacts(tmp_path_factory.mktemp("e2e-cast"), cast=cast))
 
 
 def _serve(artifacts: Path) -> Iterator[str]:
@@ -104,6 +115,12 @@ def open_ratings_only_page(
 ) -> Iterator[Callable[..., Any]]:
     """`open_page`, against the set that holds ratings-only films."""
     yield from _pages(browser, ratings_only_server_url)
+
+
+@pytest.fixture
+def open_cast_page(browser: Any, cast_server_url: str) -> Iterator[Callable[..., Any]]:
+    """`open_page`, against the set that holds a cast file."""
+    yield from _pages(browser, cast_server_url)
 
 
 def _pages(browser: Any, url: str) -> Iterator[Callable[..., Any]]:
