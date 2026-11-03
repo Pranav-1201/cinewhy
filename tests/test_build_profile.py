@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import pytest
 
+import cinewhy.absa.extract as extract_module
 from cinewhy.absa.extract import build_profile, split_clauses
 from cinewhy.schemas import Aspect
 from tests.conftest import KeywordScorer
@@ -115,6 +116,47 @@ class TestSplitClauses:
     def test_a_negated_verb_counts_as_a_statement(self) -> None:
         sentence = "The acting wasn't good and the plot didn't work."
         assert split_clauses(sentence) == ["The acting wasn't good", "the plot didn't work."]
+
+    def test_the_candidates_examined_in_one_span_are_bounded(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # No piece here is ever a statement, so no cut is made and the left side keeps growing:
+        # the shape that made the splitter quadratic on crafted input. 140 candidates, under the
+        # character limit, must cost at most `_MAX_JOINS` looks, not 140.
+        calls: list[str] = []
+        real = extract_module._is_statement
+
+        def counting(piece: str) -> bool:
+            calls.append(piece)
+            return real(piece)
+
+        monkeypatch.setattr(extract_module, "_is_statement", counting)
+        sentence = ("x, the " * 142)[:990].strip()  # split_clauses strips its input
+        assert split_clauses(sentence) == [sentence]
+        # A literal, not the constant: a test that compares the cap with itself cannot notice
+        # someone raising it. 60 candidates, one look each when the left side already fails.
+        assert 0 < len(calls) <= 120
+
+    def test_a_span_past_the_character_limit_is_not_split_at_all(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        short = "The acting was great and the plot was dull."
+        assert split_clauses(short) == ["The acting was great", "the plot was dull."]  # control
+        long = short + " word" * 400  # well past the limit, with a perfectly good join in it
+        assert len(long) > extract_module._MAX_SPLIT_CHARS
+        calls: list[str] = []
+        monkeypatch.setattr(extract_module, "_is_statement", lambda piece: calls.append(piece))
+        assert split_clauses(long) == [long]
+        assert calls == []  # it never even looked: the work does not grow with a long span
+
+    def test_a_crafted_five_thousand_character_text_does_almost_no_work(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        calls: list[str] = []
+        monkeypatch.setattr(extract_module, "_is_statement", lambda piece: calls.append(piece))
+        text = ("acting" + ", the" * 1000)[:5000]
+        assert split_clauses(text) == [text]
+        assert calls == []
 
 
 def _reviews(*texts: str) -> list[tuple[str, str]]:

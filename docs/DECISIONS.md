@@ -761,6 +761,23 @@ are NOT known; the evidence is the examples read, and the gold files hold pre-sp
 change. **Consequence.** Receipts change at the next rebuild, which must re-profile every title (hours); nothing on the
 demo changes until then. Typo tolerance ("supeerb") and a semantic matcher (embeddings, parked) are not done.
 
+## D-039: the "and" splitter does bounded work (2026-11-03, Sonnet 5.5)
+
+**Finding.** An automated security review of the pushed branch flagged `_split_statements` (D-036): for every "and" or
+comma candidate it re-reads both sides, and when no cut is made the left side keeps growing, so the cost is quadratic in
+the span. `/analyze` runs it on up to 5,000 characters of visitor text. **Reproduced:** a crafted 5,000-character text
+of ", the" repeated took about 1.4 s against 0.1 s for a normal review; at the API's limit of 120 POSTs a minute from
+one client on one worker that can keep the server busy. **Fix.** A span longer than 1,000 characters is not statement-split
+(it behaves as before D-036) and at most 60 candidates are examined per span. After the fix the same inputs take under a
+millisecond and the worst case under the character limit takes 13 ms. **Cost, measured.** On 120,000 real sentences the
+output changed for 25 (0.02%), all unpunctuated run-ons of 1,000 to 3,287 characters (182 sentences exceed 1,000).
+Tests count the work done rather than time it (so they cannot flake) and pin the numbers as literals; four planted bugs
+(limit removed, cap removed, cap raised, limit moved) were caught after one surviving mutant, which compared the cap with
+itself, was fixed. **Not changed.** The leading `\s*` in `_JOIN`, which the review also named: a 4,990-space run costs
+0.0 ms, so it is not exploitable here. The build runs the same code, so a review that is one huge unpunctuated sentence
+now keeps its old, single-clause behaviour. v12 and v13 were built BEFORE this change; a rebuild would differ in about
+0.02% of sentences, which is immaterial to the receipts.
+
 ## D-038: the review floor drops from 50 to 20 (build v12), which adds 8,555 thinner receipts (2026-11-03, Sonnet 5.5)
 
 **Owner's plan** (2026-11-02): floor 50 first, then floor 20 once the floor-50 build was checked. **Blocker removed.**

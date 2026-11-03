@@ -200,6 +200,10 @@ _JOIN: Final[re.Pattern[str]] = re.compile(
 # limit 160 more sentences in a 34,000-sentence sample were cut (419 against 259), with more sign
 # flips (50 against 31), and the extra cuts could not be shown to be better. A bare noun subject
 # ("... and special effects were awful") is therefore left whole: narrower, not wrong.
+# Limits on the work `_split_statements` may do on one span (see the comment there). Real sentences
+# are far below both: the longest sentences in review text are a few hundred characters.
+_MAX_SPLIT_CHARS: Final[int] = 1_000
+_MAX_JOINS: Final[int] = 60
 # A verb the sides must each have, so "The acting, the plot and the pacing were great" (one shared
 # verb) is not cut into "The acting, the plot" (no opinion) and "the pacing were great".
 _PREDICATE: Final[re.Pattern[str]] = re.compile(
@@ -231,9 +235,18 @@ def _split_statements(text: str, start: int, end: int) -> list[tuple[int, int]]:
     A cut is made only when BOTH the piece before it and everything after it are statements
     (see `_is_statement`), so a list that shares one verb, or a side with no aspect, is left whole.
     """
+    # Bounded work. Each candidate re-reads both sides, and when no cut is made the left side keeps
+    # growing, so a crafted 5,000-character text of ", the" repeated cost about 1.4 s against 0.1 s
+    # for a normal review (a security review of /analyze found it, and it was reproduced). A span
+    # past the character limit is not split at all, which is how it behaved before D-036, and only
+    # the first `_MAX_JOINS` candidates are examined.
+    if end - start > _MAX_SPLIT_CHARS:
+        return [(start, end)]
     pieces: list[tuple[int, int]] = []
     current = start
-    for join in _JOIN.finditer(text, start, end):
+    for examined, join in enumerate(_JOIN.finditer(text, start, end)):
+        if examined >= _MAX_JOINS:
+            break
         if _is_statement(text[current : join.start()]) and _is_statement(text[join.end() : end]):
             pieces.append((current, join.start()))
             current = join.end()
