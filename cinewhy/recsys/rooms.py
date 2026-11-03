@@ -20,7 +20,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Final
 
-from cinewhy.recsys.group import MAX_GROUP, MIN_GROUP, Member
+from cinewhy.recsys.group import MAX_GROUP, MIN_GROUP, Member, Quiz
 
 # No 0, O, 1, I or L: a code read aloud or typed from a screenshot is not mistaken for another.
 CODE_ALPHABET: Final[str] = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
@@ -31,6 +31,8 @@ HARD_MAX_MEMBERS: Final[int] = (
     20  # the owner's eventual size; the working limit is lower (MAX_GROUP)
 )
 MAX_NAME_LENGTH: Final[int] = 30
+MAX_SWIPES: Final[int] = 5000  # a bound on memory: one person's answers in one room
+ACTIONS: Final[frozenset[str]] = frozenset({"want", "pass", "seen", "top"})
 
 
 class RoomError(Exception):
@@ -50,6 +52,13 @@ class RoomMember:
     name: str
     token: str
     member: Member
+    # What this person did INSIDE the room. It never leaves the room and never touches their own
+    # profile: `swipes` maps a title to "want", "pass" or "seen"; `top` is the one title they put
+    # above all others and `former_tops` the ones it replaced (they keep a smaller bonus).
+    quiz: Quiz | None = None
+    swipes: dict[str, str] = field(default_factory=dict)
+    top: str | None = None
+    former_tops: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -61,7 +70,10 @@ class Room:
     touched: float
     members: dict[str, RoomMember] = field(default_factory=dict)
     host_id: str | None = None
-    version: int = 0
+    version: int = 0  # changes when the membership does
+    activity: int = (
+        0  # changes with every quiz answer and swipe, so a results screen knows it is stale
+    )
 
 
 def normalise_code(text: str) -> str:
@@ -187,17 +199,82 @@ class RoomStore:
             raise RoomError("forbidden")
         del self._rooms[room.code]
 
+    def set_quiz(self, code: str, token: str, quiz: Quiz) -> RoomMember:
+        """Record what this member feels like watching tonight (empty means no preference)."""
+        room, entry = self.authenticate(code, token)
+        entry.quiz = quiz
+        room.activity += 1
+        return entry
+
+    def swipe(
+        self, code: str, token: str, movie_id: str, action: str, *, replace: bool = False
+    ) -> RoomMember:
+        """Record one swipe: "want", "pass", "seen" or "top".
+
+        A member has ONE top pick. Naming a different title while they already have one is refused
+        with `RoomError("top_exists")` unless `replace` is true (the page asks first); the replaced
+        title keeps a smaller bonus as a former top pick. Swiping the current top pick any other way
+        takes it off the top slot.
+        """
+        if action not in ACTIONS:
+            raise RoomError("bad_action")
+        room, entry = self.authenticate(code, token)
+        is_new = movie_id not in entry.swipes and movie_id != entry.top
+        if is_new and len(entry.swipes) >= MAX_SWIPES:
+            raise RoomError("full")
+        if action == "top":
+            if entry.top == movie_id:
+                return entry
+            if entry.top is not None:
+                if not replace:
+                    raise RoomError("top_exists")
+                if entry.top not in entry.former_tops:
+                    entry.former_tops.append(entry.top)
+            entry.top = movie_id
+            entry.swipes.pop(movie_id, None)
+        else:
+            if entry.top == movie_id:
+                entry.top = None
+            entry.swipes[movie_id] = action
+        if movie_id in entry.former_tops:
+            entry.former_tops.remove(movie_id)  # a title swiped again is no longer "former"
+        room.activity += 1
+        return entry
+
+    @staticmethod
+    def seen_by(entry: RoomMember) -> frozenset[str]:
+        """Every title this member should not be shown again in their own deck."""
+        library = entry.member.taste
+        mine = {*entry.swipes, *entry.former_tops, *library.liked_movie_ids}
+        mine |= {*library.disliked_movie_ids, *entry.member.watched}
+        if entry.top:
+            mine.add(entry.top)
+        return frozenset(mine)
+
     @staticmethod
     def members_of(room: Room) -> list[Member]:
-        """The shared libraries in join order, under the display names the room gave them."""
-        return [
-            Member(
-                e.name,
-                e.member.taste,
-                e.member.watched,
-                e.member.want,
-                e.member.languages,
-                e.member.kinds,
+        """The members as the group engine sees them: shared library plus what they did here.
+
+        Right swipes become wants and similarity seeds, left swipes dislikes, "already watched"
+        swipes watched titles; the top pick and the ones it replaced carry their own bonuses. The
+        quiz replaces the old language and kind filters (it weights, it does not exclude).
+        """
+        out: list[Member] = []
+        for e in room.members.values():
+            by = e.swipes
+            wanted = tuple(m for m, a in by.items() if a == "want")
+            top = (e.top,) if e.top else ()
+            out.append(
+                Member(
+                    e.name,
+                    e.member.taste,
+                    watched=e.member.watched | {m for m, a in by.items() if a == "seen"},
+                    want=e.member.want | frozenset(wanted),
+                    quiz=e.quiz or Quiz(),
+                    signals_liked=(*wanted, *top, *e.former_tops),
+                    passed=frozenset(m for m, a in by.items() if a == "pass"),
+                    top=e.top,
+                    former_tops=frozenset(e.former_tops),
+                )
             )
-            for e in room.members.values()
-        ]
+        return out
