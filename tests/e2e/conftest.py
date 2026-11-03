@@ -65,8 +65,23 @@ def availability_server_url(tmp_path_factory: pytest.TempPathFactory) -> Iterato
         "movie/603",
         {"netflix": {"stream": ("IN", "US"), "rent": ("US",)}, "prime": {"buy": ("US",)}},
     )
-    data = Availability("2026-11-03", {n: where for n in range(1, 7)})
+    # Film 2 is offered only in the US, so it is the one title that is NOT on offer in India.
+    us_only = Where("movie/603", {"netflix": {"stream": ("US",)}})
+    data = Availability("2026-11-03", {n: us_only if n == 2 else where for n in range(1, 7)})
     artifacts = write_smoke_artifacts(tmp_path_factory.mktemp("e2e-watch"), availability=data)
+    yield from _serve(artifacts)
+
+
+@pytest.fixture(scope="session")
+def rich_server_url(tmp_path_factory: pytest.TempPathFactory) -> Iterator[str]:
+    """The same app on a set that has BOTH a cast and where-to-watch for all six films."""
+    people = {1: "Ann Actor", 2: "Ben Actor"}
+    cast = Cast({n: (1, 2) for n in range(1, 7)}, people)
+    where = Where("movie/603", {"netflix": {"stream": ("IN", "US")}, "prime": {"buy": ("US",)}})
+    availability = Availability("2026-11-03", {n: where for n in range(1, 7)})
+    artifacts = write_smoke_artifacts(
+        tmp_path_factory.mktemp("e2e-rich"), cast=cast, availability=availability
+    )
     yield from _serve(artifacts)
 
 
@@ -140,6 +155,12 @@ def open_cast_page(browser: Any, cast_server_url: str) -> Iterator[Callable[...,
 def open_watch_page(browser: Any, availability_server_url: str) -> Iterator[Callable[..., Any]]:
     """`open_page`, against the set that holds availability."""
     yield from _pages(browser, availability_server_url)
+
+
+@pytest.fixture
+def open_rich_page(browser: Any, rich_server_url: str) -> Iterator[Callable[..., Any]]:
+    """`open_page`, against the set that has both a cast and where-to-watch."""
+    yield from _pages(browser, rich_server_url)
 
 
 def _pages(browser: Any, url: str) -> Iterator[Callable[..., Any]]:

@@ -817,6 +817,30 @@ itself, was fixed. **Not changed.** The leading `\s*` in `_JOIN`, which the revi
 now keeps its old, single-clause behaviour. v12 and v13 were built BEFORE this change; a rebuild would differ in about
 0.02% of sentences, which is immaterial to the receipts.
 
+## D-041: the top pick carries the film page's essentials, and where-to-watch defaults to India (2026-11-03, Sonnet 5.5)
+
+**Owner's brief (2026-11-03).** (1) On the top recommended title show what the film page shows: the Starring line, the
+Like / Not for me / I've watched it / Want to watch buttons with IMDb and Rotten Tomatoes, and Where to watch; drop the
+"why we picked this" receipts excerpt; rename the yellow button "Why we chose this", which opens the receipts. (2) Where to
+watch defaults to India, and a profile's country defaults to India too. **Change 1.** `spotlight()` in `rails.js` reuses
+`actions`, `starring` and `whereToWatch` from the film page (the pick already fetched `/movie/{id}`, so no new request);
+the yellow button calls `openFilm(id, { toReceipt: true })`, which scrolls the drawer to the receipt. With no details
+the pick still shows the yellow button. No existing test pinned the old wording. **Change 2.** The profile gains
+`country`, an ISO two-letter capital code, default `IN` (`DEFAULT_COUNTRY`); an older save without it, or any invalid value,
+reads as India; `setCountry` ignores anything but a valid code; the profile version is not bumped (the field is optional
+on read); a taste reset keeps it (a setting, not a taste). `watch.js` opens on `state.country`, keeps that country in the
+picker even when the title is not offered there, and in that case SAYS SO ("Not on Netflix... in India. Choose another
+country...") instead of silently showing another country. A pick in the picker is saved to the profile. **Supersedes
+D-035's limit (3)**: the first guess is no longer the browser's region and the separate browser-storage key
+`cinewhy.country` is gone (a visitor who had chosen a country there starts on India once). **Tests.** `regionOf` and
+`pickCountry` were removed with their tests, and two browser tests that encoded the browser-language default were
+replaced, deliberately and on the owner's instruction; new Node tests pin the default, the validation, export and import
+and the reset, and the browser tests pin India with an `en-US` browser, saving the pick, and the not-offered message.
+Fourteen planted bugs across both changes were caught after two survivors (the scroll to the receipts) got a test with a
+window short enough to need it. **Limits.** The first-visit sheet asks only a coarse region ("India", "North America"...)
+and still has no country question, so every new visitor is India until they pick; a real profile with accounts (not
+built) will adopt this field. "India only" was read as a default, not a removal of the picker: say if it should go.
+
 ## D-038: the review floor drops from 50 to 20 (build v12), which adds 8,555 thinner receipts (2026-11-03, Sonnet 5.5)
 
 **Owner's plan** (2026-11-02): floor 50 first, then floor 20 once the floor-50 build was checked. **Blocker removed.**

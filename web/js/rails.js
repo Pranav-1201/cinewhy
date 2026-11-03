@@ -6,9 +6,11 @@ import { api, post } from "./api.js";
 import { $, clear, h, icon, reducedMotion } from "./dom.js";
 import { clamp, kindLabel, languageName, runtimeLabel } from "./format.js";
 import { requestYears } from "./years.js";
-import { linesFromAspects, receipt } from "./receipt.js";
+import { actions } from "./film.js";
+import { starring } from "./people.js";
 import { excludedIds, profileForApi, state } from "./state.js";
 import { poster, tile } from "./tile.js";
+import { whereToWatch } from "./watch.js";
 import { hueOf } from "./format.js";
 
 let sequence = 0;
@@ -66,7 +68,13 @@ async function spotlight(item, open) {
   let d = null;
   try { d = await api(`/movie/${encodeURIComponent(m.movie_id)}`); } catch (_) { /* the pick still shows without details */ }
   const chips = [m.year ? String(m.year) : "", kindLabel(m.kind), languageName(item.language), runtimeLabel(d?.runtime_minutes), ...(m.genres || []).slice(0, 2)].filter(Boolean);
-  const lines = d?.aspects?.length ? linesFromAspects(d.aspects.slice(0, 2)) : [];
+  // The top pick carries what the film page carries: who is in it, the answers (like, watched, ...),
+  // the links, and where to watch. The reasons live behind the yellow button, not on the pick, so
+  // the pick shows the facts a visitor decides on and the receipts stay one press away.
+  const why = h("button", { class: "btn primary", type: "button", onclick: () => open(m.movie_id, { toReceipt: true }), text: "Why we chose this" });
+  const row = d ? actions(m, d) : h("div", { class: "film-actions" }); // no details: the pick still offers its reasons
+  row.classList.add("actions");
+  row.prepend(why);
   const section = h("div", { class: "spotlight", vars: { "--tint": hueOf(m.movie_id) } },
     poster(m, { language: item.language, isNew: item.is_new }),
     h("div", { class: "body" },
@@ -74,8 +82,9 @@ async function spotlight(item, open) {
       item.because ? h("p", { class: "because", text: `Because you liked ${item.because}` }) : null,
       h("div", { class: "meta" }, chips.map((c) => h("span", { class: "chip static", text: c }))),
       d?.overview ? h("p", { class: "overview", text: clamp(d.overview, 300) }) : null,
-      h("div", { class: "actions" }, h("button", { class: "btn primary", type: "button", onclick: () => open(m.movie_id), text: "See all the receipts" })),
-      lines.length ? h("div", { class: "receipts" }, receipt({ title: m.title, lines, bySource: d.reviews_by_source, maxQuotes: 1, heading: "Why we picked this" })) : null));
+      starring(d?.cast),
+      row,
+      whereToWatch(d?.where_to_watch)));
   root.replaceChildren(section);
 }
 
