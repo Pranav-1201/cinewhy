@@ -121,12 +121,19 @@ development set (Jupyter, plotting and so on) plus `pip install -e ".[dev]"` for
 
 The site needs one folder of ready-made data, `artifacts/v13` (the current build). It is **not in the
 git repository**: it contains material derived from MovieLens and Rotten Tomatoes, whose licences
-do not allow it to be republished. So the owner (Pranav) shares it privately.
+do not allow it to be republished. There are two ways to get it:
+
+* **Option A: the ready-made zip (recommended, about 5 minutes).** One file from the owner; you
+  download nothing else and rebuild nothing. This is what a teammate should do. Steps 1 to 3 below.
+* **Option B: build it yourself from the raw downloads (many hours, about 15 GB).** Only if you are
+  changing the data pipeline. See [step 7](#7-rebuilding-the-data-only-if-you-change-the-data-pipeline).
+
+**Option A, steps:**
 
 1. Ask Pranav for **`cinewhy-artifacts-v13.zip`** (913 MB) and save it, for example in your Downloads
    folder.
 2. Check it arrived intact. The SHA-256 must be
-   `1288510D82C1280D075F7E54C5A0C5F4221145E8BF2D03AF869B56A553CC0CA9`:
+   `F6D4DF3D8EAAA1603899E50EB8B529C06331CEA1562C8C3CC85115F1C43E7477`:
 
    Windows (PowerShell): `Get-FileHash "$HOME\Downloads\cinewhy-artifacts-v13.zip" -Algorithm SHA256`
    Mac: `shasum -a 256 ~/Downloads/cinewhy-artifacts-v13.zip`
@@ -152,7 +159,19 @@ The folder `artifacts/` is git-ignored, so it never gets committed. When the own
 build it arrives the same way as a `cinewhy-artifacts-vN.zip` unpacked into `artifacts/vN`; the
 server always loads the highest-numbered one. The server checks the SHA-256 of every file inside
 at start and refuses to boot if one is missing or changed (`ManifestMismatchError`): unzip again if
-that happens.
+that happens. If your zip's SHA-256 does not match the one above, the owner has published a newer
+build since this README was written: ask for the current hash.
+
+**For the owner: keeping the zip current.** The zip must always match the newest `artifacts/vN`.
+After **any** change to a data folder (a new build, an edited file, a new version number), run
+
+```bat
+python -m cinewhy.artifacts.package
+```
+
+It checks the folder against its manifest, writes `artifacts/cinewhy-artifacts-vN.zip` (the same data
+always gives the same zip), proves the zip unpacks to a verified copy, and prints the new SHA-256 and
+size. Put them in this step and give your teammates the new zip.
 
 ### 5. Run it
 
