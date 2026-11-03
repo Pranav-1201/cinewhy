@@ -8,9 +8,11 @@ import {
   clamp,
   hueOf,
   imdbLine,
+  initialsOf,
   kindLabel,
   languageName,
   ratingsOnlyNote,
+  titlesLabel,
   yearAndKind,
   pct,
   recencyForAge,
@@ -165,6 +167,25 @@ test("basisLine says what a verdict rests on, with the right singular and plural
   assert.equal(basisLine(3, "Pacing", ["mention in your review", "mentions in your review"]), "Based on 3 mentions in your review about pacing");
   assert.equal(basisLine(0, "Acting"), "");
   assert.equal(basisLine(null, "Acting"), "");
+});
+
+test("initialsOf takes the first letters of the first and last name for a person's avatar", () => {
+  assert.equal(initialsOf("Tom Hanks"), "TH");
+  assert.equal(initialsOf("Zoë Saldaña"), "ZS");
+  assert.equal(initialsOf("Amitabh Bachchan"), "AB");
+  assert.equal(initialsOf("Cher"), "C");
+  assert.equal(initialsOf("Mary Elizabeth Winstead"), "MW"); // first and last, not the middle
+  assert.equal(initialsOf("  tom   hanks "), "TH"); // spacing and case never matter
+  assert.equal(initialsOf(""), "");
+  assert.equal(initialsOf(undefined), "");
+});
+
+test("titlesLabel says how many titles a person is billed in, in the singular too", () => {
+  assert.equal(titlesLabel(1), "1 title");
+  assert.equal(titlesLabel(2), "2 titles");
+  assert.equal(titlesLabel(1234), "1,234 titles");
+  assert.equal(titlesLabel(0), "");
+  assert.equal(titlesLabel(undefined), "");
 });
 
 test("reviewsLine words the per-source counts plainly", () => {

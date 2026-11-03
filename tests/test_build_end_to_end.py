@@ -26,6 +26,7 @@ from sklearn.linear_model import LogisticRegression
 from cinewhy.absa.polarity import PolarityModel
 from cinewhy.artifacts.manifest import load_manifest, verify
 from cinewhy.build import BuildConfig, build_artifacts
+from cinewhy.data import spine
 from cinewhy.data.catalogue_sources import Gathered
 from cinewhy.data.sources import load_ratings
 from cinewhy.data.spine import quota, wide_quota
@@ -79,6 +80,7 @@ def _build(
     extra_ebd: list[tuple[str, str, str]] | None = None,
     series_dumps: Path | None = None,
     series_tmdb: Path | None = None,
+    uncapped: bool = False,
 ) -> Path:
     tmdb = [tmdb_row(k + 1, 100 + k, _TITLES[k], 2005 + k % 8) for k in range(N_TMDB)]
     tmdb += extra_tmdb or []
@@ -127,6 +129,7 @@ def _build(
         ratings_only_fallback_votes=ratings_only_fallback_votes,
         series_dumps=series_dumps,
         series_tmdb=series_tmdb,
+        uncapped=uncapped,
     )
     build_artifacts(config)
     return out
@@ -247,6 +250,34 @@ def test_the_ratings_only_tier_lists_well_voted_films_that_have_no_receipt(
     }
     # English: 14 full receipts plus 1 ratings-only film, against the 10,000 target.
     assert report["by_language"]["en"]["short_by"] == 10_000 - N_FILMS - 1
+
+
+def test_an_uncapped_build_lists_more_than_the_target_allows(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Shrink French's target to 1 so the cap bites on a handful of synthetic films: the capped build
+    # lists one, the uncapped build lists all three (the v7 English gap, in miniature).
+    monkeypatch.setitem(spine.CATALOGUE_TARGETS, "fr", 1)
+    extras = [_extra_row(90 + k, 900 + k, "fr", 5000 - k) for k in range(3)]
+    for name, uncapped in (("capped", False), ("open", True)):
+        (tmp_path / name).mkdir()
+        out = _build(
+            tmp_path / name, ratings_only_min_votes=200, extra_tmdb=extras, uncapped=uncapped
+        )
+        listed = {
+            f.movie.movie_id
+            for f in load_catalogue(out, with_ratings_only=True).ratings_only
+            if f.language == "fr"
+        }
+        assert listed == ({"ro-0000900"} if not uncapped else {f"ro-000090{k}" for k in range(3)})
+
+
+def test_an_uncapped_build_refuses_a_fallback_floor() -> None:
+    # No target is ever met, so a fallback floor would list every thinly rated title above it.
+    with pytest.raises(ValueError, match="fallback"):
+        BuildConfig(ratings_only_min_votes=200, ratings_only_fallback_votes=50, uncapped=True)
+    BuildConfig(ratings_only_min_votes=200, uncapped=True)  # the floor alone is fine
+    BuildConfig(ratings_only_min_votes=200, ratings_only_fallback_votes=50)  # capped keeps it
 
 
 def test_a_fallback_floor_lists_thin_films_and_the_report_counts_them(tmp_path: Path) -> None:

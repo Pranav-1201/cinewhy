@@ -27,6 +27,7 @@ from pydantic import BaseModel, ConfigDict
 
 from cinewhy.recsys import rank
 from cinewhy.recsys.catalogue import Catalogue
+from cinewhy.recsys.people import person_positions
 from cinewhy.schemas import Aspect, Movie, Reason, TasteProfile
 
 # The most the recency term can add to a score that otherwise runs from 0 to 1. At 0.30 a film
@@ -99,6 +100,43 @@ def _language_at(catalogue: Catalogue, position: int) -> str | None:
     return catalogue.meta.get(catalogue.movies[position].movie_id, {}).get("language") or None
 
 
+def languages_of(catalogue: Catalogue) -> list[str | None]:
+    """Original language of every film (either tier), in catalogue order; None when unknown.
+
+    Kept on the catalogue (see `Catalogue.derived`), so treat it as read-only.
+    """
+    return catalogue.derived(
+        "languages_of",
+        lambda: [_language_at(catalogue, p) for p in range(len(catalogue.all_movies))],
+    )
+
+
+def language_codes(catalogue: Catalogue) -> npt.NDArray[np.str_]:
+    """`languages_of` as an array ("" for unknown), so a language filter is one `np.isin`."""
+    return catalogue.derived(
+        "language_codes", lambda: np.array([lang or "" for lang in languages_of(catalogue)])
+    )
+
+
+def genre_masks(catalogue: Catalogue) -> dict[str, npt.NDArray[np.bool_]]:
+    """For each genre, which films (either tier) carry it, so a genre filter is a few array ORs.
+
+    Kept on the catalogue (see `Catalogue.derived`), so treat it as read-only.
+    """
+
+    def compute() -> dict[str, npt.NDArray[np.bool_]]:
+        masks: dict[str, npt.NDArray[np.bool_]] = {}
+        n = len(catalogue.all_movies)
+        for position, movie in enumerate(catalogue.all_movies):
+            for genre in movie.genres:
+                if genre not in masks:
+                    masks[genre] = np.zeros(n, dtype=bool)
+                masks[genre][position] = True
+        return masks
+
+    return catalogue.derived("genre_masks", compute)
+
+
 def recency_lift(years: npt.NDArray[np.int64], recency: float) -> npt.NDArray[np.float64]:
     """Score added to each film for being recent, at a recency setting from 0 to 1.
 
@@ -120,7 +158,8 @@ def film_years(catalogue: Catalogue) -> npt.NDArray[np.int64]:
         catalogue: The loaded catalogue.
 
     Returns:
-        One year per film, in catalogue order; 0 means unknown.
+        One year per film, in catalogue order; 0 means unknown. Kept on the catalogue (see
+        `Catalogue.derived`), so treat it as read-only.
     """
 
     def year_of(movie: Movie, date: object) -> int:
@@ -129,11 +168,15 @@ def film_years(catalogue: Catalogue) -> npt.NDArray[np.int64]:
         text = str(date or "")
         return int(text[:4]) if text[:4].isdigit() else 0
 
-    core = [
-        year_of(m, catalogue.meta.get(m.movie_id, {}).get("release_date")) for m in catalogue.movies
-    ]
-    extra = [year_of(f.movie, f.release_date) for f in catalogue.ratings_only]
-    return np.array(core + extra, dtype=np.int64)
+    def compute() -> npt.NDArray[np.int64]:
+        core = [
+            year_of(m, catalogue.meta.get(m.movie_id, {}).get("release_date"))
+            for m in catalogue.movies
+        ]
+        extra = [year_of(f.movie, f.release_date) for f in catalogue.ratings_only]
+        return np.array(core + extra, dtype=np.int64)
+
+    return catalogue.derived("film_years", compute)
 
 
 def catalogue_facets(catalogue: Catalogue) -> dict[str, object]:
@@ -144,26 +187,31 @@ def catalogue_facets(catalogue: Catalogue) -> dict[str, object]:
 
     Returns:
         `films`, `languages` (original language to count; only films with a known language),
-        `genres`, and `oldest_year` / `newest_year` (None when no film has a year).
+        `genres`, and `oldest_year` / `newest_year` (None when no film has a year). Kept on the
+        catalogue (see `Catalogue.derived`), so treat it as read-only.
     """
-    languages: dict[str, int] = {}
-    genres: dict[str, int] = {}
-    for position, movie in enumerate(catalogue.all_movies):
-        language = _language_at(catalogue, position)
-        if language:
-            languages[language] = languages.get(language, 0) + 1
-        for genre in movie.genres:
-            genres[genre] = genres.get(genre, 0) + 1
-    known = [int(y) for y in film_years(catalogue) if y > 0]
-    series = int(catalogue.is_series.sum())
-    return {
-        "films": len(catalogue.all_movies),
-        "kinds": {"film": len(catalogue.all_movies) - series, "series": series},
-        "languages": dict(sorted(languages.items(), key=lambda kv: (-kv[1], kv[0]))),
-        "genres": dict(sorted(genres.items(), key=lambda kv: (-kv[1], kv[0]))),
-        "oldest_year": min(known) if known else None,
-        "newest_year": max(known) if known else None,
-    }
+
+    def compute() -> dict[str, object]:
+        languages: dict[str, int] = {}
+        genres: dict[str, int] = {}
+        for position, movie in enumerate(catalogue.all_movies):
+            language = _language_at(catalogue, position)
+            if language:
+                languages[language] = languages.get(language, 0) + 1
+            for genre in movie.genres:
+                genres[genre] = genres.get(genre, 0) + 1
+        known = [int(y) for y in film_years(catalogue) if y > 0]
+        series = int(catalogue.is_series.sum())
+        return {
+            "films": len(catalogue.all_movies),
+            "kinds": {"film": len(catalogue.all_movies) - series, "series": series},
+            "languages": dict(sorted(languages.items(), key=lambda kv: (-kv[1], kv[0]))),
+            "genres": dict(sorted(genres.items(), key=lambda kv: (-kv[1], kv[0]))),
+            "oldest_year": min(known) if known else None,
+            "newest_year": max(known) if known else None,
+        }
+
+    return catalogue.derived("catalogue_facets", compute)
 
 
 def audience_popularity(catalogue: Catalogue) -> npt.NDArray[np.float64]:
@@ -341,7 +389,7 @@ def score_films(
     """
     n = len(catalogue.movies)
     years = film_years(catalogue)
-    language_of = [_language_at(catalogue, p) for p in range(len(years))]
+    language_of = languages_of(catalogue)
     popularity = audience_popularity(catalogue)
     lift = recency_lift(years, recency)
     liked = [catalogue.index[i] for i in profile.liked_movie_ids if i in catalogue.index]
@@ -447,6 +495,7 @@ def select_items(
     exclude: Collection[str] = (),
     order: Sequence[int] | None = None,
     include_ratings_only: bool = True,
+    only: Collection[int] | None = None,
 ) -> tuple[DiscoverItem, ...]:
     """The best films and series for one shelf: `scored`, filtered by language, genre and years.
 
@@ -465,6 +514,8 @@ def select_items(
         order: Film positions in the order to consider them; default is best score first.
         include_ratings_only: False keeps out the films we have ratings for but no reviews, for a
             shelf whose heading promises the sentences behind each pick.
+        only: Catalogue positions to consider and nothing else (a person's titles); None means
+            every title, and an empty collection means none.
 
     Returns:
         Up to `limit` films, in order; fewer (even none) when the filters leave few.
@@ -483,15 +534,22 @@ def select_items(
         # classics rather than let a missing date pass for a very old film.
         allowed &= (years > 0) & (years <= to_year)
     if languages:
-        wanted_languages = expand_languages(languages)
-        allowed &= np.array([lang in wanted_languages for lang in scored.language_of], dtype=bool)
+        allowed &= np.isin(language_codes(catalogue), list(expand_languages(languages)))
+    if only is not None:
+        considered = np.zeros(n, dtype=bool)
+        considered[list(only)] = True
+        allowed &= considered
     if set(kinds) == {"series"}:
         allowed &= catalogue.is_series
     elif set(kinds) == {"film"}:
         allowed &= ~catalogue.is_series
     if genres:
-        wanted = set(genres)
-        allowed &= np.array([bool(wanted & set(m.genres)) for m in all_movies], dtype=bool)
+        masks = genre_masks(catalogue)
+        wanted_genre = np.zeros(n, dtype=bool)
+        for genre in set(genres):
+            if genre in masks:  # a genre no film carries matches nothing
+                wanted_genre |= masks[genre]
+        allowed &= wanted_genre
 
     skip = set(exclude)
     items: list[DiscoverItem] = []
@@ -540,6 +598,7 @@ def discover(
     from_year: int | None = None,
     to_year: int | None = None,
     exclude: Sequence[str] = (),
+    person_id: int | None = None,
     manifest: str,
 ) -> DiscoverResult:
     """Rank films for a visitor, with optional era, language and genre filters.
@@ -562,12 +621,15 @@ def discover(
         to_year: Keep only films released in or before this year (films with no known year are
             left out).
         exclude: Film ids never to return.
+        person_id: Only titles this person is billed in, ranked like any other list (an unknown
+            person, or a build with no cast file, gives an empty list).
         manifest: Hash of the artifact set, echoed so a result can be traced to its build.
 
     Returns:
         The ranked list, possibly empty when the filters match nothing.
     """
     scored = score_films(catalogue, profile, recency=recency)
+    only = person_positions(catalogue, person_id) if person_id is not None else None
     items = select_items(
         catalogue,
         scored,
@@ -578,5 +640,6 @@ def discover(
         from_year=from_year,
         to_year=to_year,
         exclude=set(exclude) | set(profile.liked_movie_ids) | set(profile.disliked_movie_ids),
+        only=only,
     )
     return DiscoverResult(items=items, cold_start=scored.cold, manifest=manifest)

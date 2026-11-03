@@ -68,7 +68,29 @@ def make_fetcher(
     connect: Callable[[], http.client.HTTPSConnection] = _new_connection,
     sleep: Callable[[float], None] = time.sleep,
 ) -> Fetcher:
-    """A function that asks TMDB about one IMDb number; None means "failed, try again later".
+    """A function that asks TMDB about one IMDb number; None means "failed, try again later"."""
+    return make_json_fetcher(
+        token,
+        lambda imdb_id: f"/3/find/tt{imdb_id:07d}?external_source=imdb_id",
+        record_from_find,
+        connect=connect,
+        sleep=sleep,
+    )
+
+
+def make_json_fetcher(
+    token: str,
+    path_for: Callable[[int], str | None],
+    to_record: Callable[[int, dict[str, Any]], dict[str, Any]],
+    *,
+    connect: Callable[[], http.client.HTTPSConnection] = _new_connection,
+    sleep: Callable[[float], None] = time.sleep,
+) -> Fetcher:
+    """A function that asks TMDB one question per IMDb number and turns the answer into a record.
+
+    `path_for` gives the request path for an IMDb number (None: nothing to ask, recorded as "not
+    found"); `to_record` turns TMDB's JSON answer into the cache line. A None result means "failed,
+    try again later" and is never recorded.
 
     Each worker thread keeps ONE connection open and reuses it. Opening a new one per request
     costs a TLS handshake (measured here: 0.7 to 8 seconds each, against 0.24 s on a reused
@@ -83,7 +105,9 @@ def make_fetcher(
         local.conn = None
 
     def fetch(imdb_id: int) -> dict[str, Any] | None:
-        path = f"/3/find/tt{imdb_id:07d}?external_source=imdb_id"
+        path = path_for(imdb_id)
+        if path is None:
+            return {"imdb": imdb_id, "found": False}
         headers = {"Authorization": f"Bearer {token}", "accept": "application/json"}
         for attempt in range(5):
             try:
@@ -98,7 +122,7 @@ def make_fetcher(
                 continue
             if response.status == 200:
                 try:
-                    return record_from_find(imdb_id, json.loads(body))
+                    return to_record(imdb_id, json.loads(body))
                 except (json.JSONDecodeError, KeyError, TypeError, ValueError):
                     drop()
                     sleep(1 + attempt)

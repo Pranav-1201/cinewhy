@@ -16,6 +16,8 @@ from dataclasses import replace
 from pathlib import Path
 
 from cinewhy.artifacts.manifest import build as build_manifest
+from cinewhy.data.availability import AVAILABILITY_FILE, Availability, write_availability
+from cinewhy.data.cast import CAST_FILE, Cast, write_cast
 from cinewhy.recsys.catalogue import RatingsOnlyFilm, write_catalogue
 from cinewhy.schemas import Movie
 from tests.conftest import _toy_polarity_model, make_catalogue
@@ -48,11 +50,18 @@ def _ratings_only_films(count: int) -> tuple[RatingsOnlyFilm, ...]:
     )
 
 
-def write_smoke_artifacts(out: Path, *, ratings_only: int = 0) -> Path:
+def write_smoke_artifacts(
+    out: Path,
+    *,
+    ratings_only: int = 0,
+    cast: Cast | None = None,
+    availability: Availability | None = None,
+) -> Path:
     """Write the six-film artifact set into `out` (created if missing) and return it.
 
     `ratings_only` adds that many films we hold only ratings for (none by default, so the set the
-    other tests pin is unchanged).
+    other tests pin is unchanged). `cast` and `availability` add their files, hashed into the
+    manifest like the rest.
     """
     out.mkdir(parents=True, exist_ok=True)
     write_catalogue(out, replace(make_catalogue(), ratings_only=_ratings_only_films(ratings_only)))
@@ -71,6 +80,10 @@ def write_smoke_artifacts(out: Path, *, ratings_only: int = 0) -> Path:
     (out / "meta.json").write_text(json.dumps(meta), encoding="utf-8")
     _toy_polarity_model().save(out / "polarity.joblib")
     (out / "eval.json").write_text(json.dumps({"catalogue": {"films": 6}}), encoding="utf-8")
+    if cast is not None:
+        write_cast(out / CAST_FILE, cast)
+    if availability is not None:
+        write_availability(out / AVAILABILITY_FILE, availability)
     build_manifest(out)
     return out
 

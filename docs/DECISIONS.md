@@ -661,6 +661,163 @@ anime and 425 live-action series rest on ratings from 50 to 199 voters, and are 
 front page, a Japanese-only view and the series shelf were checked: they lead with the well-voted titles). **Page.** A Films / Series choice, a Series shelf after old school, and an Anime shelf
 (Japanese animation, films and series) after the language shelves.
 
+## D-032: list every title with 200+ votes in the five languages, with no per-language target (2026-11-03, Sonnet 5.5)
+
+The owner dropped the 4:3:2:1 ratio ("I want as much data as possible") and set the floor at 200 IMDb votes; the
+languages stay English, Hindi, Telugu, French and Japanese. **Rule.** `--uncapped` gives every bucket the target
+`spine.UNCAPPED` (a billion), so the vote floor alone decides who is listed; the Japanese split buckets stay, and
+`eval.json` reports `target: null`, `short_by: 0`. `BuildConfig` refuses `uncapped` with a fallback floor: with no
+target to meet, the fallback would never stop lowering the bar and would list every thinly rated title. **Why it
+was needed.** The ratings-only tier stopped at each target, and English was already over 10,000 from the receipts
+tier, so v7 listed no English title that lacked reviews: nothing from 2025-26 and 1,171 films from 2020-24.
+**Result in v8** (`artifacts/v8`, manifest `8d17da05a041`, 19 minutes on the cached gather): 106,069 titles, 11,930
+with full receipts (the same core as v7) and 94,139 ratings-only. English 85,574, French 7,427, Japanese 7,161, Hindi
+4,277, Telugu 1,630. The page now leads "New and now" with 2025-26 English titles. **Costs, stated.** Hindi, Telugu
+and the two Japanese series parts are SMALLER than in v7 (Hindi 5,250 to 4,277, Telugu 2,250 to 1,630, anime series
+2,500 to 2,354, live-action series 1,000 to 575) because the 50-vote fallback that filled them is gone: that is the
+200-vote floor working, not a fault. `/shelves` takes 0.45 to 0.62 s against 0.16 to 0.23 s on v7 (same machine,
+interleaved, six runs each): `all_movies` is rebuilt about 20 times a request and `catalogue_facets` is recomputed
+each time (found by profile, not yet fixed). `/discover` 0.17 s, `/search` 0.27 to 0.34 s. The recommender core is
+unchanged (validation hit@20 0.171, hybrid weight 0.45, as v7), because ratings-only titles sit outside it.
+
+## D-033: a wider candidate list reaches the films the 50-review build still misses (2026-11-03, Sonnet 5.5)
+
+**Measured** (`experiments/floor50_reach.py`): ebD has 13,684 films with 50 or more reviews. 8,256 are in v8; 2,029
+are reachable (one TMDB film in the five languages: English 1,886, French 61, Hindi 40, Japanese 39, Telugu 3); 2,335
+match no TMDB film by title and year; 780 are another language (Italian 112, Spanish 95, German 79); 284 share a key.
+Of the 2,029, **1,192 were selected and then lost**, not missed: `scan_ebd_keys` counts every review "whatever
+its length or spoiler flag", while the gather excludes spoiler-flagged and profane reviews (shown to users as
+evidence). Counted the gather's way, **1,168 of the 1,192 have fewer than 50 usable reviews** (the other 24 are
+not explained by this check). Only **837** sit outside `wide_quota`. **Decision.**
+`spine.widest_quota`: English 1,500 a year from 2000 and 600 before, 600 a year for every other language (a quota of
+600 takes 638 of the 837, 1,500 takes 713; the curve flattens after that while memory climbs). It is an option
+(`--widest`), so v4 to v8 stay reproducible, and it needs a new gather (the cache key records the quota). **Why now:**
+the gather cache keeps the reviews of every selected film whatever the floor, so this one wider gather also serves
+the later floor-20 build. **Expected gain** about 650 films with receipts (837 at the 87% that survive the filter),
+not the 3,300 first quoted: that figure was the raw ebD count, which the filter does not honour. **Not yet run:**
+free memory was 4.4 GB, below what a gather needs.
+
+## D-034: the wider candidate list added 88 titles, not 650; D-033's expected gain is withdrawn (2026-11-03, Sonnet 5.5)
+
+**Result** (`artifacts/v9`, manifest `d6cbf7291838`, 57 minutes; `--widest --uncapped`): 134,073 candidate films
+(v8: 91,019), 12,018 titles with receipts (v8: 11,930, **+88**: English 11,187 against 11,105, Japanese movies 147
+against 140, Hindi 426 against 427), 94,057 ratings-only, 106,075 in all. Hit-rate at 20 is 18.1% for both
+collaborative filtering and the hybrid (validation 0.183; the tuned fit weight moved from 0.45 to 0.3, and 10,077 films
+now have MovieLens ratings, so this is not like-for-like with v7). **Why so little** (`cache_diag`, the v8 and v9
+gather caches): the 43,054 added candidates are obscure (median 4 TMDB votes, maximum 73); 33.1% have any review, 15.0%
+five or more, 2.1% (909) twenty or more and **0.3% (114) fifty or more** (107 English, 7 Japanese), against 42.2%,
+30.4%, 18.9% and 11.4% for the 91,019 candidates the old list already had. **Widening also costs links:** title
+collisions rose from 471 to 847, and a popular film that shares its title and year with an obscure candidate is refused
+as ambiguous, so 25 films the old list had fell below 50 reviews (Taras Bulba 1962, The Hunchback of Notre Dame 1996,
+Anastasia 1997 among them; no film rose). 114 gained less 25 lost is 89 against the observed +88; the one-film
+difference is not explained. **What D-033 got wrong.** It predicted about 650 from 837 films outside the old quota at
+an 87% survival rate. That rate came from films the old list already held; at most 114 of the 837 (about 14%) reached
+50 usable reviews. Why obscure films lose more of their reviews to the filters is untested. **Consequences.** (1)
+`--widest` is not worth running and stays an option with that warning. (2) v9 is not recommended: it swaps 25 well-known films
+that lost their reviews for 114 obscure ones, for a net +88, and costs a 57-minute build; v8 stays the build to
+evaluate unless the owner prefers the extra titles (the owner has not decided). (3) D-033's claim that the wider gather also serves floor 20 is withdrawn, and is
+not needed: **the v8 cache already holds 17,201 films with 20 or more merged reviews against 10,386 at 50 or more**
+(+6,815, about +66%), so floor 20 can be built from it once the similarity matrix is made sparse.
+
+## D-035: where to watch covers six platforms in every country TMDB lists, as a dated snapshot (2026-11-03, Sonnet 5.5)
+
+**Owner's brief.** On opening a title, show where it can be watched, only on Netflix, Apple TV, Amazon Prime Video,
+Disney+ Hotstar, Crunchyroll and HBO Max; region "every country TMDB lists". **Source.** TMDB's watch-providers
+endpoint, one request per title, which returns every country at once and is powered by JustWatch (the page credits it,
+as TMDB's terms require). **Platform mapping** (`fetch_providers.PLATFORMS`, TMDB provider ids): Netflix 8 and 1796
+(with-ads variant); Apple TV 350 and 2; Amazon Prime Video 119, 9, 2100, 613, 10; Disney+ Hotstar 122 and 2336;
+Crunchyroll 283; HBO Max 1899. **Left out on purpose:** Amazon Channel add-ons (1968, 1825: a third party sold through
+Amazon), HBO Max sold through U-Next (2284), plain Disney+ (337, a different product from Hotstar) and Netflix Kids
+(175). Ways shown: stream (flatrate), free (including ads), rent and buy. **Result** (v11, manifest `9ea566ea1455`,
+`availability.json` 17 MB, fetch 105,843 answers in about 9 hours at 25 requests a second): 74,561 of 106,069 titles
+(70%) are on at least one of the six in some country; by platform Prime 65,663, Apple TV 49,961, Netflix 10,921, HBO
+Max 5,454, Hotstar 4,829, Crunchyroll 1,694; 139 countries appear. A title missing from the file is "none of the six",
+shown as such with no link, never as "unknown". **Limits.** (1) It is a snapshot: availability changes daily, so the file
+and the page carry the fetch date and tell the visitor to check the service. (2) Prime counts include titles that are
+only rent or buy there, and the page says Rent or Buy, never "included". (3) The first guess of country is the visitor's
+last choice, then their browser region; it is a guess, and the picker lists only countries where the title is offered.
+(4) The data is TMDB's and is not independently checked; no spot-check against the services themselves was done.
+(5) `availability.json` is read only when the verified manifest lists it, and only a plain `movie/N` or `tv/N` path can
+become a link. **Next.** Refreshing is a re-run of `fetch_providers` and `availability` into a new folder (about 9 hours
+at the same rate); nothing re-fetches while a visitor waits.
+
+## D-036: "Try a review" and the receipts read two statements joined by "and" separately, and know nine more phrases (2026-11-03, Sonnet 5.5)
+
+**Problem.** The owner's example ("the performances were fantastic, the storyline was captivating, and the ending was
+absolutely brilliant") was already read correctly for acting and plot, but a clause joined by "and" or a comma shared
+one polarity: "The acting was great and the plot was dull" scored -0.57 for both aspects. **Change 1 (splitting).**
+`split_clauses` also cuts at "and" or a comma when BOTH pieces are statements: at least three words, an aspect, and a
+verb after the aspect, and the next piece starts with a determiner or pronoun. Measured on 34,094 real sentences: 259
+changed (0.76%), 31 flipped sign, 84 opinions were lost and 36 gained; about 60 changed examples were read. Reading them
+found one bug (a list, "the plot, the acting and the scenery were bad", flipped plot to +0.14), fixed by requiring the
+verb AFTER the aspect. The determiner/pronoun guard stays: without it 419 against 259 sentences change and sign flips are
+50 against 31, and the extra cuts could not be shown to be better. **Change 2 (phrases).** From 60,000 real sentences
+(45,873 with no aspect) candidate phrases were counted and read; only those whose examples were on-topic were added:
+"chemistry" and "comic timing" (acting), "plodding", "breakneck", "fast-paced", "slow burn" (pacing), "beautifully
+shot/filmed" (visuals), "storytelling" (plot), "resolution" (ending). Left out because they fire on other things: "shot"
+(gunshots), "director" and "character" (not aspects), "gorgeous" and "stunning" (usually people), "color", "sound",
+"singing", "final(ly)". **Not measured.** There is no aspect-labelled test set, so precision and recall of the new phrases
+are NOT known; the evidence is the examples read, and the gold files hold pre-split clauses so they cannot score either
+change. **Consequence.** Receipts change at the next rebuild, which must re-profile every title (hours); nothing on the
+demo changes until then. Typo tolerance ("supeerb") and a semantic matcher (embeddings, parked) are not done.
+
+## D-039: the "and" splitter does bounded work (2026-11-03, Sonnet 5.5)
+
+**Finding.** An automated security review of the pushed branch flagged `_split_statements` (D-036): for every "and" or
+comma candidate it re-reads both sides, and when no cut is made the left side keeps growing, so the cost is quadratic in
+the span. `/analyze` runs it on up to 5,000 characters of visitor text. **Reproduced:** a crafted 5,000-character text
+of ", the" repeated took about 1.4 s against 0.1 s for a normal review; at the API's limit of 120 POSTs a minute from
+one client on one worker that can keep the server busy. **Fix.** A span longer than 1,000 characters is not statement-split
+(it behaves as before D-036) and at most 60 candidates are examined per span. After the fix the same inputs take under a
+millisecond and the worst case under the character limit takes 13 ms. **Cost, measured.** On 120,000 real sentences the
+output changed for 25 (0.02%), all unpunctuated run-ons of 1,000 to 3,287 characters (182 sentences exceed 1,000).
+Tests count the work done rather than time it (so they cannot flake) and pin the numbers as literals; four planted bugs
+(limit removed, cap removed, cap raised, limit moved) were caught after one surviving mutant, which compared the cap with
+itself, was fixed. **Not changed.** The leading `\s*` in `_JOIN`, which the review also named: a 4,990-space run costs
+0.0 ms, so it is not exploitable here. The build runs the same code, so a review that is one huge unpunctuated sentence
+now keeps its old, single-clause behaviour. v12 and v13 were built BEFORE this change; a rebuild would differ in about
+0.02% of sentences, which is immaterial to the receipts.
+
+## D-038: the review floor drops from 50 to 20 (build v12), which adds 8,555 thinner receipts (2026-11-03, Sonnet 5.5)
+
+**Owner's plan** (2026-11-02): floor 50 first, then floor 20 once the floor-50 build was checked. **Blocker removed.**
+Floor 20 was expected to need a sparse similarity; instead `build_item_similarity` now forms the matrix in row blocks
+(`block_rows`, default 1,024), because the real cost was three dense float64 matrices at once (about 5 GB at 15,000 rated
+films), not the float32 result. The result is unchanged up to rounding (tests compare it with the old whole-matrix
+formula at three block sizes; four planted block-edge bugs were caught). **Result** (`artifacts/v12`, manifest
+`aec535f651e1`, 27 minutes on the cached gather; `--min-reviews 20`, otherwise the v8 flags): **20,485 titles with
+receipts** (17,191 films and 3,294 series) against 11,930, no title lost; 85,630 ratings-only; 282,397 quotable sentences
+(v8: 191,874). English receipts 18,703 (11,105), Hindi 791 (427), French 495 (188), Japanese movies 323 (140), anime
+series 95 (35), Telugu 74 (33). `item_sim.npy` is 1.68 GB (v8: 569 MB), so the server needs about 1.7 GB for it.
+**What the new titles are like.** The 8,555 added titles have a median of 30 reviews, report 3.9 aspects on average
+(the 11,930 older titles: 5.7) and 37.7% report three or fewer, because an aspect needs three supporting clauses. A
+receipt from 20 to 49 reviews is thinner evidence; the page shows each score's support, so it says so. **Recommender.**
+On the same 2,000 test users the hybrid minus collaborative filtering at 20 is -0.3 points [-1.2, +0.7] (v8: -1.55
+[-2.5, -0.55]); the interval now includes zero. This is NOT like-for-like (the catalogue and so the candidate pool
+differ; popularity's hit rate moved from 7.1% to 6.0%), so it does not show that the hybrid improved. Validation hit@20
+is 0.212 (v8: 0.171); shrink 50 was chosen (v8: 200). **Effect of D-036 on the older receipts.** Over 68,224 aspect
+scores of the 11,930 shared titles the mean absolute change is 0.014; 2.2% moved by more than 0.1; one crossed from
+liked to disliked (both beyond 0.2); 61 aspects were dropped and 194 gained. The splitter and the nine phrases are
+therefore not a visible change to existing receipts. **Not measured.** Whether the 20-to-49-review receipts are as
+accurate as the older ones: the aspect and polarity gold sets are clause-level and cannot score a title. **Consequence.**
+v12 holds no cast or availability; v13 is v12 plus both (add-on steps, new folders).
+
+## D-037: spelling repair for the polarity model was measured and is NOT shipped (2026-11-03, Sonnet 5.5)
+
+**Idea.** "Try a review" scored "supeerb" at +0.48 against +0.99 for "superb", because a misspelt word is not in the
+polarity model's vocabulary. A repair step would replace an unknown word (5+ letters, letters only) with the most
+frequent vocabulary word one edit away (delete, swap, replace or insert one letter). **Measured** on 30,000 real review
+sentences (377,336 tokens; 6.1% of tokens are unknown to the model; probe in the session scratchpad, not committed).
+(1) Repairing toward any vocabulary word fired 3,857 times on 2,455 distinct words, and of 70 sampled repairs I judged
+about a fifth right (pleasent, beleiving, mediochre, adolesence, millionare, whirpool) and the rest wrong: real rare
+words turned into other words (stocky to stock, parlance to palance, seance to stance, nooks to looks) and names (konrad
+to conrad, mcmann to mcgann). (2) Limited to targets among the 1,500 most polar words it fired 363 times (0.1% of
+tokens) and about 45% of the 70 sampled were still wrong (dented to rented, coker to cover, saeed to saved, pater to
+later). **Decision.** Not built: a wrong repair is as likely as a right one, and the right ones touch about one token in a
+thousand. **What could work instead (untested).** A character n-gram polarity model reads misspellings natively, but it
+needs a retrain and a full re-profile; it belongs with the parked embeddings option, to be compared on a fresh random
+clause sample. No dictionary was available to separate a real rare word from a typo; adding one is a new dependency.
+
 ## D-029: a 50-vote fallback fills the short languages; the build is v5 (2026-11-01, Sonnet 5.5)
 
 At the 200-vote floor Hindi, Telugu and Japanese were 3,270 films short of the owner's targets (roadmap

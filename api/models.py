@@ -47,6 +47,39 @@ class AspectDetail(_Out):
     evidence: tuple[EvidenceSentence, ...]
 
 
+class PersonRef(_Out):
+    """A person billed in a title: enough for the page to show a name and search for the person."""
+
+    id: int
+    name: str
+
+
+class PersonHit(_Out):
+    """A person found by name, with how many catalogue titles they are billed in."""
+
+    id: int
+    name: str
+    titles: int
+
+
+class WatchOption(_Out):
+    """One platform and, for each way of watching it, the countries where that way is offered."""
+
+    # Names from `fetch_providers.PLATFORMS` and ways from `WAY_ORDER`; the loader admits no others.
+    platform: str
+    ways: dict[str, tuple[str, ...]]
+
+
+class WhereToWatch(_Out):
+    """Where a title can be watched: a dated snapshot, never a live answer."""
+
+    fetched: str  # ISO date of the snapshot; the page says "as of" this
+    # The title's watch page on TMDB, powered by JustWatch (the page credits it); None when the
+    # title is on none of the six platforms, so there is nothing to link.
+    tmdb_url: str | None = None
+    platforms: tuple[WatchOption, ...]
+
+
 class MovieDetail(_Out):
     """Everything the movie page shows."""
 
@@ -69,6 +102,11 @@ class MovieDetail(_Out):
     ratings_only: bool = False
     imdb_rating: float | None = None
     imdb_votes: int | None = None
+    # The billed actors and actresses, first billed first; empty for a build with no cast file.
+    cast: tuple[PersonRef, ...] = ()
+    # Where it can be watched among the six platforms we cover; None for a build with no
+    # availability file, and present-but-empty `platforms` when it is on none of them.
+    where_to_watch: WhereToWatch | None = None
 
 
 class DiscoverRequest(BaseModel):
@@ -88,6 +126,8 @@ class DiscoverRequest(BaseModel):
     kinds: tuple[Literal["film", "series"], ...] = Field(default=(), max_length=2)
     from_year: int | None = Field(default=None, ge=1880, le=2100)
     to_year: int | None = Field(default=None, ge=1880, le=2100)
+    # Only the titles this person (an id from `/people`) is billed in, ranked like any other list.
+    person_id: int | None = Field(default=None, ge=1, le=2_000_000_000)
     # Watched films travel here. The browser caps each of its lists at 3,000 (web/js/profile.js
     # LIST_CAP); this must not be lower, or a long watched list would turn every shelf into a 422.
     exclude_movie_ids: tuple[str, ...] = Field(default=(), max_length=3000)
@@ -124,6 +164,10 @@ class Facets(_Out):
     genres: dict[str, int]
     oldest_year: int | None
     newest_year: int | None
+    # True when this build has a cast file, so the page knows people can be searched.
+    cast: bool = False
+    # True when this build knows where titles can be watched.
+    availability: bool = False
 
 
 class AnalyzeRequest(BaseModel):

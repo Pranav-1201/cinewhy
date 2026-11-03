@@ -140,6 +140,48 @@ permanently by `unique_review_indices` and `test_no_review_text_appears_in_both_
 ## Five-line handoff ritual (fill in each session)
 
 ```
+Session date:      2026-11-03 (session "nlp 3", scale-up), branch feature/wide-catalogue in D:\NLPPROJECT-dev,
+                   NOT pushed, NOT in the demo
+Model:             Claude Sonnet 5.5
+What we did:       Owner dropped the ratio: 200+ votes, five languages, no cap. --uncapped (D-032) and artifacts/v8
+                   (manifest 8d17da05a041): 106,069 titles = 11,930 with receipts + 94,139 ratings-only; 2025-26
+                   English now present. Measured floor-50 reach (D-033): only ~650 more films are gettable, not
+                   3,300; added --widest (built as v9: only +88, D-034). THEN the owner's three asks, all built
+                   and committed on this branch (744 tests pass): (a) CAST: cast.json from IMDb's non-commercial
+                   dumps, "Starring" line, People group in search, a person's top titles (v10, manifest
+                   f269a42c0c3e). (b) WHERE TO WATCH: TMDB providers for six platforms, every country, 74,561 of
+                   106,069 titles on at least one; a country picker, dated and credited to JustWatch (D-035; v11 =
+                   v10 + availability.json, manifest 9ea566ea1455). (c) TRY A REVIEW: statements joined by "and"
+                   are scored separately and nine phrases added (D-036); receipts change only at the next rebuild.
+                   (d) FLOOR 20 (D-038): the similarity is now formed in row blocks (no memory blow-up), and
+                   artifacts/v12 (manifest aec535f651e1, 27 min) has 20,485 titles with receipts (was 11,930),
+                   282,397 quotable sentences; item_sim.npy is 1.68 GB. The 8,555 new titles are thinner
+                   (median 30 reviews, 3.9 aspects each). v13 (manifest 16c1ba2b4576) = v12 + cast + availability:
+                   106,115 titles; on it /shelves is 0.12 s warm, the server holds 2.9 GB. The five Word documents
+                   were regenerated with all of this and validated.
+What's left:       1) v13 IS ON THE DEMO (owner said "Put v13 on the demo", 2026-11-03): D:\NLPPROJECT main was
+                   fast-forwarded to this branch (local only, rollback: git reset --hard e81629c) and
+                   artifacts\v13 copied in byte-identical; start.bat serves the highest vN, so v13. Checked: it
+                   boots in 16 s, manifest 16c1ba2b4576, cast and availability on. v7 stays beside it as a
+                   rollback (moving artifacts\v13 away serves v7 again; the new code works with v7 and just shows no cast or where-to-watch).
+                   NOTHING IS PUSHED to GitHub; origin/main is still PR #3. A host must hold a 1.7 GB matrix. 2) Try a review: typo tolerance
+                   ("supeerb") and polarity on figurative praise are not done; then embeddings (PARKED OPTION,
+                   owner 2026-11-03: a sentence-embedding model for similar-word matching, if it proves the most
+                   effective; measure each step on a FRESH random clause sample; costs a new dependency, ~100 MB
+                   model, hours of CPU to re-profile 1.5M reviews, check for a build-time GPU; it is not RAG).
+                   Typo repair was measured and REJECTED (D-037); do not retry it. The splitter/phrase changes
+                   are already in v12 and barely moved old receipts (D-038). 3) The dense similarity (1.68 GB at
+                   20,485 titles with receipts) grows with the square: a sparse top-neighbours design is the
+                   answer if that count passes about 28,000. 4) Not measured: whether the 20-to-49-review
+                   receipts are as accurate as the older ones. 5) Availability is a snapshot dated 2026-11-03;
+                   refresh = re-run fetch_providers then availability (about 9 hours). 6) The v13_cast folder
+                   in artifacts/ is an intermediate (v13 minus availability) and can be deleted. 7) Rotate the
+                   TMDB token the owner pasted in chat (it is in no commit and no file).
+Watch out for:     NEVER pass --ratings-only-fallback-votes with --uncapped (BuildConfig refuses it). Hindi, Telugu
+                   and the Japanese series parts are smaller than v7 on purpose (no 50-vote fallback). A teammate
+                   will build a full dataset later; do not scrape for it. A raw ebD review count includes
+                   spoiler-flagged reviews: 98% of "missing" films had under 50 usable ones.
+
 Session date:      2026-11-02 (session "nlp 3", targets met), merged to main (PRs #1 and #2)
 Model:             Claude Sonnet 5.5
 What we did:       PR #2 (series, Anime shelf, Japanese 5:3:2) merged after CI; downloaded the 30,501 series with

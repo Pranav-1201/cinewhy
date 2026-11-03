@@ -4,10 +4,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from cinewhy.build import BuildConfig, quota_function
 from cinewhy.data.catalogue_sources import SourcePaths, _cache_key
 from cinewhy.data.spine import (
     CATALOGUE_TARGETS,
     JAPANESE_SPLIT,
+    UNCAPPED,
     SpineFilm,
     bucket_of,
     catalogue_targets,
@@ -16,6 +18,7 @@ from cinewhy.data.spine import (
     select_ratings_only,
     select_spine,
     wide_quota,
+    widest_quota,
 )
 from tests.dumps import tmdb_row
 
@@ -239,6 +242,56 @@ def test_the_targets_are_the_owners_ratio() -> None:
     assert [CATALOGUE_TARGETS[k] for k in ("en", "ja", "fr")] == [10_000, 5_000, 2_500]
 
 
+def test_uncapped_targets_ask_for_every_bucket_and_change_nothing_else() -> None:
+    for split in (False, True):
+        capped = catalogue_targets(split_japanese=split)
+        open_ended = catalogue_targets(split_japanese=split, uncapped=True)
+        assert open_ended.keys() == capped.keys()  # same buckets, so the Japanese split survives
+        assert set(open_ended.values()) == {UNCAPPED}
+    assert catalogue_targets(split_japanese=False) == dict(CATALOGUE_TARGETS)  # default unchanged
+
+
+def test_an_uncapped_language_lists_every_film_above_the_floor_not_just_a_target() -> None:
+    # English with 12 qualifying films and a capped target of 5 would stop at 5; uncapped lists 12.
+    rows = [_row(i, "en", votes=300 + i, year=2024) for i in range(1, 13)]
+    capped = select_ratings_only(rows, taken=[], targets={"en": 5}, min_votes=200)
+    assert len(capped) == 5
+    uncapped = select_ratings_only(rows, taken=[], targets={"en": UNCAPPED}, min_votes=200)
+    assert _ids(uncapped) == list(range(1, 13))
+
+
+def test_an_uncapped_language_already_over_its_old_target_still_gets_new_titles() -> None:
+    # The v7 gap: English was over its target from receipts alone, so the recent films were never
+    # listed. 6 held titles against a target of 5 meant none; uncapped must still add the rest.
+    rows = [_row(i, "en", votes=500, year=2024 if i > 6 else 2005) for i in range(1, 11)]
+    assert select_ratings_only(rows, taken=range(1, 7), targets={"en": 5}, min_votes=200) == ()
+    more = select_ratings_only(rows, taken=range(1, 7), targets={"en": UNCAPPED}, min_votes=200)
+    assert _ids(more) == [7, 8, 9, 10]
+
+
+def test_uncapped_still_respects_the_vote_floor_the_rating_and_receipts_already_held() -> None:
+    rows = [
+        _row(1, "en", votes=199),  # under the floor
+        _row(2, "en", votes=9000, rating="0"),  # no rating
+        _row(3, "en", votes=200),
+        _row(4, "en", votes=5000),  # already has full receipts
+    ]
+    chosen = select_ratings_only(rows, taken=[4], targets={"en": UNCAPPED}, min_votes=200)
+    assert _ids(chosen) == [3]
+
+
+def test_uncapped_keeps_the_japanese_split_buckets_apart() -> None:
+    targets = catalogue_targets(split_japanese=True, uncapped=True)
+    candidates = [
+        _title(1, "ja", "series", 900, _ANIMATION),  # anime series
+        _title(2, "ja", "series", 800),  # live-action series
+        _title(3, "ja", "film", 700, _ANIMATION),  # an anime film is a movie
+        _title(4, "ja", "series", 100, _ANIMATION),  # under the floor
+    ]
+    chosen = choose_ratings_only(candidates, [], targets, min_votes=200)
+    assert _ids(chosen) == [1, 2, 3]
+
+
 def test_select_spine_takes_the_languages_it_is_given() -> None:
     rows = [_row(1, "fr", 900), _row(2, "ja", 900), _row(3, "en", 900)]
     assert _ids(select_spine(rows, quota).films) == [3]  # the default is English and Hindi only
@@ -259,6 +312,31 @@ def test_the_wide_quota_is_wider_and_never_narrower_than_the_shipped_one() -> No
     assert wide_quota("en", 2010) == 1000 and wide_quota("ja", 2010) == 300
 
 
+def test_the_widest_quota_is_wider_than_the_wide_one_in_every_language_and_year() -> None:
+    for language in ("en", "hi", "te", "ja", "fr"):
+        for year in (1934, 1960, 1999, 2000, 2024):
+            assert widest_quota(language, year) >= wide_quota(language, year)
+    # The values the measurement chose (D-033), so a casual edit shows up here.
+    assert (widest_quota("en", 2010), widest_quota("en", 1960)) == (1500, 600)
+    assert {widest_quota(lang, 2010) for lang in ("hi", "te", "ja", "fr")} == {600}
+
+
+def test_the_widest_quota_selects_a_film_the_wide_quota_leaves_out() -> None:
+    # Three English films of one year, most voted first. A quota of 2 keeps the best two; one of 3
+    # keeps all, which is the whole point of widening: the third film was simply never a candidate.
+    rows = [_row(i, "en", votes=1000 - i, year=1999) for i in range(1, 4)]
+    narrow = select_spine(rows, lambda _lang, _year: 2, languages=("en",))
+    wider = select_spine(rows, lambda _lang, _year: 3, languages=("en",))
+    assert _ids(narrow.films) == [1, 2] and _ids(wider.films) == [1, 2, 3]
+
+
+def test_the_build_picks_the_widest_quota_it_is_asked_for() -> None:
+    assert quota_function(BuildConfig()) is quota
+    assert quota_function(BuildConfig(wide=True)) is wide_quota
+    assert quota_function(BuildConfig(widest=True)) is widest_quota
+    assert quota_function(BuildConfig(wide=True, widest=True)) is widest_quota  # widest wins
+
+
 def test_a_gather_cache_is_not_reused_for_another_selection(tmp_path: Path) -> None:
     for name in ("tmdb.csv", "rt.zip", "ebd.zip", "acl.tar.gz"):
         (tmp_path / name).write_bytes(b"x")
@@ -271,6 +349,7 @@ def test_a_gather_cache_is_not_reused_for_another_selection(tmp_path: Path) -> N
     base = _cache_key(paths, 150)
     assert base == _cache_key(paths, 150, quota)
     assert base != _cache_key(paths, 150, wide_quota)
+    assert _cache_key(paths, 150, wide_quota) != _cache_key(paths, 150, widest_quota)
     assert base != _cache_key(paths, 150, quota, ("en", "hi", "fr"))
     assert base != _cache_key(paths, 150, quota, None, 2026)
     # The same languages in another order are the same selection.

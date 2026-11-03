@@ -73,13 +73,15 @@ _ASPECT_PATTERNS: Final[dict[Aspect, re.Pattern[str]]] = {
             r"|superb|terrific|excellent|awful|terrible|wooden)\s+as\b",
             r"(?:screen\s+)?presence", r"(?:can|can't|cannot|couldn't|could)\s+act",
             r"(?:well|brilliantly|beautifully|superbly|perfectly)\s+(?:played|cast|acted)",
+            # Added after reading 83 and 4 real uncaught sentences (D-036): both were about acting.
+            "chemistry", r"comic\s+timing",
         ),
         Aspect.PLOT: (
             "plots?", "story(?:lines?)?", "script", "screenplay", "twists?", r"narrativ(?:e|ly)",
             "dialogues?", "writing",
             "premise", "subplots?", r"events\s+in\s+(?:this|the)\s+(?:film|movie)",
             r"what\s+(?:this|the)\s+(?:movie|film)\s+was\s+about",
-            r"(?:best|great|good|bad|worst|memorable)\s+lines",
+            r"(?:best|great|good|bad|worst|memorable)\s+lines", "storytelling",
         ),
         # Bare "drag" and "slowly" were the main false positives (drag queens, "slowly loses
         # it"), and "change of pace" is an idiom. Each is now tied to the film or its tempo.
@@ -89,6 +91,7 @@ _ASPECT_PATTERNS: Final[dict[Aspect, re.Pattern[str]]] = {
             r"(?:it|film|movie|story|plot|part|half|hour|middle|act|second|third)\s+drag(?:s|ged|ging)?",
             r"(?:moves|runs|unfolds|progresses|builds)\s+(?:very\s+|so\s+|too\s+)?slowly",
             r"dull\s+stretch(?:es)?", "tedious", "momentum", r"kept\s+waiting",
+            "plodding", "breakneck", r"fast[-\s]paced", r"slow[-\s]burn",
         ),
         # "effects of tradition" is not special effects; require a visual qualifier.
         Aspect.VISUALS: (
@@ -97,12 +100,12 @@ _ASPECT_PATTERNS: Final[dict[Aspect, re.Pattern[str]]] = {
             r"effects\s+(?:are|were|was|look|looked|work|worked)", r"set\s+design",
             r"picture\s+quality", r"blue\s?screen", r"fashions?", r"production\s+values?",
             "artwork", r"well[-\s]shot", r"(?:production\s+)?sets\b", r"low[-\s]budget",
-            r"visually\s+\w+", r"underwater\s+scenes",
+            r"visually\s+\w+", r"underwater\s+scenes", r"beautifully\s+(?:shot|filmed)",
         ),
         # `(?<!-)` keeps "never-ending" out; "in conclusion" is a discourse marker.
         Aspect.ENDING: (
             r"(?<!-)endings?", "finale", "climax", r"(?<!in\s)conclusion",
-            r"(?:final|last)\s+(?:scene|act|minutes|twist|sequence)",
+            r"(?:final|last)\s+(?:scene|act|minutes|twist|sequence)", "resolution",
         ),
         # Bare "score" also means a rating ("a score of 4"), so it needs a music context.
         Aspect.SOUNDTRACK: (
@@ -184,9 +187,79 @@ _CONTRAST: Final[re.Pattern[str]] = re.compile(
 )
 _MIN_CLAUSE_WORDS: Final[int] = 3
 
+# Two opinions joined by "and" or a comma rather than a contrast word: "The acting was great and
+# the plot was dull." Left whole, both aspects inherit one blended score (here negative, so the
+# acting of a well-acted film is scored as bad). The join must be followed by a new subject, so
+# "dull and tedious" and "and so was the plot" are never joined points.
+_JOIN: Final[re.Pattern[str]] = re.compile(
+    r"\s*(?:,\s*(?:and\s+)?|\s+and\s+)"
+    r"(?=(?:the|a|an|its|his|her|their|this|that|these|those|it|he|she|they|we|i|there)\b)",
+    re.IGNORECASE,
+)
+# The new subject after the join is limited to a determiner or pronoun on purpose. Without that
+# limit 160 more sentences in a 34,000-sentence sample were cut (419 against 259), with more sign
+# flips (50 against 31), and the extra cuts could not be shown to be better. A bare noun subject
+# ("... and special effects were awful") is therefore left whole: narrower, not wrong.
+# Limits on the work `_split_statements` may do on one span (see the comment there). Real sentences
+# are far below both: the longest sentences in review text are a few hundred characters.
+_MAX_SPLIT_CHARS: Final[int] = 1_000
+_MAX_JOINS: Final[int] = 60
+# A verb the sides must each have, so "The acting, the plot and the pacing were great" (one shared
+# verb) is not cut into "The acting, the plot" (no opinion) and "the pacing were great".
+_PREDICATE: Final[re.Pattern[str]] = re.compile(
+    r"\b(?:was|were|is|are|am|had|has|have|felt|feels|looked|looks|seemed|seems|sounded|sounds"
+    r"|got|gets|kept|keeps|made|makes|did|does|dragged|drags|worked|works|moved|moves|fell|falls"
+    r"|lacked|lacks|delivered|delivers)\b|\b\w+n't\b|\b\w{3,}ed\b",
+    re.IGNORECASE,
+)
+
+
+def _is_statement(piece: str) -> bool:
+    """True when a piece can be scored on its own: enough words, an aspect, and a verb after it.
+
+    The verb must FOLLOW the aspect ("the plot was dull"). A verb before it belongs to an earlier
+    clause: in "I agree with the others who posted that the plot, the acting and the scenery were
+    bad", "posted" is not the verb of "that the plot".
+    """
+    if len(piece.split()) < _MIN_CLAUSE_WORDS:
+        return False
+    first_aspect_end = min(
+        (m.end() for p in _ASPECT_PATTERNS.values() if (m := p.search(piece))), default=None
+    )
+    return first_aspect_end is not None and _PREDICATE.search(piece, first_aspect_end) is not None
+
+
+def _split_statements(text: str, start: int, end: int) -> list[tuple[int, int]]:
+    """Cut text[start:end] where "and" or a comma joins two statements about aspects.
+
+    A cut is made only when BOTH the piece before it and everything after it are statements
+    (see `_is_statement`), so a list that shares one verb, or a side with no aspect, is left whole.
+    """
+    # Bounded work. Each candidate re-reads both sides, and when no cut is made the left side keeps
+    # growing, so a crafted 5,000-character text of ", the" repeated cost about 1.4 s against 0.1 s
+    # for a normal review (a security review of /analyze found it, and it was reproduced). A span
+    # past the character limit is not split at all, which is how it behaved before D-036, and only
+    # the first `_MAX_JOINS` candidates are examined.
+    if end - start > _MAX_SPLIT_CHARS:
+        return [(start, end)]
+    pieces: list[tuple[int, int]] = []
+    current = start
+    for examined, join in enumerate(_JOIN.finditer(text, start, end)):
+        if examined >= _MAX_JOINS:
+            break
+        if _is_statement(text[current : join.start()]) and _is_statement(text[join.end() : end]):
+            pieces.append((current, join.start()))
+            current = join.end()
+    pieces.append((current, end))
+    return pieces
+
 
 def split_clauses(sentence: str) -> list[str]:
-    """Split a sentence at contrast markers into clauses that can be scored separately.
+    """Split a sentence into clauses that can be scored separately.
+
+    It splits at contrast markers ("but", "however", ...) and where "and" or a comma joins two
+    statements that each have their own verb and aspect ("The acting was great and the plot was
+    dull" gives two clauses, so each aspect takes its own polarity).
 
     Every returned clause is a verbatim substring of the input, so it can be quoted as
     evidence without paraphrase (CONSTRAINTS.md #9). A split is only made when both sides
@@ -218,7 +291,8 @@ def split_clauses(sentence: str) -> list[str]:
             merged[-1] = (merged[-1][0], span[1])
         else:
             merged.append(span)
-    return [c for s, e in merged if (c := text[s:e].strip())] or [text]
+    cut = [piece for s, e in merged for piece in _split_statements(text, s, e)]
+    return [c for s, e in cut if (c := text[s:e].strip())] or [text]
 
 
 _default_model: PolarityScorer | None = None

@@ -3,9 +3,11 @@
 import { api } from "./api.js";
 import { $, clear, fill, h } from "./dom.js";
 import { imdbLine, kindLabel, languageName, ratingsOnlyNote, runtimeLabel } from "./format.js";
+import { starring } from "./people.js";
 import { linesFromAspects, receipt } from "./receipt.js";
 import { isWanted, isWatched, opinionOf, setOpinion, setWant, setWatched } from "./state.js";
 import { poster } from "./tile.js";
+import { whereToWatch } from "./watch.js";
 
 /** The yes/no answers the visitor can give about a film, each with its two wordings. */
 function answers(movie) {
@@ -58,7 +60,9 @@ function body(d) {
       poster(m, { language: d.language }),
       h("div", {}, h("h2", { id: "film-title", text: m.title }), h("div", { class: "meta" }, chips.map((c) => h("span", { class: "chip static", text: c }))))),
     d.overview ? h("p", { class: "film-overview", text: d.overview }) : null,
+    starring(d.cast),
     actions(m, d),
+    whereToWatch(d.where_to_watch),
     d.ratings_only
       ? h("p", { class: "film-overview ratings-only-note", text: ratingsOnlyNote(m.kind) })
       : d.aspects.length

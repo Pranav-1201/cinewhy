@@ -56,6 +56,7 @@ from cinewhy.data.spine import (
     quota,
     read_tmdb_rows,
     wide_quota,
+    widest_quota,
 )
 from cinewhy.recsys.catalogue import (
     Catalogue,
@@ -109,6 +110,9 @@ class BuildConfig:
     languages: tuple[str, ...] | None = None  # None: the spine's English and Hindi
     max_year: int | None = None  # None: the spine's last year
     wide: bool = False  # the wider candidate list (`spine.wide_quota`)
+    # Wider again (`spine.widest_quota`), to reach the films `wide` still misses; takes precedence
+    # over `wide`. Its gather is a new one: the cache key records which quota selected the films.
+    widest: bool = False
     # Fewest IMDb votes for a ratings-only film; None builds no ratings-only tier.
     ratings_only_min_votes: int | None = None
     # A lower floor used only to fill a language still short of its target once the films above
@@ -120,6 +124,22 @@ class BuildConfig:
     series_dumps: Path | None = None
     series_tmdb: Path | None = None
     series_min_votes: int = 200
+    # List every title that passes the vote floor instead of stopping at a per-language target
+    # (spine.UNCAPPED; DECISIONS D-032). The ratings-only tier's floor then alone sets its size.
+    uncapped: bool = False
+
+    def __post_init__(self) -> None:
+        """Refuse settings that would quietly list thinly rated titles.
+
+        With no target to meet, a fallback floor would never stop lowering the bar: every title
+        above it would be listed. Better a clear error than a silent weak tier.
+        """
+        if self.uncapped and self.ratings_only_fallback_votes is not None:
+            msg = (
+                "uncapped already lists everything above ratings_only_min_votes; "
+                "a fallback floor would only add thinly rated titles"
+            )
+            raise ValueError(msg)
 
 
 def movie_id_for(imdb_id: int) -> str:
@@ -159,9 +179,16 @@ def ratings_only_id(imdb_id: int) -> str:
     return f"ro-{imdb_id:07d}"
 
 
+def quota_function(config: BuildConfig) -> Callable[[str, int], int]:
+    """Which films-per-(language, year) rule picks the build's candidates: the widest asked for."""
+    if config.widest:
+        return widest_quota
+    return wide_quota if config.wide else quota
+
+
 def build_targets(config: BuildConfig, *, with_series: bool) -> dict[str, int]:
     """The wanted size of each bucket: with series in the build, Japanese is split 5 : 3 : 2."""
-    return catalogue_targets(split_japanese=with_series)
+    return catalogue_targets(split_japanese=with_series, uncapped=config.uncapped)
 
 
 def series_candidates(config: BuildConfig) -> list[SpineFilm]:
@@ -275,11 +302,15 @@ def ratings_only_report(
         "series": sum(f.movie.kind == "series" for f in ratings_only),
         "by_language": {
             name: {
-                "target": target,
+                # No target when uncapped: the vote floor, not a number, set the size, so there is
+                # nothing to fall short of.
+                "target": None if config.uncapped else target,
                 "full_receipts": full.get(name, 0),
                 "ratings_only": only.get(name, 0),
                 "of_which_below_the_main_floor": thin.get(name, 0),
-                "short_by": max(0, target - full.get(name, 0) - only.get(name, 0)),
+                "short_by": (
+                    0 if config.uncapped else max(0, target - full.get(name, 0) - only.get(name, 0))
+                ),
             }
             for name, target in build_targets(config, with_series=split).items()
         },
@@ -440,7 +471,7 @@ def build_artifacts(config: BuildConfig) -> ArtifactManifest:
     out.mkdir(parents=True, exist_ok=True)
 
     _log("gathering films and reviews from TMDB, aclImdb, Rotten Tomatoes and ebD")
-    quota_for = wide_quota if config.wide else quota
+    quota_for = quota_function(config)
     if config.cache_file is None:
         gathered = gather(
             config.sources,
@@ -715,6 +746,12 @@ def main() -> None:
         "--wide", action="store_true", help="the wider candidate list (spine.wide_quota)"
     )
     parser.add_argument(
+        "--widest",
+        action="store_true",
+        help="wider again than --wide (spine.widest_quota); needs a new gather. Adds few titles "
+        "with receipts and makes more titles ambiguous (docs/DECISIONS.md D-034)",
+    )
+    parser.add_argument(
         "--ratings-only-min-votes",
         type=int,
         default=None,
@@ -739,6 +776,11 @@ def main() -> None:
         help="the TMDB series cache written by `python -m cinewhy.data.fetch_series`",
     )
     parser.add_argument("--series-min-votes", type=int, default=200, help="fewest IMDb votes")
+    parser.add_argument(
+        "--uncapped",
+        action="store_true",
+        help="list every title passing the vote floor, not just up to each language's target",
+    )
     args = parser.parse_args()
     build_artifacts(
         BuildConfig(
@@ -753,11 +795,13 @@ def main() -> None:
             languages=tuple(args.languages.split(",")) if args.languages else None,
             max_year=args.max_year,
             wide=args.wide,
+            widest=args.widest,
             ratings_only_min_votes=args.ratings_only_min_votes,
             ratings_only_fallback_votes=args.ratings_only_fallback_votes,
             series_dumps=args.series_dumps,
             series_tmdb=args.series_tmdb,
             series_min_votes=args.series_min_votes,
+            uncapped=args.uncapped,
         )
     )
 

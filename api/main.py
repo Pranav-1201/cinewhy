@@ -45,8 +45,12 @@ from api.models import (
     ErrorResponse,
     Facets,
     MovieDetail,
+    PersonHit,
+    PersonRef,
     SentenceAnalysis,
     ShelvesRequest,
+    WatchOption,
+    WhereToWatch,
 )
 from cinewhy.absa.extract import (
     MIN_OPINION,
@@ -57,9 +61,11 @@ from cinewhy.absa.extract import (
 )
 from cinewhy.absa.polarity import PolarityModel
 from cinewhy.artifacts.manifest import load_manifest, verify
+from cinewhy.data.fetch_providers import PLATFORMS, WAY_ORDER
 from cinewhy.recsys import discover, rank
 from cinewhy.recsys.catalogue import Catalogue, load_catalogue
 from cinewhy.recsys.discover import DiscoverResult
+from cinewhy.recsys.people import cast_of, imdb_number, search_people
 from cinewhy.recsys.shelves import ShelvesResult, build_shelves
 from cinewhy.schemas import (
     ArtifactManifest,
@@ -78,6 +84,7 @@ _MAX_BODY_BYTES = 160 * 1024
 _RATE_WINDOW_SECONDS = 60.0
 _RATE_LIMIT = 120  # POSTs per client per window; POST is where the real work happens
 _SEARCH_LIMIT_MAX = 50
+_PEOPLE_LIMIT_MAX = 20
 _WEB_DIR = Path(__file__).resolve().parent.parent / "web"
 
 
@@ -146,6 +153,8 @@ def load_artifacts(directory: Path | None = None) -> ArtifactManifest:
         root,
         with_meta="meta.json" in manifest.files,
         with_ratings_only="ratings_only.json" in manifest.files,
+        with_cast="cast.json" in manifest.files,
+        with_availability="availability.json" in manifest.files,
     )
     _state = _State(manifest, catalogue, metrics, polarity)
     log.info(
@@ -212,6 +221,47 @@ def _rotten_tomatoes_url(value: object) -> str | None:
     return value if isinstance(value, str) and value.startswith(_RT_PREFIX) else None
 
 
+def _cast(catalogue: Catalogue, movie_id: str) -> tuple[PersonRef, ...]:
+    """The billed actors and actresses of a title, or nobody when the build has no cast file."""
+    return tuple(PersonRef(id=person, name=name) for person, name in cast_of(catalogue, movie_id))
+
+
+_TMDB_PAGE = re.compile(r"(?:movie|tv)/[0-9]{1,9}")
+
+
+def _where(catalogue: Catalogue, movie_id: str) -> WhereToWatch | None:
+    """Where a title can be watched among the six platforms, or None when the build has no data.
+
+    A title missing from a build that has the data is on none of the six, so it gets an empty
+    list (the page says so) rather than None (which would mean "we do not know"). The TMDB path
+    comes from a hash-verified file, but only a plain `movie/123` or `tv/123` may become a link.
+    Platforms and ways come out in the fixed order of `PLATFORMS` and `WAY_ORDER`: the file is
+    written with sorted keys, so its own order says nothing.
+    """
+    number = imdb_number(movie_id)
+    if catalogue.availability is None or number is None:
+        return None
+    fetched = catalogue.availability.fetched
+    found = catalogue.availability.titles.get(number)
+    if found is None:
+        return WhereToWatch(fetched=fetched, tmdb_url=None, platforms=())
+    link = f"https://www.themoviedb.org/{found.tmdb}/watch"
+    return WhereToWatch(
+        fetched=fetched,
+        tmdb_url=link if _TMDB_PAGE.fullmatch(found.tmdb) else None,
+        platforms=tuple(
+            WatchOption(
+                platform=platform,
+                ways={
+                    way: found.on[platform][way] for way in WAY_ORDER if way in found.on[platform]
+                },
+            )
+            for platform in PLATFORMS
+            if platform in found.on
+        ),
+    )
+
+
 def _ratings_only_detail(catalogue: Catalogue, movie_id: str) -> MovieDetail:
     """The movie page for a film we hold only ratings for: facts and IMDb numbers, no receipt."""
     film = catalogue.ratings_only_at(catalogue.all_index[movie_id])
@@ -229,6 +279,8 @@ def _ratings_only_detail(catalogue: Catalogue, movie_id: str) -> MovieDetail:
         ratings_only=True,
         imdb_rating=film.imdb_rating,
         imdb_votes=film.imdb_votes,
+        cast=_cast(catalogue, movie_id),
+        where_to_watch=_where(catalogue, movie_id),
     )
 
 
@@ -266,6 +318,8 @@ def movie_detail(movie_id: str) -> MovieDetail:
             )
             for s in sorted(profile.scores, key=lambda s: (-s.support, s.aspect.value))
         ),
+        cast=_cast(state.catalogue, movie_id),
+        where_to_watch=_where(state.catalogue, movie_id),
     )
 
 
@@ -307,6 +361,7 @@ def discover_films(request: DiscoverRequest) -> DiscoverResult:
         from_year=request.from_year,
         to_year=request.to_year,
         exclude=request.exclude_movie_ids,
+        person_id=request.person_id,
         manifest=state.manifest.manifest_hash,
     )
 
@@ -333,8 +388,23 @@ def shelves(request: ShelvesRequest) -> ShelvesResult:
 
 
 def facets() -> Facets:
-    """Counts for the UI's filters: films per language and genre, and the year range."""
-    return Facets.model_validate(discover.catalogue_facets(_loaded().catalogue))
+    """Counts for the UI's filters, and whether this build has a cast file."""
+    catalogue = _loaded().catalogue
+    return Facets.model_validate(
+        {
+            **discover.catalogue_facets(catalogue),
+            "cast": catalogue.cast is not None,
+            "availability": catalogue.availability is not None,
+        }
+    )
+
+
+def people(query: str, limit: int = 8) -> list[PersonHit]:
+    """Find actors and actresses by name; empty when the build has no cast file."""
+    return [
+        PersonHit(id=hit.person_id, name=hit.name, titles=hit.titles)
+        for hit in search_people(_loaded().catalogue, query, limit)
+    ]
 
 
 def analyze(request: AnalyzeRequest) -> AnalyzeResponse:
@@ -463,6 +533,10 @@ def create_app(artifacts: Path | None = None, *, rate_limit: int = _RATE_LIMIT) 
     @app.get("/search")
     def search_route(q: str = "", limit: int = 20) -> list[Movie]:
         return search(q[:100], max(1, min(limit, _SEARCH_LIMIT_MAX)))
+
+    @app.get("/people")
+    def people_route(q: str = "", limit: int = 8) -> list[PersonHit]:
+        return people(q[:100], max(1, min(limit, _PEOPLE_LIMIT_MAX)))
 
     @app.get("/movie/{movie_id}")
     def movie_route(movie_id: str) -> MovieDetail:

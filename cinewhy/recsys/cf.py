@@ -26,6 +26,7 @@ def build_item_similarity(
     *,
     shrink: float = 50.0,
     min_user_ratings: int = 5,
+    block_rows: int = 1024,
 ) -> Floats:
     """Cosine similarity between items over mean-centred ratings, shrunk toward zero.
 
@@ -41,6 +42,8 @@ def build_item_similarity(
         n_items: Number of items; also the matrix size.
         shrink: Shrinkage strength; larger means more conservative.
         min_user_ratings: Users with fewer ratings are dropped; their mean is noise.
+        block_rows: Rows of the similarity formed at once; only the memory peak depends on it,
+            never the result.
 
     Returns:
         Dense `(n_items, n_items)` float32 matrix with a zero diagonal.
@@ -67,22 +70,29 @@ def build_item_similarity(
     b = sparse.csr_matrix(
         (np.ones_like(centred), (user_index, column[items])), shape=shape, dtype=np.float64
     )
-    dot = (r.T @ r).toarray()
-    co = (b.T @ b).toarray()
-    norms = np.sqrt(np.diag(dot))
+    # A column's norm is the root of its summed squares (the diagonal of r.T @ r), so it is read
+    # from r directly and the dense products below can be formed one block of rows at a time.
+    norms = np.sqrt(np.asarray(r.multiply(r).sum(axis=0)).ravel())
     inverse = np.divide(1.0, norms, out=np.zeros_like(norms), where=norms > 0)
-    # In place, so the peak is three dense float64 matrices (dot, co, the shrink denominator)
-    # and not the five the straightforward expression allocates.
-    dot *= inverse[:, None]
-    dot *= inverse[None, :]
-    denominator = co + shrink
-    np.divide(co, denominator, out=co)
-    del denominator
-    dot *= co
-    del co
-    np.fill_diagonal(dot, 0.0)
+    # Row blocks, not the whole product: dense float64 over every rated film needs three
+    # n x n matrices at once (about 5 GB at 15,000 films, 8 GB at 20,000). A block holds
+    # `block_rows` x n_rated of them, so the peak is the float32 result plus a few hundred MB.
+    rt, bt = r.T.tocsr(), b.T.tocsr()
     sim = np.zeros((n_items, n_items), dtype=np.float32)
-    sim[np.ix_(rated, rated)] = dot
+    for start in range(0, rated.size, block_rows):
+        stop = min(start + block_rows, rated.size)
+        dot = (rt[start:stop] @ r).toarray()
+        co = (bt[start:stop] @ b).toarray()
+        dot *= inverse[start:stop, None]
+        dot *= inverse[None, :]
+        denominator = co + shrink
+        np.divide(co, denominator, out=co)
+        del denominator
+        dot *= co
+        del co
+        # The diagonal of the full matrix: row `start + i` meets column `start + i`.
+        dot[np.arange(stop - start), np.arange(start, stop)] = 0.0
+        sim[np.ix_(rated[start:stop], rated)] = dot
     return sim
 
 

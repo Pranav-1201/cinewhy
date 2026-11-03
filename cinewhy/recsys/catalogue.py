@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import re
 from collections import defaultdict
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Final
@@ -17,6 +18,8 @@ from typing import Any, Final
 import numpy as np
 import numpy.typing as npt
 
+from cinewhy.data.availability import AVAILABILITY_FILE, Availability, load_availability
+from cinewhy.data.cast import CAST_FILE, Cast, load_cast
 from cinewhy.schemas import Aspect, EvidenceSentence, Movie, MovieAspectProfile
 
 CATALOGUE_FILE: Final[str] = "catalogue.json"
@@ -100,6 +103,10 @@ class Catalogue:
     # `meta.json`. Empty when the artifact set has none.
     meta: dict[str, dict[str, Any]] = field(default_factory=dict)
     ratings_only: tuple[RatingsOnlyFilm, ...] = ()
+    # Who is billed in each title, when the build has a cast file (see `cinewhy.data.cast`).
+    cast: Cast | None = None
+    # Where each title can be watched, when the build has an availability file (a dated snapshot).
+    availability: Availability | None = None
     # Id to position for full-receipt films only: every row of `similarity` and `aspect_matrix`
     # is one of these, so code indexing them with `index[...]` can never reach a ratings-only film.
     index: dict[str, int] = field(init=False)
@@ -110,6 +117,11 @@ class Catalogue:
     # True at the position of every TV series (both tiers), so a "series only" filter is one array
     # lookup per shelf, not a loop over every title.
     is_series: npt.NDArray[np.bool_] = field(init=False)
+    # Results derived from the two tuples of films, kept so a request does not rebuild them: see
+    # `derived`. Not part of the catalogue's identity.
+    _derived: dict[str, tuple[object, object, object]] = field(
+        init=False, repr=False, compare=False, default_factory=dict
+    )
 
     def __post_init__(self) -> None:
         """Derive the id index and the shrunk aspect matrix; validate shapes."""
@@ -133,10 +145,35 @@ class Catalogue:
         self.aspect_matrix = matrix
         self.is_series = np.array([m.kind == "series" for m in self.all_movies], dtype=bool)
 
+    def derived[T](self, name: str, compute: Callable[[], T]) -> T:
+        """A value computed from this catalogue's films, computed once and kept.
+
+        On the 106k-title catalogue, rebuilding the list of every film, the year of every film and
+        the filter counts on each request cost about half of a `/shelves` answer. The key is the
+        identity of the `movies` and `ratings_only` tuples, so replacing either (as tests do on a
+        small world) recomputes; editing inside `meta` after a value was kept is NOT noticed, and a
+        catalogue is not edited after it loads. Callers must treat the result as read-only.
+
+        Args:
+            name: What is being kept ("all_movies", "film_years", ...).
+            compute: Builds the value when it is missing or the films were replaced.
+
+        Returns:
+            The kept value, or the freshly computed one.
+        """
+        entry = self._derived.get(name)
+        if entry is not None and entry[0] is self.movies and entry[1] is self.ratings_only:
+            return entry[2]  # type: ignore[return-value]
+        value = compute()
+        self._derived[name] = (self.movies, self.ratings_only, value)
+        return value
+
     @property
     def all_movies(self) -> tuple[Movie, ...]:
         """Every film, full-receipt first then ratings-only, in position order."""
-        return self.movies + tuple(f.movie for f in self.ratings_only)
+        return self.derived(
+            "all_movies", lambda: self.movies + tuple(f.movie for f in self.ratings_only)
+        )
 
     def is_ratings_only(self, position: int) -> bool:
         """True when this position belongs to a ratings-only film."""
@@ -244,7 +281,12 @@ def _dumps(obj: object) -> str:
 
 
 def load_catalogue(
-    directory: Path, *, with_meta: bool = False, with_ratings_only: bool = False
+    directory: Path,
+    *,
+    with_meta: bool = False,
+    with_ratings_only: bool = False,
+    with_cast: bool = False,
+    with_availability: bool = False,
 ) -> Catalogue:
     """Read a catalogue from a verified artifact directory.
 
@@ -256,6 +298,8 @@ def load_catalogue(
             sitting in the directory is unverified and must not change what browsers are told.
         with_ratings_only: Also read `ratings_only.json`, on the same condition: only when the
             verified manifest lists it.
+        with_cast: Also read `cast.json`, on the same condition.
+        with_availability: Also read `availability.json`, on the same condition.
 
     Returns:
         The catalogue.
@@ -307,4 +351,17 @@ def load_catalogue(
         raise ValueError(f"profiles/evidence for films not in the catalogue: {sorted(stray)[:3]}")
     similarity = np.load(directory / SIMILARITY_FILE, allow_pickle=False)
     ratings_only = _read_ratings_only(directory / RATINGS_ONLY_FILE) if with_ratings_only else ()
-    return Catalogue(movies, stats, profiles, evidence, similarity, settings, meta, ratings_only)
+    cast = load_cast(directory / CAST_FILE) if with_cast else None
+    availability = load_availability(directory / AVAILABILITY_FILE) if with_availability else None
+    return Catalogue(
+        movies,
+        stats,
+        profiles,
+        evidence,
+        similarity,
+        settings,
+        meta,
+        ratings_only,
+        cast,
+        availability,
+    )
