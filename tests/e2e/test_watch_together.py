@@ -63,9 +63,20 @@ def _agree_and_go(page: Any, name: str) -> None:
     page.click("#together-body .btn.primary")
 
 
+def _open_dialog(page: Any) -> None:
+    """Open Watch together from the Profile sheet.
+
+    The top bar holds three tools and `tests/e2e/test_layout.py` pins that, so the entry lives in
+    the sheet (and in invite links).
+    """
+    page.click("#profile-btn")
+    page.click("#profile-dialog [data-open=together]")
+    page.wait_for_selector("#together-dialog[open]")
+
+
 def _host_room(visitors: _Visitors, **library: Any) -> tuple[Any, str]:
     page = visitors.visit(**library)
-    page.click("#together-btn")
+    _open_dialog(page)
     page.click("text=Start a room")
     _agree_and_go(page, "Ann")
     page.wait_for_selector("#tg-code-text")
@@ -84,7 +95,7 @@ def test_nothing_is_sent_until_the_person_agrees(visitors: _Visitors) -> None:
     page = visitors.visit(watched=["cw-1"], liked=["cw-2"])
     sent: list[str] = []
     page.on("request", lambda request: sent.append(request.url))
-    page.click("#together-btn")
+    _open_dialog(page)
     page.click("text=Start a room")
     assert page.is_disabled("#together-body .btn.primary")  # no agreement, no button
     page.fill("#tg-name", "Ann")
@@ -155,8 +166,8 @@ def test_leaving_takes_you_out_for_everyone_and_forgets_the_secret(visitors: _Vi
 def test_a_reload_keeps_you_in_the_room(visitors: _Visitors) -> None:
     host, code = _host_room(visitors, watched=[], liked=["cw-1"])
     host.reload()
-    host.wait_for_selector("#together-btn")
-    host.click("#together-btn")
+    host.wait_for_selector("#profile-btn")
+    _open_dialog(host)
     host.wait_for_selector("#tg-code-text")
     assert host.inner_text("#tg-code-text") == code
 

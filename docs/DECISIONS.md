@@ -761,6 +761,36 @@ are NOT known; the evidence is the examples read, and the gold files hold pre-sp
 change. **Consequence.** Receipts change at the next rebuild, which must re-profile every title (hours); nothing on the
 demo changes until then. Typo tolerance ("supeerb") and a semantic matcher (embeddings, parked) are not done.
 
+## D-044: Watch together is a temporary in-memory room, joined by code or link, with no accounts (2026-11-03, Sonnet 5.5)
+
+**Owner's brief.** Two or more people connect, both must agree before their libraries are combined, the combining is for
+one sitting only, everything in the library counts (watched with stars, want, liked, disliked, taste), friends may see each
+other's likes, five people now and twenty eventually, link and live joining both supported, accounts later. **Design.** A
+room lives in the server's memory (`cinewhy/recsys/rooms.py`): a six-character code from an alphabet without 0, O, 1, I, L;
+members in join order; a version number that changes with the membership. A room ends when the host closes it, when its last
+member leaves (a leaving host hands over to the longest-standing member), or after three idle hours; at most 200 rooms are
+held, then the server says it is busy. Nothing is written to disk. **Consent** is enforced twice: the dialog's join button
+stays disabled until the box is ticked and nothing is sent before that (tested in a real browser), and the server refuses a
+join that does not say `consent: true` (HTTP 400), so a client that skips the dialog cannot put a library in a room. **Entry point.**
+A header button was built first and removed: `test_header_fits_at_every_width` pins exactly three top-bar tools, and a failing
+guard is a finding, not something to edit. Watch together is reached from the Profile sheet and from invite links; a fourth
+header button is a decision for the owner (it needs that guard re-pinned on purpose). **Secrets.**
+Joining returns a secret that travels in an `X-Room-Token` header, never in an address, is kept in the tab's sessionStorage so a
+reload does not drop the person, and is compared in constant time; a wrong secret and an unknown room give the same 404 so a
+guess learns nothing. **Joining.** An invite link carries the code after `#` (so no server log sees it); the code is read and
+removed from the address. "Live" is polling every four seconds while the dialog is open, not websockets: for five people it is
+simpler and needs no new dependency. **Stars** are not sent as such; four and five stars are already likes and one and two are
+dislikes in the profile, which is how the ranking reads them. **Size.** The server clamps a requested size to `MAX_GROUP` (5);
+the store can be built for 20, and nothing else in the code assumes five, but see D-043 before raising it. **Concurrency.**
+Routes run on a thread pool and the store is not thread-safe, so every touch of it holds one lock; scoring runs outside it on a
+copy. **Checks.** 23 store tests, 15 route tests, 12 Node tests, 7 two-profile browser tests, and planted bugs (off-by-one
+size, no expiry, anyone may close, any secret accepted, no host handover, consent not enforced, a lone person may ask,
+likes hidden, join enabled before agreeing, polling off, close shown to everyone) were each caught. **Limits.** Server memory
+is lost on a restart, which ends every room; with several workers each would hold its own rooms (the app runs one). A person who
+closes the tab stays in the room until it expires, because a leave request cannot carry the secret header on page close. Cold
+libraries give every title the same "100% fit", which is true but uninformative. The room is not rate-limited beyond the
+existing per-client POST budget. Accounts (Supabase magic links, guest import) are not built.
+
 ## D-043: a group's members are combined by their mean percentile; this is a tie-break, not a win (2026-11-03, Sonnet 5.5)
 
 **Owner's brief.** A group of two to five (twenty eventually) watches together; each member's library is combined for
