@@ -142,7 +142,7 @@ def test_a_constant_has_a_zero_width_interval_and_the_interval_brackets_the_mean
 def _noisy(mean: float, n: int = 100, seed: int = 0) -> np.ndarray:
     """Values with EXACTLY this mean and a standard deviation of 0.1 (so a near-tie is a tie)."""
     z = np.random.default_rng(seed).normal(size=n)
-    return mean + (z - z.mean()) / z.std() * 0.1
+    return np.asarray(mean + (z - z.mean()) / z.std() * 0.1, dtype=np.float64)
 
 
 def test_a_clear_winner_is_chosen() -> None:
