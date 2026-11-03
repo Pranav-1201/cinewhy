@@ -73,13 +73,15 @@ _ASPECT_PATTERNS: Final[dict[Aspect, re.Pattern[str]]] = {
             r"|superb|terrific|excellent|awful|terrible|wooden)\s+as\b",
             r"(?:screen\s+)?presence", r"(?:can|can't|cannot|couldn't|could)\s+act",
             r"(?:well|brilliantly|beautifully|superbly|perfectly)\s+(?:played|cast|acted)",
+            # Added after reading 83 and 4 real uncaught sentences (D-036): both were about acting.
+            "chemistry", r"comic\s+timing",
         ),
         Aspect.PLOT: (
             "plots?", "story(?:lines?)?", "script", "screenplay", "twists?", r"narrativ(?:e|ly)",
             "dialogues?", "writing",
             "premise", "subplots?", r"events\s+in\s+(?:this|the)\s+(?:film|movie)",
             r"what\s+(?:this|the)\s+(?:movie|film)\s+was\s+about",
-            r"(?:best|great|good|bad|worst|memorable)\s+lines",
+            r"(?:best|great|good|bad|worst|memorable)\s+lines", "storytelling",
         ),
         # Bare "drag" and "slowly" were the main false positives (drag queens, "slowly loses
         # it"), and "change of pace" is an idiom. Each is now tied to the film or its tempo.
@@ -89,6 +91,7 @@ _ASPECT_PATTERNS: Final[dict[Aspect, re.Pattern[str]]] = {
             r"(?:it|film|movie|story|plot|part|half|hour|middle|act|second|third)\s+drag(?:s|ged|ging)?",
             r"(?:moves|runs|unfolds|progresses|builds)\s+(?:very\s+|so\s+|too\s+)?slowly",
             r"dull\s+stretch(?:es)?", "tedious", "momentum", r"kept\s+waiting",
+            "plodding", "breakneck", r"fast[-\s]paced", r"slow[-\s]burn",
         ),
         # "effects of tradition" is not special effects; require a visual qualifier.
         Aspect.VISUALS: (
@@ -97,12 +100,12 @@ _ASPECT_PATTERNS: Final[dict[Aspect, re.Pattern[str]]] = {
             r"effects\s+(?:are|were|was|look|looked|work|worked)", r"set\s+design",
             r"picture\s+quality", r"blue\s?screen", r"fashions?", r"production\s+values?",
             "artwork", r"well[-\s]shot", r"(?:production\s+)?sets\b", r"low[-\s]budget",
-            r"visually\s+\w+", r"underwater\s+scenes",
+            r"visually\s+\w+", r"underwater\s+scenes", r"beautifully\s+(?:shot|filmed)",
         ),
         # `(?<!-)` keeps "never-ending" out; "in conclusion" is a discourse marker.
         Aspect.ENDING: (
             r"(?<!-)endings?", "finale", "climax", r"(?<!in\s)conclusion",
-            r"(?:final|last)\s+(?:scene|act|minutes|twist|sequence)",
+            r"(?:final|last)\s+(?:scene|act|minutes|twist|sequence)", "resolution",
         ),
         # Bare "score" also means a rating ("a score of 4"), so it needs a music context.
         Aspect.SOUNDTRACK: (

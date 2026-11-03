@@ -719,6 +719,26 @@ evaluate unless the owner prefers the extra titles (the owner has not decided). 
 not needed: **the v8 cache already holds 17,201 films with 20 or more merged reviews against 10,386 at 50 or more**
 (+6,815, about +66%), so floor 20 can be built from it once the similarity matrix is made sparse.
 
+## D-036: "Try a review" and the receipts read two statements joined by "and" separately, and know nine more phrases (2026-11-03, Sonnet 5.5)
+
+**Problem.** The owner's example ("the performances were fantastic, the storyline was captivating, and the ending was
+absolutely brilliant") was already read correctly for acting and plot, but a clause joined by "and" or a comma shared
+one polarity: "The acting was great and the plot was dull" scored -0.57 for both aspects. **Change 1 (splitting).**
+`split_clauses` also cuts at "and" or a comma when BOTH pieces are statements: at least three words, an aspect, and a
+verb after the aspect, and the next piece starts with a determiner or pronoun. Measured on 34,094 real sentences: 259
+changed (0.76%), 31 flipped sign, 84 opinions were lost and 36 gained; about 60 changed examples were read. Reading them
+found one bug (a list, "the plot, the acting and the scenery were bad", flipped plot to +0.14), fixed by requiring the
+verb AFTER the aspect. The determiner/pronoun guard stays: without it 419 against 259 sentences change and sign flips are
+50 against 31, and the extra cuts could not be shown to be better. **Change 2 (phrases).** From 60,000 real sentences
+(45,873 with no aspect) candidate phrases were counted and read; only those whose examples were on-topic were added:
+"chemistry" and "comic timing" (acting), "plodding", "breakneck", "fast-paced", "slow burn" (pacing), "beautifully
+shot/filmed" (visuals), "storytelling" (plot), "resolution" (ending). Left out because they fire on other things: "shot"
+(gunshots), "director" and "character" (not aspects), "gorgeous" and "stunning" (usually people), "color", "sound",
+"singing", "final(ly)". **Not measured.** There is no aspect-labelled test set, so precision and recall of the new phrases
+are NOT known; the evidence is the examples read, and the gold files hold pre-split clauses so they cannot score either
+change. **Consequence.** Receipts change at the next rebuild, which must re-profile every title (hours); nothing on the
+demo changes until then. Typo tolerance ("supeerb") and a semantic matcher (embeddings, parked) are not done.
+
 ## D-029: a 50-vote fallback fills the short languages; the build is v5 (2026-11-01, Sonnet 5.5)
 
 At the 200-vote floor Hindi, Telugu and Japanese were 3,270 films short of the owner's targets (roadmap

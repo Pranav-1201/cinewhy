@@ -75,6 +75,16 @@ def test_sentences_are_verbatim_slices_of_the_document() -> None:
         ("Worth a second viewing.", {Aspect.REWATCHABILITY}),
         ("Watched it twice.", {Aspect.REWATCHABILITY}),
         ("SOUNDTRACK ROCKS", {Aspect.SOUNDTRACK}),
+        # Phrases added after reading real sentences that no pattern caught (D-036).
+        ("The chemistry between the two was perfect.", {Aspect.ACTING}),
+        ("Her comic timing is perfect.", {Aspect.ACTING}),
+        ("A plodding, joyless affair.", {Aspect.PACING}),
+        ("It moves at a breakneck speed.", {Aspect.PACING}),
+        ("A fast-paced thriller.", {Aspect.PACING}),
+        ("A slow burn that pays off.", {Aspect.PACING}),
+        ("The cornfields are beautifully shot.", {Aspect.VISUALS}),
+        ("An efficient piece of storytelling.", {Aspect.PLOT}),
+        ("The resolution is predictable.", {Aspect.ENDING}),
     ],
 )
 def test_detect_aspects_finds_the_named_aspects(sentence: str, expected: set[Aspect]) -> None:
