@@ -2,7 +2,7 @@
 
 import { api } from "./api.js";
 import { $, clear, fill, h } from "./dom.js";
-import { imdbLine, kindLabel, languageName, ratingsOnlyNote, runtimeLabel } from "./format.js";
+import { imdbLine, kindLabel, languageName, movieLensLine, ratingsOnlyNote, runtimeLabel } from "./format.js";
 import { starring } from "./people.js";
 import { linesFromAspects, receipt } from "./receipt.js";
 import { isWanted, isWatched, opinionOf, setOpinion, setWant, setWatched } from "./state.js";
@@ -53,7 +53,7 @@ function body(d) {
   const ratings = d.ratings_only
     ? imdbLine(d.imdb_rating, d.imdb_votes)
     : d.rating_count > 0
-      ? `${d.rating_count.toLocaleString("en")} MovieLens ratings, adjusted mean ${d.mean_rating}.`
+      ? movieLensLine(d.rating_count, d.mean_rating)
       : "No MovieLens ratings, so there is no “viewers like you” signal for this film. It is placed by its reviews and its IMDb score.";
   return [
     h("div", { class: "film-head" },

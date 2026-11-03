@@ -155,6 +155,9 @@ class ShelvesRequest(BaseModel):
     from_year: int | None = Field(default=None, ge=1880, le=2100)
     to_year: int | None = Field(default=None, ge=1880, le=2100)
     exclude_movie_ids: tuple[str, ...] = Field(default=(), max_length=3000)
+    # "Show more" on one row: only that shelf, this many titles. Leave both out for the whole page.
+    only: Annotated[str, StringConstraints(max_length=60)] | None = None
+    limit: int = Field(default=20, ge=1, le=40)
 
 
 _ID_LIST = Field(default=(), max_length=3000)

@@ -395,6 +395,8 @@ def shelves(request: ShelvesRequest) -> ShelvesResult:
         to_year=request.to_year,
         exclude=request.exclude_movie_ids,
         manifest=state.manifest.manifest_hash,
+        only=request.only,
+        more_limit=request.limit,
     )
 
 

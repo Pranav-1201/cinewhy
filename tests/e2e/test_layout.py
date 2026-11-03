@@ -62,7 +62,9 @@ def test_phone_tools_reachable_from_profile_sheet(open_page: Callable[..., Any])
     page = open_page(375)
     page.click("#nav-profile")
     page.wait_for_selector("#profile-dialog[open]")
-    assert len(page.locator("#profile-dialog [data-tool]").all_inner_texts()) == 4
+    # Deliberate re-pin: the sheet held four tools; the owner removed its dark/light switch (the one
+    # in the top bar is enough), leaving three.
+    assert len(page.locator("#profile-dialog [data-tool]").all_inner_texts()) == 3
     page.click("#profile-dialog [data-tool=about]")
     page.wait_for_selector("#about-dialog[open]")
     assert not page.evaluate("document.querySelector('#profile-dialog').open")

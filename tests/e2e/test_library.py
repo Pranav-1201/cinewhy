@@ -51,6 +51,9 @@ def test_a_watched_film_leaves_the_shelves_and_is_kept_in_the_library(
     tile, title = _first_shelf_film(page)
     tile.hover()
     tile.locator(".tile-act.seen").click()
+    # Deliberate re-pin (D-045): the page no longer redraws by itself, so the film leaves the
+    # shelves when the visitor reloads (test_rows_stay_put.py pins that it STAYS until then).
+    page.reload()
     page.wait_for_function(_GONE_FROM_FRESH_SHELVES, arg=title, timeout=10_000)
     assert not _shown_anywhere(page, title)
     assert len(_profile(page)["watched"]) == 1
@@ -89,6 +92,7 @@ def test_watched_films_come_back_when_the_visitor_asks_to_see_them(
     tile, title = _first_shelf_film(page)
     tile.hover()
     tile.locator(".tile-act.seen").click()
+    page.reload()  # deliberate re-pin (D-045): the shelves update on reload, not on the click
     page.wait_for_function(_GONE_FROM_FRESH_SHELVES, arg=title, timeout=10_000)
     page.click("#seen-chips .chip")  # "Hide films I've watched": off
     page.wait_for_function(

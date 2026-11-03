@@ -7,6 +7,7 @@ import { $, clear, h, icon, reducedMotion } from "./dom.js";
 import { clamp, kindLabel, languageName, runtimeLabel } from "./format.js";
 import { requestYears } from "./years.js";
 import { actions } from "./film.js";
+import { freshItems, moreRequest } from "./more.js";
 import * as picks from "./picks.js";
 import { starring } from "./people.js";
 import { excludedIds, profileForApi, state } from "./state.js";
@@ -15,7 +16,10 @@ import { whereToWatch } from "./watch.js";
 import { hueOf } from "./format.js";
 
 let sequence = 0;
-const scrollMemory = new Map();
+// Every title on the page (every row and the top pick), so "Show more" never offers one twice. A
+// redraw starts it afresh; and because a redraw also starts every row from its first title, a row
+// never keeps a scroll position from the list it replaced.
+const onScreen = new Set();
 
 // The top pick and "Show me another" (the walk itself is picks.js, tested in Node).
 const MORE_PICKS = 16;
@@ -59,16 +63,50 @@ function skeletonRail(spec) {
     h("ul", { class: "rail-scroll", "aria-label": spec.title }, items));
 }
 
+/** The last item of a row: "Show more" adds the next titles after the ones shown, ranked with
+    everything the visitor has said since the row was drawn. Nothing else on the page changes. */
+function moreTile(spec, open) {
+  const stamp = sequence;
+  const label = `Show more in ${spec.title}`;
+  const button = h("button", { class: "btn", type: "button", text: "Show more", "aria-label": label });
+  const slot = h("li", { class: "tile more" }, button);
+  const ready = () => { button.disabled = false; button.textContent = "Show more"; };
+  button.addEventListener("click", async () => {
+    button.disabled = true;
+    button.textContent = "Loading";
+    try {
+      const answer = await post("/shelves", moreRequest(shared(lastCtx.facets), spec.id, onScreen));
+      if (stamp !== sequence) return; // the page was redrawn meanwhile; this row is gone
+      const fresh = freshItems(answer, spec.id, onScreen);
+      if (!fresh.length) {
+        slot.replaceChildren(h("p", { class: "note", text: "That is everything for now." }));
+        return;
+      }
+      const added = fresh.map((item) => { onScreen.add(item.movie.movie_id); return tile(item, open); });
+      slot.before(...added);
+      added[0].scrollIntoView({ inline: "start", block: "nearest", behavior: reducedMotion() ? "auto" : "smooth" });
+      ready();
+    } catch (err) {
+      ready();
+      const status = $("#status");
+      status.hidden = false;
+      status.textContent = `Could not load more. ${err.message}`;
+    }
+  });
+  return slot;
+}
+
 function filledRail(spec, items, open) {
-  const scroller = h("ul", { class: "rail-scroll", "aria-label": spec.title }, items.map((item) => tile(item, open)));
+  const tiles = items.map((item) => { onScreen.add(item.movie.movie_id); return tile(item, open); });
+  // The picks row is walked with "Show me another"; every other row grows with "Show more".
+  if (spec.id !== "picks") tiles.push(moreTile(spec, open));
+  const scroller = h("ul", { class: "rail-scroll", "aria-label": spec.title }, tiles);
   const step = (dir) => scroller.scrollBy({ left: dir * scroller.clientWidth * 0.8, behavior: reducedMotion() ? "auto" : "smooth" });
   const nav = h("div", { class: "rail-nav" },
     h("button", { class: "btn", type: "button", "aria-label": `Scroll ${spec.title} left`, onclick: () => step(-1) }, icon("left")),
     h("button", { class: "btn", type: "button", "aria-label": `Scroll ${spec.title} right`, onclick: () => step(1) }, icon("right")));
   const section = h("section", { class: "rail", "data-rail": spec.id },
     h("div", { class: "rail-head" }, h("div", {}, h("h2", { text: spec.title }), h("p", { text: spec.sub })), nav), scroller);
-  scroller.addEventListener("scroll", () => scrollMemory.set(spec.id, scroller.scrollLeft), { passive: true });
-  requestAnimationFrame(() => { scroller.scrollLeft = scrollMemory.get(spec.id) || 0; });
   return section;
 }
 
@@ -132,7 +170,7 @@ async function showAnother(open) {
       const body = { ...shared(lastCtx.facets), limit: MORE_PICKS, receipts_only: true, exclude_movie_ids: ids };
       const more = (await post("/discover", body)).items;
       if (stamp !== sequence) return; // the page was redrawn meanwhile; its own list is the truth
-      for (const item of more) byId.set(item.movie.movie_id, item);
+      for (const item of more) { byId.set(item.movie.movie_id, item); onScreen.add(item.movie.movie_id); }
       if (picks.append(queue, more.map((item) => item.movie.movie_id))) picks.next(queue);
       else exhausted = true;
     } catch (err) {
@@ -158,6 +196,7 @@ export async function renderAll(ctx) {
   const root = $("#rails");
   const status = $("#status");
   status.hidden = true;
+  onScreen.clear();
   root.replaceChildren(...LOADING.map(skeletonRail));
   let shelves = [];
   let failure = null;
@@ -177,7 +216,7 @@ export async function renderAll(ctx) {
       // and otherwise moves on to the first one the visitor has not been shown.
       picksSpec = spec;
       byId.clear();
-      for (const item of shelf.items) byId.set(item.movie.movie_id, item);
+      for (const item of shelf.items) { byId.set(item.movie.movie_id, item); onScreen.add(item.movie.movie_id); }
       picks.load(queue, shelf.items.map((item) => item.movie.movie_id));
       exhausted = false;
     } else {

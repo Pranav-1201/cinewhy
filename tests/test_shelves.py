@@ -16,7 +16,7 @@ from fastapi.testclient import TestClient
 import api.main as api_main
 from cinewhy.recsys import shelves as shelves_module
 from cinewhy.recsys.catalogue import Catalogue, FilmStats
-from cinewhy.recsys.discover import audience_popularity, audience_quality
+from cinewhy.recsys.discover import audience_popularity, audience_quality, languages_of
 from cinewhy.recsys.shelves import (
     MIN_SHELF,
     NEW_FROM_YEAR,
@@ -244,6 +244,55 @@ def test_explore_is_less_like_the_liked_film_than_similar_is() -> None:
     assert closeness("explore") < closeness("similar")
 
 
+# --- "Show more" on one row ----------------------------------------------------------------------
+
+
+def test_asking_for_one_row_builds_only_that_row() -> None:
+    world = _world()
+    everything = _build(world)
+    only = _build(world, only="classics")
+    assert [s.id for s in only.shelves] == ["classics"]
+    assert only.shelves[0].title == _by_id(everything, "classics").title  # the same row, not a copy
+
+
+def test_show_more_gives_the_next_titles_and_never_one_already_on_screen() -> None:
+    world = _world()
+    on_screen = [i.movie.movie_id for s in _build(world).shelves for i in s.items]
+    more = _by_id(_build(world, exclude=on_screen, only="classics", more_limit=10), "classics")
+    assert 0 < len(more.items) <= 10
+    assert not {i.movie.movie_id for i in more.items} & set(on_screen)
+    assert all(i.movie.year is not None and i.movie.year <= OLD_TO_YEAR for i in more.items)
+
+
+def test_show_more_still_answers_when_fewer_than_the_usual_minimum_are_left() -> None:
+    world = _world()
+    everything = _ids(_build(world))
+    # Leave exactly two Hindi films not yet on screen: a normal shelf this short is dropped.
+    hindi = [
+        m.movie_id
+        for m, code in zip(world.movies, languages_of(world), strict=True)
+        if code == "hi"
+    ]
+    leave = hindi[:2]
+    exclude = [i for i in {*everything, *hindi} if i not in leave]
+    short = _build(world, exclude=exclude, only="lang-hi", more_limit=10)
+    assert {i.movie.movie_id for i in short.shelves[0].items} == set(leave)
+    assert len(leave) < MIN_SHELF
+
+
+def test_show_more_honours_the_visitors_latest_likes() -> None:
+    world = _world()
+    liked = TasteProfile(liked_movie_ids=("cw-1", "cw-5"))
+    after = _build(world, liked, only="new", more_limit=10)
+    assert not {"cw-1", "cw-5"} & set(_ids(after))  # what was just liked is never offered again
+
+
+def test_an_unknown_row_gives_nothing_and_the_default_still_gives_every_row() -> None:
+    world = _world()
+    assert _build(world, only="no-such-row").shelves == ()
+    assert len(_build(world).shelves) > 3
+
+
 def test_the_route_returns_shelves_and_refuses_bad_input(artifact_dir: Path) -> None:
     with TestClient(api_main.create_app(artifact_dir)) as client:
         body = client.post("/shelves", json={}).json()
@@ -253,3 +302,21 @@ def test_the_route_returns_shelves_and_refuses_bad_input(artifact_dir: Path) -> 
         assert client.post("/shelves", json={"languages": ["xx"]}).status_code == 422
         assert client.post("/shelves", json={"exclude_movie_ids": ["a"] * 3001}).status_code == 422
         assert client.post("/shelves", json={"surprise": 1}).status_code == 422
+
+
+def test_the_route_serves_one_row_for_show_more_and_bounds_its_size(artifact_dir: Path) -> None:
+    with TestClient(api_main.create_app(artifact_dir)) as client:
+        first = client.post("/shelves", json={}).json()
+        on_screen = [i["movie"]["movie_id"] for s in first["shelves"] for i in s["items"]]
+        more = client.post(
+            "/shelves", json={"only": "picks", "limit": 3, "exclude_movie_ids": on_screen}
+        ).json()
+        assert all(
+            s["id"] == "picks" for s in more["shelves"]
+        )  # one row, or none when nothing is left
+        assert not {i["movie"]["movie_id"] for s in more["shelves"] for i in s["items"]} & set(
+            on_screen
+        )
+        assert client.post("/shelves", json={"only": "picks", "limit": 0}).status_code == 422
+        assert client.post("/shelves", json={"only": "picks", "limit": 41}).status_code == 422
+        assert client.post("/shelves", json={"only": "x" * 61}).status_code == 422
