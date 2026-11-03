@@ -153,8 +153,13 @@ What we did:       Owner dropped the ratio: 200+ votes, five languages, no cap. 
                    106,069 titles on at least one; a country picker, dated and credited to JustWatch (D-035; v11 =
                    v10 + availability.json, manifest 9ea566ea1455). (c) TRY A REVIEW: statements joined by "and"
                    are scored separately and nine phrases added (D-036); receipts change only at the next rebuild.
-What's left:       1) v11 is the build to put on the demo when the owner says (it holds v8's titles + cast +
-                   availability); it is NOT there yet and nothing is pushed. 2) Try a review: typo tolerance
+                   (d) FLOOR 20 (D-038): the similarity is now formed in row blocks (no memory blow-up), and
+                   artifacts/v12 (manifest aec535f651e1, 27 min) has 20,485 titles with receipts (was 11,930),
+                   282,397 quotable sentences; item_sim.npy is 1.68 GB. The 8,555 new titles are thinner
+                   (median 30 reviews, 3.9 aspects each). v13 = v12 + cast + availability (see build_v13 log).
+What's left:       1) v13 (floor 20 + cast + where to watch) is the build to put on the demo when the owner
+                   says (v11 is the same minus floor 20); it is NOT there yet and nothing is pushed. The demo
+                   host must hold a 1.7 GB similarity matrix. 2) Try a review: typo tolerance
                    ("supeerb") and polarity on figurative praise are not done; then embeddings (PARKED OPTION,
                    owner 2026-11-03: a sentence-embedding model for similar-word matching, if it proves the most
                    effective; measure each step on a FRESH random clause sample; costs a new dependency, ~100 MB

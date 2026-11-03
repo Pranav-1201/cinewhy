@@ -761,6 +761,30 @@ are NOT known; the evidence is the examples read, and the gold files hold pre-sp
 change. **Consequence.** Receipts change at the next rebuild, which must re-profile every title (hours); nothing on the
 demo changes until then. Typo tolerance ("supeerb") and a semantic matcher (embeddings, parked) are not done.
 
+## D-038: the review floor drops from 50 to 20 (build v12), which adds 8,555 thinner receipts (2026-11-03, Sonnet 5.5)
+
+**Owner's plan** (2026-11-02): floor 50 first, then floor 20 once the floor-50 build was checked. **Blocker removed.**
+Floor 20 was expected to need a sparse similarity; instead `build_item_similarity` now forms the matrix in row blocks
+(`block_rows`, default 1,024), because the real cost was three dense float64 matrices at once (about 5 GB at 15,000 rated
+films), not the float32 result. The result is unchanged up to rounding (tests compare it with the old whole-matrix
+formula at three block sizes; four planted block-edge bugs were caught). **Result** (`artifacts/v12`, manifest
+`aec535f651e1`, 27 minutes on the cached gather; `--min-reviews 20`, otherwise the v8 flags): **20,485 titles with
+receipts** (17,191 films and 3,294 series) against 11,930, no title lost; 85,630 ratings-only; 282,397 quotable sentences
+(v8: 191,874). English receipts 18,703 (11,105), Hindi 791 (427), French 495 (188), Japanese movies 323 (140), anime
+series 95 (35), Telugu 74 (33). `item_sim.npy` is 1.68 GB (v8: 569 MB), so the server needs about 1.7 GB for it.
+**What the new titles are like.** The 8,555 added titles have a median of 30 reviews, report 3.9 aspects on average
+(the 11,930 older titles: 5.7) and 37.7% report three or fewer, because an aspect needs three supporting clauses. A
+receipt from 20 to 49 reviews is thinner evidence; the page shows each score's support, so it says so. **Recommender.**
+On the same 2,000 test users the hybrid minus collaborative filtering at 20 is -0.3 points [-1.2, +0.7] (v8: -1.55
+[-2.5, -0.55]); the interval now includes zero. This is NOT like-for-like (the catalogue and so the candidate pool
+differ; popularity's hit rate moved from 7.1% to 6.0%), so it does not show that the hybrid improved. Validation hit@20
+is 0.212 (v8: 0.171); shrink 50 was chosen (v8: 200). **Effect of D-036 on the older receipts.** Over 68,224 aspect
+scores of the 11,930 shared titles the mean absolute change is 0.014; 2.2% moved by more than 0.1; one crossed from
+liked to disliked (both beyond 0.2); 61 aspects were dropped and 194 gained. The splitter and the nine phrases are
+therefore not a visible change to existing receipts. **Not measured.** Whether the 20-to-49-review receipts are as
+accurate as the older ones: the aspect and polarity gold sets are clause-level and cannot score a title. **Consequence.**
+v12 holds no cast or availability; v13 is v12 plus both (add-on steps, new folders).
+
 ## D-037: spelling repair for the polarity model was measured and is NOT shipped (2026-11-03, Sonnet 5.5)
 
 **Idea.** "Try a review" scored "supeerb" at +0.48 against +0.99 for "superb", because a misspelt word is not in the
