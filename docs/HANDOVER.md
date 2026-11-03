@@ -156,7 +156,9 @@ What we did:       Owner dropped the ratio: 200+ votes, five languages, no cap. 
                    (d) FLOOR 20 (D-038): the similarity is now formed in row blocks (no memory blow-up), and
                    artifacts/v12 (manifest aec535f651e1, 27 min) has 20,485 titles with receipts (was 11,930),
                    282,397 quotable sentences; item_sim.npy is 1.68 GB. The 8,555 new titles are thinner
-                   (median 30 reviews, 3.9 aspects each). v13 = v12 + cast + availability (see build_v13 log).
+                   (median 30 reviews, 3.9 aspects each). v13 (manifest 16c1ba2b4576) = v12 + cast + availability:
+                   106,115 titles; on it /shelves is 0.12 s warm, the server holds 2.9 GB. The five Word documents
+                   were regenerated with all of this and validated.
 What's left:       1) v13 (floor 20 + cast + where to watch) is the build to put on the demo when the owner
                    says (v11 is the same minus floor 20); it is NOT there yet and nothing is pushed. The demo
                    host must hold a 1.7 GB similarity matrix. 2) Try a review: typo tolerance
@@ -164,13 +166,14 @@ What's left:       1) v13 (floor 20 + cast + where to watch) is the build to put
                    owner 2026-11-03: a sentence-embedding model for similar-word matching, if it proves the most
                    effective; measure each step on a FRESH random clause sample; costs a new dependency, ~100 MB
                    model, hours of CPU to re-profile 1.5M reviews, check for a build-time GPU; it is not RAG).
-                   A re-profile (rebuild) is needed before the splitter and phrase changes reach any receipt.
-                   3) Floor 20 from the v8 cache needs a sparse similarity (dense item_sim is 569 MB at 11,930
-                   titles and grows with the square). 4) /shelves is 0.45-0.62 s on v8 (0.16-0.23 s on v7);
-                   wall-clock gain of the catalogue cache is unmeasured. 5) Availability is a snapshot dated
-                   2026-11-03; refresh = re-run fetch_providers then availability (about 9 hours). 6) The Word
-                   documents still describe v9 as untested and do not mention the three new features. 7) Rotate
-                   the TMDB token the owner pasted in chat (it is in no commit and no file).
+                   Typo repair was measured and REJECTED (D-037); do not retry it. The splitter/phrase changes
+                   are already in v12 and barely moved old receipts (D-038). 3) The dense similarity (1.68 GB at
+                   20,485 titles with receipts) grows with the square: a sparse top-neighbours design is the
+                   answer if that count passes about 28,000. 4) Not measured: whether the 20-to-49-review
+                   receipts are as accurate as the older ones. 5) Availability is a snapshot dated 2026-11-03;
+                   refresh = re-run fetch_providers then availability (about 9 hours). 6) The v13_cast folder
+                   in artifacts/ is an intermediate (v13 minus availability) and can be deleted. 7) Rotate the
+                   TMDB token the owner pasted in chat (it is in no commit and no file).
 Watch out for:     NEVER pass --ratings-only-fallback-votes with --uncapped (BuildConfig refuses it). Hindi, Telugu
                    and the Japanese series parts are smaller than v7 on purpose (no 50-vote fallback). A teammate
                    will build a full dataset later; do not scrape for it. A raw ebD review count includes
