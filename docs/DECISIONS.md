@@ -761,6 +761,40 @@ are NOT known; the evidence is the examples read, and the gold files hold pre-sp
 change. **Consequence.** Receipts change at the next rebuild, which must re-profile every title (hours); nothing on the
 demo changes until then. Typo tolerance ("supeerb") and a semantic matcher (embeddings, parked) are not done.
 
+## D-045: rows stay put until the visitor asks; "Show more" adds titles to one row; the film page says what the rating is (2026-11-04, Sonnet 5.5)
+
+**Owner's brief.** Liking or marking a title redrew the whole page 1.2 seconds later, so a visitor browsing a row lost the
+other titles they might still have clicked. New suggestions should arrive only when the visitor reloads, changes a filter, or
+reaches the end of a row and presses a **Show more** button. Answers given: Show more ADDS titles after the last one; a title
+the visitor likes or marks watched STAYS in its row with its button showing the new state; the top pick stays put too. Second
+observation: a row scrolled to its end stayed scrolled after a filter change although it held new titles. Third: the film page's
+"adjusted mean 3.85" is jargon. **Changes.** (1) `main.js` no longer listens for the opinion event that redrew the page; the
+tiles still announce it, nothing listens, on purpose. (2) `/shelves` takes two optional fields, `only` (a row id) and `limit`
+(1 to 40, default 20); `build_shelves` then builds just that row, returns it even when fewer than the usual minimum remain, and
+an unknown id gives nothing. The page sends every title already on screen (all rows and the top pick) and every watched title as
+`exclude_movie_ids`, so nothing repeats, and the visitor's current likes and dislikes ride in the profile, so the next titles
+reflect what they have just said (`web/js/more.js`, pure, tested in Node). The picks row is not given a button: "Show me another"
+(D-042) walks it. (3) The scroll position memory in `rails.js` is deleted: it existed only to hide the automatic redraw (it kept
+rows from jumping after a like), so with no automatic redraw a redraw always starts every row at its first title. (4) The film
+page says "MovieLens viewers rate it 3.9 out of 5 (12,345 ratings)." The number is the same one as before: the average star
+rating pulled toward the overall average when few people rated it, so three five-star votes do not look perfect. **A finding
+worth keeping.** Two older browser tests (`test_library.py`: a watched film leaves the shelves; watched films come back when asked
+for) passed after this change only by a race: the first-visit "Skip" schedules its own delayed redraw, which landed after the
+test's click and excluded the film. They were not testing the click. They are **deliberately re-pinned** (one added step, a page
+reload, each with a comment pointing here), because the owner changed the behaviour they described; the new
+`test_rows_stay_put.py` pins the other half (the row is unchanged for 2.5 seconds after acting, and the watched title is gone
+after a reload). **Checks.** Seven new server and route tests, seven Node tests for the request logic, one Node test for the
+wording, four browser tests; planted bugs caught: every row built for `only`, the limit ignored, a short tail dropped, the
+automatic redraw put back, and a row scroll position restored after a redraw. **Checked on the real v13 catalogue in a browser.**
+After liking one title and marking another watched, the row was unchanged for 3 seconds; Show more grew it from 20 to 40 titles
+with the first 20 intact and both answered titles still in place; no film appeared twice (two repeated names were different
+films: One Piece 1999 and 2023, The Gentlemen 2020 and 2024); a row scrolled to 3,146 px, and every one of 15 rows, was back at
+the start after a filter change. **Limit.** A row can run out (its leftovers may already sit on another row, as the anime row
+holds what the Japanese row left), in which case the slot says "That is everything for now." and the button is gone until the
+next redraw. The rows are not re-ranked as the visitor acts: only Show more and a reload use the new answers.
+**Also, on request:** the Profile sheet's second dark/light button is removed (the one in the top bar is enough, and it stays
+visible on phones). `test_layout.py`'s count of tools in that sheet is deliberately re-pinned from four to three.
+
 ## D-044: Watch together is a temporary in-memory room, joined by code or link, with no accounts (2026-11-03, Sonnet 5.5)
 
 **Owner's brief.** Two or more people connect, both must agree before their libraries are combined, the combining is for

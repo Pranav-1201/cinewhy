@@ -304,6 +304,10 @@ button { font: inherit; color: inherit; }
   overflow-x: auto; scroll-snap-type: x proximity; scroll-padding-inline: var(--gutter); scrollbar-width: thin;
 }
 .tile { position: relative; flex: none; width: var(--poster-w); scroll-snap-align: start; }
+/* The last item of a row: a poster-sized slot holding "Show more", so it sits where the next title would. */
+.tile.more { display: grid; place-items: center; align-content: center; height: calc(var(--poster-w) * 1.5); }
+.tile.more .btn { width: 100%; }
+.tile.more .note { margin: 0; text-align: center; }
 .tile-btn { display: block; width: 100%; padding: 0; background: none; border: 0; text-align: left; cursor: pointer; }
 .tile .poster { transition: transform 180ms ease, box-shadow 180ms ease; }
 .tile-btn:hover .poster, .tile-btn:focus-visible .poster { transform: translateY(-4px); box-shadow: var(--shadow); }

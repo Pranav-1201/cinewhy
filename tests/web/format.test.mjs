@@ -11,6 +11,7 @@ import {
   initialsOf,
   kindLabel,
   languageName,
+  movieLensLine,
   ratingsOnlyNote,
   titlesLabel,
   yearAndKind,
@@ -105,6 +106,15 @@ test("imdbLine states the rating and the votes behind it, and nothing without a 
   assert.equal(imdbLine(8, 0), "IMDb rating 8.0.");
   assert.equal(imdbLine(0, 500), "");
   assert.equal(imdbLine(null, 500), "");
+});
+
+test("movieLensLine says what viewers rated it out of 5, in plain words, with no jargon", () => {
+  assert.equal(movieLensLine(12345, 3.85), "MovieLens viewers rate it 3.9 out of 5 (12,345 ratings).");
+  assert.equal(movieLensLine(1, 4.5), "MovieLens viewers rate it 4.5 out of 5 (1 rating).");
+  assert.doesNotMatch(movieLensLine(500, 3.2), /adjusted|mean/i);
+  assert.equal(movieLensLine(0, 3.2), "");
+  assert.equal(movieLensLine(500, 0), "");
+  assert.equal(movieLensLine(null, null), "");
 });
 
 test("the ratings-only note admits what is missing and promises no quotes", () => {

@@ -137,8 +137,10 @@ def build_shelves(
     to_year: int | None = None,
     exclude: Collection[str] = (),
     manifest: str,
+    only: str | None = None,
+    more_limit: int = SHELF_SIZE,
 ) -> ShelvesResult:
-    """Build every shelf for one visitor.
+    """Build every shelf for one visitor, or just one of them.
 
     Deterministic: the same request gives the same shelves in the same order, so a reload does not
     reshuffle the page.
@@ -154,6 +156,12 @@ def build_shelves(
         to_year: Latest release year the visitor allows.
         exclude: Film ids never to show (the films the visitor has watched).
         manifest: Hash of the artifact set, echoed so a result can be traced to its build.
+        only: A shelf id. The page's "Show more" asks for the next titles of ONE row: only that
+            shelf is built, `more_limit` titles long, and it is returned even when fewer than
+            `MIN_SHELF` remain. The caller passes everything already on screen in `exclude`, so
+            the row grows without repeating a title or taking one from another row. An unknown
+            id gives no shelves.
+        more_limit: How many titles the `only` shelf holds.
 
     Returns:
         The shelves, with each film on at most one of them; shelves that came out too short are
@@ -179,6 +187,10 @@ def build_shelves(
         minimum: int = MIN_SHELF,
         ratings_only: bool = True,
     ) -> None:
+        if only is not None:
+            if shelf_id != only:
+                return
+            limit, minimum = more_limit, 1
         items = select_items(
             catalogue,
             scored,

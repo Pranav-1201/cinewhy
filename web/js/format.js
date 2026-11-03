@@ -105,6 +105,16 @@ export function imdbLine(rating, votes) {
 }
 
 /**
+ * "MovieLens viewers rate it 3.9 out of 5 (12,345 ratings)."; empty without ratings. The number is
+ * the average star rating nudged toward the overall average when few people rated (so three 5-star
+ * votes do not look perfect); the page just says what it is, in the words a viewer would use.
+ */
+export function movieLensLine(ratings, mean) {
+  if (!(ratings > 0) || !(mean > 0)) return "";
+  return `MovieLens viewers rate it ${Number(mean).toFixed(1)} out of 5 (${count(ratings)} ${ratings === 1 ? "rating" : "ratings"}).`;
+}
+
+/**
  * One word for how reviewers felt, from an aspect score between -1 and +1. The edges are symmetric
  * and inclusive on the strong side: 0.5 is Loved and -0.5 is Panned; 0.2 is Liked and -0.2 is Disliked.
  */

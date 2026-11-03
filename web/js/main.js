@@ -165,7 +165,6 @@ async function boot() {
     taste: () => openTaste(ctx),
     review: () => $("#review-dialog").showModal(),
     about: () => { renderAbout(); $("#about-dialog").showModal(); },
-    theme: toggleTheme,
   };
   const inviteCode = initTogether(ctx); // a friend's link opens straight to the room
   const opens = { library: () => openLibrary(ctx), rate: () => openRate(), profile: () => openProfile(), together: () => openTogether(ctx) };
@@ -180,8 +179,10 @@ async function boot() {
       (button.dataset.tool ? tools[button.dataset.tool] : opens[button.dataset.open])();
     });
   }
-  // A like or skip changes the ranking, but not while the visitor is still browsing the rails.
-  document.addEventListener("cinewhy:opinion", debounce(() => renderAll(ctx), 1200));
+  // Nothing redraws the rails when a visitor likes or marks a title (D-045): they may still want
+  // another title from the row they are in. New suggestions arrive when they reload, change a
+  // filter, or press "Show more" on a row. (The tiles still announce "cinewhy:opinion"; nothing
+  // here listens, on purpose.)
   await renderAll(ctx);
   if (inviteCode) openTogether(ctx, inviteCode);
   else if (!state.onboarded) openOnboarding(ctx);
