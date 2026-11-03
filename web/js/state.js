@@ -32,7 +32,8 @@ export function save() {
 }
 
 export function resetTaste() {
-  const keep = { onboarded: state.onboarded };
+  // The country is a setting, not a taste: resetting what you like must not move where-to-watch.
+  const keep = { onboarded: state.onboarded, country: state.country };
   adopt({ ...profile.defaultProfile(), ...keep });
   save();
 }
@@ -57,6 +58,8 @@ export function setOpinion(movie, opinion) { profile.setOpinion(state, movie, op
 export function setWatched(movie, on) { profile.setWatched(state, movie, on); save(); }
 export function setWant(movie, on) { profile.setWant(state, movie, on); save(); }
 export function rate(movie, stars) { profile.rate(state, movie, stars); save(); }
+/** The country where-to-watch is shown for; kept in the profile so an account can adopt it later. */
+export function setCountry(code) { profile.setCountry(state, code); save(); }
 
 export function initTheme() {
   let stored = null;

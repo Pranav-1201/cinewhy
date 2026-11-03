@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import {
+  DEFAULT_COUNTRY,
   LIST_CAP,
   PROFILE_VERSION,
   counts,
@@ -19,6 +20,7 @@ import {
   opinionOf,
   profileForApi,
   rate,
+  setCountry,
   setOpinion,
   setWant,
   setWatched,
@@ -238,6 +240,37 @@ test("the kinds choice survives an export and an import", () => {
   const back = importText(exportText(p, new Date("2026-11-01T00:00:00Z")));
   assert.equal(back.ok, true);
   assert.deepEqual(back.profile.kinds, ["series"]);
+});
+
+test("every new profile starts in India, and a profile saved before the field existed reads as India", () => {
+  assert.equal(DEFAULT_COUNTRY, "IN");
+  assert.equal(defaultProfile().country, "IN");
+  assert.equal(migrate(null).country, "IN");
+  assert.equal(migrate({ liked: ["cw-1"] }).country, "IN"); // an older save has no country
+});
+
+test("the country is a two-letter capital code, and anything else falls back to India", () => {
+  for (const bad of ["in", "IND", "", "I", "I1", 5, null, ["IN"], {}, "US "]) {
+    assert.equal(migrate({ country: bad }).country, "IN", JSON.stringify(bad));
+  }
+  assert.equal(migrate({ country: "US" }).country, "US");
+  assert.equal(migrate({ country: "GB" }).country, "GB");
+});
+
+test("setCountry sets a valid country and ignores an invalid one", () => {
+  const p = defaultProfile();
+  assert.equal(setCountry(p, "US").country, "US");
+  assert.equal(setCountry(p, "us").country, "US"); // lower case is not a code: unchanged
+  assert.equal(setCountry(p, "USA").country, "US");
+  assert.equal(setCountry(p, null).country, "US");
+  assert.equal(setCountry(p, "FR").country, "FR");
+});
+
+test("the country survives an export and an import", () => {
+  const p = setCountry(defaultProfile(), "CA");
+  const back = importText(exportText(p, new Date("2026-11-03T00:00:00Z")));
+  assert.equal(back.ok, true);
+  assert.equal(back.profile.country, "CA");
 });
 
 test("import refuses what is not a CineWhy profile, and never throws", () => {

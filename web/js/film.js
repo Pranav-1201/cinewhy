@@ -26,7 +26,7 @@ function answers(movie) {
 
 /** The answer buttons. After any click every button re-reads the profile, because one answer can
     change another (watching a film takes it off the want-to-watch list). */
-function actions(movie, d) {
+export function actions(movie, d) {
   const specs = answers(movie);
   const buttons = specs.map(() => h("button", { class: "btn", type: "button" }));
   const sync = () => buttons.forEach((button, i) => {
@@ -72,7 +72,9 @@ function body(d) {
   ];
 }
 
-export async function openFilm(id) {
+/** Open a film's page in the drawer. `toReceipt` scrolls straight to the evidence, for the visitor
+    who pressed "Why we chose this" on the top pick and wants the reasons, not the facts again. */
+export async function openFilm(id, { toReceipt = false } = {}) {
   const dialog = $("#film-dialog");
   const target = $("#film-body");
   clear(target);
@@ -80,6 +82,7 @@ export async function openFilm(id) {
   if (!dialog.open) dialog.showModal();
   try {
     fill(target, body(await api(`/movie/${encodeURIComponent(id)}`)));
+    if (toReceipt) target.querySelector(".receipt, .ratings-only-note")?.scrollIntoView({ block: "start" });
   } catch (err) {
     target.replaceChildren(h("p", { class: "film-overview", text: err.message }));
   }
