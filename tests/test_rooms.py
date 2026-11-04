@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 
 from cinewhy.recsys.group import MAX_GROUP, Member
@@ -33,7 +35,7 @@ def _member(name: str = "Ann", *liked: str) -> Member:
     return Member(name, TasteProfile(liked_movie_ids=liked), frozenset({"cw-9"}))
 
 
-def _store(**kwargs: int) -> tuple[RoomStore, Clock]:
+def _store(**kwargs: Any) -> tuple[RoomStore, Clock]:  # typing only: RoomStore also takes `wall`
     clock = Clock()
     return RoomStore(clock=clock, **kwargs), clock
 

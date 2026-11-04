@@ -26,7 +26,7 @@ Rotten Tomatoes and IMDb user reviews).
 | **Polarity model** | Logistic regression on 1-2 word TF-IDF, trained on aclImdb plus Rotten Tomatoes and IMDb reviews (whole films held out by hash) through a harness that makes the leakage / test-reuse / spread rules structural. |
 | **Aspect analysis** | Splits reviews into clauses, finds which of 7 aspects (acting, plot, pacing, visuals, ending, soundtrack, rewatchability) each is about, scores it, and keeps the strongest sentences as verbatim evidence. |
 | **Recommender** | Item-item collaborative filtering blended with aspect fit, plus a bounded "how new" lift, evaluated on held-out users against a popularity baseline. |
-| **Watch together** | Two to five people join a temporary room by code or invite link, each agrees to share their library, and the room gets one combined list. Rooms live in the server's memory only. |
+| **Watch together** | Two to five people join a temporary room by code or invite link, each agrees to share their library, answers a mood quiz and swipes cards (want, pass, already watched, or one top pick); a results screen shows the group's best titles. An open room is kept on the server's computer so a restart does not end it. |
 | **API** | FastAPI. Verifies SHA-256 hashes of every data file at boot and refuses to start on a mismatch. Serves posters from TMDB (nothing is stored here). |
 | **Web UI** | A poster wall: a spotlight pick with *Show me another*, shelves, a film drawer with the full "receipt", a library, taste dials, an optional first-visit sheet, and a *How it works* page whose every number comes from `eval.json`. Plain ES modules, no build step. |
 
@@ -235,7 +235,15 @@ Mac: `brew install cloudflared`. Other systems:
   login.
 * If you send your friend a `localhost` address it will not work for them: always open the
   `trycloudflare.com` address first.
-* Rooms are lost when the server restarts, so keep the server window open for the whole session.
+* Rooms survive a server restart: while a room is open it is also saved in `Data/rooms.json` on the
+  computer that runs the server (git-ignored), and read back at the next start, so people stay in
+  their room with their answers. The file is rewritten without a room as soon as it ends, and the
+  site starts normally if the file is damaged. Set `CINEWHY_ROOMS_FILE=off` to keep rooms in memory
+  only, or `CINEWHY_ROOMS_FILE=somewhere/else.json` to choose the place.
+* Everyone behind the link counts as one address, and the site allows 120 requests a minute per
+  address (swiping has its own limit per person). With several friends browsing at once, if a page
+  says "too many requests", start the server with a higher limit: Windows `set CINEWHY_RATE_LIMIT=400`
+  before `start.bat`, Mac `CINEWHY_RATE_LIMIT=400 bash start.sh`.
 
 ### 6. Check that everything works (developers)
 
@@ -315,7 +323,7 @@ python -m cinewhy.build --out artifacts\v14
 | Port 8000 is busy | Another copy is running: close it (Ctrl+C in its window), or run the server on another port with `--port 8001`. To find the program: `netstat -ano \| findstr ":8000"` (Windows) or `lsof -iTCP:8000` (Mac). |
 | `cloudflared` is not recognised | Close the terminal and open a new one after installing; check with `cloudflared --version`. |
 | The tunnel address shows an error page | The site is not running: start `start.bat` / `bash start.sh` first and wait for it to open. |
-| My friend sees "room closed or expired" | The server restarted or the room sat idle for three hours: start a new room and send the new link. |
+| My friend sees "room closed or expired" | The host closed it, or it sat idle for three hours (a restart alone does not end a room), or rooms were switched off with `CINEWHY_ROOMS_FILE=off`: start a new room and send the new link. |
 | Posters are grey boxes | No internet, or `image.tmdb.org` is blocked by a network filter. The site still works. |
 
 ---
@@ -376,7 +384,10 @@ Open <http://localhost:8000/>.
 9. **How it works.** Every number on this page is read from `eval.json`, including the limits.
 10. **Watch together** (Profile sheet, then *Watch together*). Start a room, tick the agreement box, and
     send the invite link (see *Share it with a friend* above). A second person joins in another
-    browser; the host presses *Find something for us* and both see one list.
+    browser. Each of you reads the rules, answers a short mood quiz, then swipes cards (right: want
+    to watch, left: not for me, up: already watched, down: your one top pick; or use the buttons or
+    arrow keys). *Group's picks* shows the best titles for everyone and who wanted what; it changes
+    only when you press *Refresh*. Nothing you answer there changes your own profile.
 
 ### 3. Poke the API
 

@@ -120,6 +120,22 @@ class TestPolicy:
         api_main._state = None
         assert codes == [200, 200, 200, 429, 429]
 
+    def test_the_default_post_limit_is_120_a_minute(self) -> None:
+        assert api_main._RATE_LIMIT == 120  # the README's abuse test relies on this number
+
+    @pytest.mark.parametrize(
+        ("value", "expected"),
+        [("400", 400), ("1", 1), (None, 120), ("", 120), ("abc", 120), ("0", 120), ("-5", 120)],
+    )
+    def test_the_limit_can_be_raised_from_the_environment_and_bad_values_fall_back(
+        self, monkeypatch: pytest.MonkeyPatch, value: str | None, expected: int
+    ) -> None:
+        if value is None:
+            monkeypatch.delenv("CINEWHY_RATE_LIMIT", raising=False)
+        else:
+            monkeypatch.setenv("CINEWHY_RATE_LIMIT", value)
+        assert api_main.limit_from_env("CINEWHY_RATE_LIMIT", 120) == expected
+
     def test_unhandled_errors_return_an_opaque_id_and_no_detail(
         self, artifact_dir: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:

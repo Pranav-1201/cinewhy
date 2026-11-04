@@ -39,6 +39,7 @@ ipython_config.py
 Data/*.csv
 Data/*.tsv
 Data/*.json
+Data/*.partial
 Data/*.parquet
 Data/raw/
 Data/interim/

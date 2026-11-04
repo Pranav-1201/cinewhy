@@ -25,7 +25,7 @@ import uuid
 from collections import defaultdict, deque
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -42,21 +42,28 @@ from api.models import (
     AspectMention,
     AspectSummary,
     ClauseAnalysis,
+    Deck,
+    DeckCard,
+    DeckRequest,
     DiscoverRequest,
     ErrorResponse,
     Facets,
     MovieDetail,
     PersonHit,
     PersonRef,
+    QuizRequest,
+    ResultCard,
     RoomCreated,
     RoomCreateRequest,
     RoomJoined,
     RoomJoinRequest,
     RoomMemberView,
-    RoomRecommendRequest,
+    RoomResults,
     RoomView,
     SentenceAnalysis,
     ShelvesRequest,
+    SwipeAck,
+    SwipeRequest,
     WatchOption,
     WhereToWatch,
 )
@@ -72,10 +79,10 @@ from cinewhy.artifacts.manifest import load_manifest, verify
 from cinewhy.data.fetch_providers import PLATFORMS, WAY_ORDER
 from cinewhy.recsys import discover, rank
 from cinewhy.recsys.catalogue import Catalogue, load_catalogue
-from cinewhy.recsys.discover import DiscoverResult
-from cinewhy.recsys.group import MIN_GROUP, GroupResult, Member, recommend_group
+from cinewhy.recsys.discover import DiscoverItem, DiscoverResult
+from cinewhy.recsys.group import Member, Quiz, recommend_group
 from cinewhy.recsys.people import cast_of, imdb_number, search_people
-from cinewhy.recsys.rooms import Room, RoomError, RoomStore
+from cinewhy.recsys.rooms import Room, RoomError, RoomSaver, RoomStore
 from cinewhy.recsys.shelves import ShelvesResult, build_shelves
 from cinewhy.schemas import (
     ArtifactManifest,
@@ -92,7 +99,25 @@ log = logging.getLogger("cinewhy.api")
 # watched ids (about 13 bytes each, so about 120 KB at the extreme); this leaves room for that.
 _MAX_BODY_BYTES = 160 * 1024
 _RATE_WINDOW_SECONDS = 60.0
-_RATE_LIMIT = 120  # POSTs per client per window; POST is where the real work happens
+
+
+def limit_from_env(name: str, default: int) -> int:
+    """A request limit from the environment, or `default` when it is unset, not a number or below 1.
+
+    Behind a tunnel every friend arrives from one address and shares one budget, so a host with
+    several people can raise it (`CINEWHY_RATE_LIMIT=400`) without touching the code.
+    """
+    try:
+        value = int(os.environ.get(name, ""))
+    except ValueError:
+        return default
+    return value if value >= 1 else default
+
+
+_RATE_LIMIT = limit_from_env(
+    "CINEWHY_RATE_LIMIT", 120
+)  # POSTs per client per window; POST is where the real work happens
+_SWIPE_LIMIT = 240  # swipes per room member per window (about four a second, faster than a hand)
 _SEARCH_LIMIT_MAX = 50
 _PEOPLE_LIMIT_MAX = 20
 _WEB_DIR = Path(__file__).resolve().parent.parent / "web"
@@ -429,6 +454,7 @@ def room_view(room: Room, you: str) -> RoomView:
         code=room.code,
         version=room.version,
         max_members=room.max_members,
+        activity=room.activity,
         members=tuple(
             RoomMemberView(
                 member_id=e.member_id,
@@ -438,10 +464,46 @@ def room_view(room: Room, you: str) -> RoomView:
                 liked_movie_ids=e.member.taste.liked_movie_ids[:_LIKES_SHOWN],
                 watched_count=len(e.member.watched),
                 want_count=len(e.member.want),
+                quiz_done=e.quiz is not None,
+                swipe_count=e.answers,
+                has_top=e.top is not None,
             )
             for e in room.members.values()
         ),
     )
+
+
+_RESULTS_TOP = 5  # the titles shown first on the results screen
+_RESULTS_CLOSE = 15  # then the next-closest ones
+
+
+def deck_card(item: DiscoverItem) -> DeckCard:
+    """A swipe card: the film page's facts in one piece (a card skips the aspects and quotes)."""
+    detail = movie_detail(item.movie.movie_id)
+    return DeckCard(
+        movie=item.movie,
+        language=detail.language or item.language,
+        overview=detail.overview,
+        runtime_minutes=detail.runtime_minutes,
+        imdb_rating=detail.imdb_rating,
+        imdb_votes=detail.imdb_votes,
+        rating_count=detail.rating_count,
+        mean_rating=detail.mean_rating,
+        ratings_only=detail.ratings_only,
+        cast=detail.cast[:5],
+        where_to_watch=detail.where_to_watch,
+        because=item.because,
+    )
+
+
+def paired(members: list[Member]) -> list[Member]:
+    """The engine needs two people; a member alone in a room is paired with a copy of themself.
+
+    Their deck and results are then simply their own taste, until a friend joins.
+    """
+    if len(members) >= 2:
+        return members
+    return [*members, replace(members[0], name=f"{members[0].name} ")]
 
 
 def analyze(request: AnalyzeRequest) -> AnalyzeResponse:
@@ -506,25 +568,59 @@ class _RateLimiter:
         return True
 
 
-def create_app(artifacts: Path | None = None, *, rate_limit: int = _RATE_LIMIT) -> FastAPI:
+def default_rooms_file() -> Path | None:
+    """Where open Watch together rooms are kept between restarts.
+
+    `$CINEWHY_ROOMS_FILE` if set (`off`, `none` or empty turns it off), else `Data/rooms.json`,
+    which is git-ignored. The file holds only rooms that are open, on the computer running the
+    server, and is rewritten without a room as soon as it ends.
+    """
+    chosen = os.environ.get("CINEWHY_ROOMS_FILE")
+    if chosen is None:
+        return Path("Data") / "rooms.json"
+    return None if chosen.strip().lower() in {"", "off", "none"} else Path(chosen)
+
+
+def create_app(
+    artifacts: Path | None = None,
+    *,
+    rate_limit: int = _RATE_LIMIT,
+    rooms_file: Path | None = None,
+) -> FastAPI:
     """Build the FastAPI application.
 
     Args:
         artifacts: Artifact directory to load at startup (default: see `load_artifacts`).
         rate_limit: POST requests per minute per client.
+        rooms_file: Where to keep open Watch together rooms between restarts; None keeps them in
+            memory only (what the tests use). Read when the server starts, written while it runs.
 
     Returns:
         The app. Artifacts are verified when the server starts, not at import time, so
         importing this module never touches the disk.
     """
+    # Watch together rooms: in memory, and (when `rooms_file` is given) copied to that file every
+    # couple of seconds and at shutdown, so a restart does not end them (D-047). Sync routes run on
+    # a thread pool and the store is not thread-safe, so every touch of it goes through this lock.
+    rooms = RoomStore()
+    rooms_lock = threading.Lock()
+    saver = RoomSaver(rooms, rooms_lock, rooms_file) if rooms_file else None
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         load_artifacts(artifacts)
-        yield
+        if saver:
+            log.info("rooms restored from %s: %d", saver.path, saver.load())
+            saver.start()
+        try:
+            yield
+        finally:
+            if saver:
+                saver.stop()  # one last write, so a clean shutdown loses nothing
 
     app = FastAPI(title="CineWhy", version="0.1.0", lifespan=lifespan)
     limiter = _RateLimiter(rate_limit, _RATE_WINDOW_SECONDS)
+    swipe_limiter = _RateLimiter(_SWIPE_LIMIT, _RATE_WINDOW_SECONDS)
 
     @app.middleware("http")
     async def guard(
@@ -533,7 +629,8 @@ def create_app(artifacts: Path | None = None, *, rate_limit: int = _RATE_LIMIT) 
         declared = request.headers.get("content-length", "0")
         if declared.isdigit() and int(declared) > _MAX_BODY_BYTES:
             return JSONResponse({"detail": "request too large"}, status_code=413)
-        if request.method == "POST":
+        # Swipes have their own per-person limit (in the route), so they skip the per-address one.
+        if request.method == "POST" and not request.url.path.endswith("/swipe"):
             client = request.client.host if request.client else "unknown"
             if not limiter.allow(client):
                 return JSONResponse({"detail": "too many requests"}, status_code=429)
@@ -601,11 +698,15 @@ def create_app(artifacts: Path | None = None, *, rate_limit: int = _RATE_LIMIT) 
     # --- Watch together: temporary rooms, in memory, no accounts (D-044) -----------------------
     # Sync routes run on a thread pool and the store is not thread-safe, so every touch of it
     # goes through this one lock. The slow part (scoring) happens outside it, on a snapshot.
-    rooms = RoomStore()
-    rooms_lock = threading.Lock()
-
     def room_failure(error: RoomError) -> HTTPException:
-        status = {"not_found": 404, "full": 409, "forbidden": 403, "busy": 503}
+        status = {
+            "not_found": 404,
+            "full": 409,
+            "forbidden": 403,
+            "busy": 503,
+            "top_exists": 409,
+            "bad_action": 422,
+        }
         return HTTPException(status_code=status.get(error.kind, 400), detail=error.kind)
 
     @app.post("/rooms")
@@ -650,25 +751,88 @@ def create_app(artifacts: Path | None = None, *, rate_limit: int = _RATE_LIMIT) 
         except RoomError as error:
             raise room_failure(error) from None
 
-    @app.post("/rooms/{code}/recommend")
-    def room_recommend_route(
+    @app.post("/rooms/{code}/quiz")
+    def room_quiz_route(
         code: str,
-        request: RoomRecommendRequest,
+        request: QuizRequest,
         room_token: Annotated[str, Header(alias="X-Room-Token")] = "",
-    ) -> GroupResult:
+    ) -> RoomView:
+        quiz = Quiz(request.kinds, request.languages, request.genres)
+        try:
+            with rooms_lock:
+                entry = rooms.set_quiz(code, room_token, quiz)
+                return room_view(rooms.get(code), entry.member_id)
+        except RoomError as error:
+            raise room_failure(error) from None
+
+    @app.post("/rooms/{code}/swipe")
+    def room_swipe_route(
+        code: str,
+        request: SwipeRequest,
+        room_token: Annotated[str, Header(alias="X-Room-Token")] = "",
+    ) -> SwipeAck:
+        # Swipes are far more frequent than other requests, and behind a tunnel every friend arrives
+        # from one address, so they are limited per person (the member's secret), not per address.
+        if not swipe_limiter.allow(room_token or "none"):
+            raise HTTPException(status_code=429, detail="too many requests")
+        if request.movie_id not in _loaded().catalogue.all_index:
+            raise HTTPException(status_code=404, detail="unknown_title")
+        try:
+            with rooms_lock:
+                entry = rooms.swipe(
+                    code, room_token, request.movie_id, request.action, replace=request.replace
+                )
+                return SwipeAck(swipe_count=entry.answers, top=entry.top)
+        except RoomError as error:
+            raise room_failure(error) from None
+
+    @app.post("/rooms/{code}/deck")
+    def room_deck_route(
+        code: str,
+        request: DeckRequest,
+        room_token: Annotated[str, Header(alias="X-Room-Token")] = "",
+    ) -> Deck:
+        """The next cards for this member: the group's best titles that they have not answered."""
+        try:
+            with rooms_lock:
+                room, entry = rooms.authenticate(code, room_token)
+                members = RoomStore.members_of(room)
+                leave_out = RoomStore.seen_by(entry) | set(request.held_movie_ids)
+        except RoomError as error:
+            raise room_failure(error) from None
+        result = recommend_group(
+            _loaded().catalogue, paired(members), limit=request.count, exclude=leave_out
+        )
+        cards = tuple(deck_card(g.item) for g in result.items)
+        return Deck(cards=cards, exhausted=len(cards) < request.count)
+
+    @app.post("/rooms/{code}/results")
+    def room_results_route(
+        code: str, room_token: Annotated[str, Header(alias="X-Room-Token")] = ""
+    ) -> RoomResults:
+        """The group's best titles right now, then the next-closest, with each member's stand."""
         try:
             with rooms_lock:
                 room, _ = rooms.authenticate(code, room_token)
                 members = RoomStore.members_of(room)
+                activity = room.activity
         except RoomError as error:
             raise room_failure(error) from None
-        if len(members) < MIN_GROUP:
-            raise HTTPException(status_code=409, detail="need_more_people")
-        return recommend_group(
-            _loaded().catalogue,
-            members,
-            limit=request.limit,
-            exclude=request.exclude_movie_ids,
+        result = recommend_group(
+            _loaded().catalogue, paired(members), limit=_RESULTS_TOP + _RESULTS_CLOSE
+        )
+        cards = [
+            ResultCard(
+                card=deck_card(g.item), members=g.members[: len(members)], score=g.item.score
+            )
+            for g in result.items
+        ]
+        return RoomResults(
+            activity=activity,
+            members=len(members),
+            top=tuple(cards[:_RESULTS_TOP]),
+            close=tuple(cards[_RESULTS_TOP:]),
+            notes=result.notes,
         )
 
     @app.post("/rooms/{code}/leave")
@@ -709,4 +873,4 @@ def create_app(artifacts: Path | None = None, *, rate_limit: int = _RATE_LIMIT) 
     return app
 
 
-app = create_app()
+app = create_app(rooms_file=default_rooms_file())

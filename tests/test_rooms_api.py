@@ -6,6 +6,7 @@ combining rules themselves are `test_group.py`; the store's rules are `test_room
 
 from __future__ import annotations
 
+import json
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
@@ -116,51 +117,154 @@ def test_without_the_right_secret_a_room_cannot_be_read_or_used(client: TestClie
     _join(client, code, _library("Ann", []))
     for headers in ({}, {"X-Room-Token": "guess"}):
         assert client.get(f"/rooms/{code}", headers=headers).status_code == 404
-        assert client.post(f"/rooms/{code}/recommend", json={}, headers=headers).status_code == 404
+        assert client.post(f"/rooms/{code}/results", headers=headers).status_code == 404
         assert client.post(f"/rooms/{code}/leave", headers=headers).status_code == 404
 
 
-# --- the combined list ----------------------------------------------------------------------
+# --- quiz, swipes, deck and results ----------------------------------------------------------
 
 
-def test_one_person_alone_cannot_ask_for_a_group_list(client: TestClient) -> None:
+def _act(client: TestClient, code: str, who: dict[str, Any], suffix: str, **body: Any) -> Any:
+    return client.post(f"/rooms/{code}/{suffix}", json=body, headers=_auth(who))
+
+
+def _pair(
+    client: TestClient, *, watched: bool = False
+) -> tuple[str, dict[str, Any], dict[str, Any]]:
+    """Two people in a room; with `watched`, Ann has seen cw-1 and cw-2 and Ben cw-3 and cw-4."""
     code = _open(client)
-    ann = _join(client, code, _library("Ann", ["cw-1"]))
-    response = client.post(f"/rooms/{code}/recommend", json={}, headers=_auth(ann))
-    assert response.status_code == 409 and response.json()["detail"] == "need_more_people"
+    ann = _join(client, code, _library("Ann", [], ["cw-1", "cw-2"] if watched else None))
+    ben = _join(client, code, _library("Ben", [], ["cw-3", "cw-4"] if watched else None))
+    return code, ann, ben
+
+
+def _ids_of(cards: list[dict[str, Any]]) -> list[str]:
+    return [c["movie"]["movie_id"] for c in cards]
 
 
 def test_a_pair_never_gets_what_either_has_watched(client: TestClient) -> None:
-    code = _open(client)
-    ann = _join(client, code, _library("Ann", ["cw-1"], ["cw-1", "cw-2"]))
-    _join(client, code, _library("Ben", ["cw-3"], ["cw-3", "cw-4"]))
-    body = client.post(f"/rooms/{code}/recommend", json={"limit": 10}, headers=_auth(ann)).json()
-    shown = {i["item"]["movie"]["movie_id"] for i in body["items"]}
-    assert not shown & {"cw-1", "cw-2", "cw-3", "cw-4"}
-    assert body["members"] == 2 and body["majority"] == 1
+    code, ann, _ = _pair(client, watched=True)
+    body = _act(client, code, ann, "results").json()
+    shown = {c["card"]["movie"]["movie_id"] for c in body["top"] + body["close"]}
+    assert shown and not shown & {"cw-1", "cw-2", "cw-3", "cw-4"}
+    assert body["members"] == 2
 
 
-def test_every_member_stands_in_every_title_of_the_list(client: TestClient) -> None:
+def test_results_show_where_each_member_stands_and_whose_top_pick_a_title_is(
+    client: TestClient,
+) -> None:
+    code, ann, ben = _pair(client)
+    assert _act(client, code, ann, "swipe", movie_id="cw-6", action="top").status_code == 200
+    _act(client, code, ben, "swipe", movie_id="cw-6", action="want")
+    cards = (lambda b: b["top"] + b["close"])(_act(client, code, ann, "results").json())
+    card = next(c for c in cards if c["card"]["movie"]["movie_id"] == "cw-6")
+    stands = {m["name"]: m for m in card["members"]}
+    assert stands["Ann"]["top"] is True and stands["Ben"]["wants"] is True
+    assert [m["name"] for m in card["members"]] == ["Ann", "Ben"]
+
+
+def test_results_work_for_one_person_alone_and_name_only_them(client: TestClient) -> None:
     code = _open(client)
     ann = _join(client, code, _library("Ann", ["cw-1"]))
-    _join(client, code, _library("Ben", ["cw-2"]))
-    body = client.post(f"/rooms/{code}/recommend", json={}, headers=_auth(ann)).json()
-    assert body["items"]
-    assert all([m["name"] for m in i["members"]] == ["Ann", "Ben"] for i in body["items"])
+    body = _act(client, code, ann, "results").json()
+    assert body["members"] == 1
+    assert body["top"] and all([m["name"] for m in c["members"]] == ["Ann"] for c in body["top"])
 
 
-def test_titles_already_shown_are_left_out_of_the_next_list(client: TestClient) -> None:
-    code = _open(client)
-    ann = _join(client, code, _library("Ann", ["cw-1"]))
-    _join(client, code, _library("Ben", ["cw-2"]))
-    first = client.post(f"/rooms/{code}/recommend", json={"limit": 1}, headers=_auth(ann)).json()
-    top = first["items"][0]["item"]["movie"]["movie_id"]
-    again = client.post(
-        f"/rooms/{code}/recommend",
-        json={"limit": 10, "exclude_movie_ids": [top]},
-        headers=_auth(ann),
-    ).json()
-    assert top not in {i["item"]["movie"]["movie_id"] for i in again["items"]}
+def test_the_deck_leaves_out_what_the_member_already_answered_and_what_their_page_holds(
+    client: TestClient,
+) -> None:
+    code, ann, _ = _pair(client)
+    cards = _ids_of(_act(client, code, ann, "deck", count=10).json()["cards"])
+    assert len(cards) >= 3
+    _act(client, code, ann, "swipe", movie_id=cards[0], action="pass")
+    again = _ids_of(
+        _act(client, code, ann, "deck", count=10, held_movie_ids=[cards[1]]).json()["cards"]
+    )
+    assert cards[0] not in again and cards[1] not in again
+
+
+def test_the_deck_never_deals_back_what_is_in_a_members_own_library(client: TestClient) -> None:
+    code, ann, _ = _pair(client, watched=True)
+    cards = _ids_of(_act(client, code, ann, "deck", count=10).json()["cards"])
+    assert cards and not set(cards) & {"cw-1", "cw-2", "cw-3", "cw-4"}  # watched: never dealt back
+
+
+def test_a_deck_card_carries_what_a_card_shows(client: TestClient) -> None:
+    code, ann, _ = _pair(client)
+    card = _act(client, code, ann, "deck", count=1).json()["cards"][0]
+    assert {
+        "movie",
+        "language",
+        "overview",
+        "runtime_minutes",
+        "imdb_rating",
+        "mean_rating",
+    } <= set(card)
+    assert {"rating_count", "cast", "where_to_watch", "because", "ratings_only"} <= set(card)
+
+
+def test_the_top_pick_asks_before_it_is_replaced(client: TestClient) -> None:
+    code, ann, _ = _pair(client)
+    first = _act(client, code, ann, "swipe", movie_id="cw-5", action="top")
+    assert first.json() == {"swipe_count": 1, "top": "cw-5"}
+    refused = _act(client, code, ann, "swipe", movie_id="cw-6", action="top")
+    assert refused.status_code == 409 and refused.json()["detail"] == "top_exists"
+    replaced = _act(client, code, ann, "swipe", movie_id="cw-6", action="top", replace=True)
+    # Two titles were answered, so the count is 2 even though only one is the top pick now.
+    assert replaced.json() == {"swipe_count": 2, "top": "cw-6"}
+
+
+def test_a_swipe_on_an_unknown_title_or_with_a_bad_action_is_refused(client: TestClient) -> None:
+    code, ann, _ = _pair(client)
+    assert _act(client, code, ann, "swipe", movie_id="cw-nope", action="want").status_code == 404
+    assert _act(client, code, ann, "swipe", movie_id="cw-5", action="love").status_code == 422
+
+
+def test_the_quiz_and_swipe_counts_are_visible_as_progress_but_never_the_swipes(
+    client: TestClient,
+) -> None:
+    code, ann, ben = _pair(client)
+    _act(client, code, ann, "quiz", genres=["Drama"], languages=["en"])
+    _act(client, code, ann, "swipe", movie_id="cw-5", action="want")
+    seen_by_ben = client.get(f"/rooms/{code}", headers=_auth(ben)).json()
+    ann_row = next(m for m in seen_by_ben["members"] if m["name"] == "Ann")
+    assert (
+        ann_row["quiz_done"] is True and ann_row["swipe_count"] == 1 and ann_row["has_top"] is False
+    )
+    assert "swipes" not in ann_row and "cw-5" not in json.dumps(
+        ann_row
+    )  # what she chose stays hers
+
+
+def test_a_quiz_with_an_unknown_language_or_too_many_genres_is_refused(client: TestClient) -> None:
+    code, ann, _ = _pair(client)
+    assert _act(client, code, ann, "quiz", languages=["xx"]).status_code == 422
+    assert _act(client, code, ann, "quiz", genres=["g"] * 11).status_code == 422
+
+
+def test_swipes_are_limited_per_person_and_do_not_use_up_the_whole_address(
+    client: TestClient,
+) -> None:
+    code, ann, ben = _pair(client)
+    codes = [
+        _act(client, code, ann, "swipe", movie_id="cw-5", action="want").status_code
+        for _ in range(245)
+    ]
+    assert codes[:240] == [200] * 240 and set(codes[240:]) == {429}  # Ann's own limit
+    assert _act(client, code, ben, "swipe", movie_id="cw-5", action="want").status_code == 200
+    assert client.post("/shelves", json={}).status_code == 200  # the address is not shut out
+
+
+def test_without_the_secret_nothing_in_a_room_can_be_done(client: TestClient) -> None:
+    code, _, _ = _pair(client)
+    for suffix, body in [
+        ("deck", {}),
+        ("results", None),
+        ("swipe", {"movie_id": "cw-5", "action": "want"}),
+        ("quiz", {}),
+    ]:
+        assert client.post(f"/rooms/{code}/{suffix}", json=body).status_code == 404, suffix
 
 
 # --- leaving and closing --------------------------------------------------------------------

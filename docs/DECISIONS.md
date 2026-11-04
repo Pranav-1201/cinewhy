@@ -761,6 +761,84 @@ are NOT known; the evidence is the examples read, and the gold files hold pre-sp
 change. **Consequence.** Receipts change at the next rebuild, which must re-profile every title (hours); nothing on the
 demo changes until then. Typo tolerance ("supeerb") and a semantic matcher (embeddings, parked) are not done.
 
+## D-047: open rooms are kept in a file, so a server restart does not end them (2026-11-04, Sonnet 5.5)
+
+**Owner's to-do.** "Restarts end rooms: rooms live in memory, so a server restart ends them" (D-044's first limit). **Design.**
+`RoomSaver` (`rooms.py`) keeps one JSON copy of the OPEN rooms at `Data/rooms.json` (git-ignored; `$CINEWHY_ROOMS_FILE` chooses
+another place, and `off`, `none` or empty keeps rooms in memory only). A background thread looks every two seconds and writes only
+when the content changed; shutdown writes once more; start reads the file back. The write goes to a `.partial` file and is renamed
+into place, so a reader sees the old file or the new one, never half. The file holds each room's code, size, host, version and
+activity counter, last-use time, and for each member their name, SECRET, shared library, quiz, swipes, top pick and replaced top
+picks; a room that is closed, left empty or expired is gone from the next write, and an empty store writes an empty list. **Time.**
+Idle time is measured in-process on a monotonic clock, which does not survive a restart, so the file carries the last use as
+calendar time (rounded to the minute so polls do not rewrite it every few seconds) and the restart counts the time down as idle: a
+room that would have expired still does, and one down for most of its allowance keeps only what was left. **A file is not trusted.**
+A missing, unreadable, over 64 MB or other-layout file restores nothing; each room is validated (code format, host is a member,
+secrets are non-empty strings, swipes only want/pass/seen and within the cap, quiz lists within bounds, taste validated by the
+schema) and a bad room is skipped without costing the good ones; restoring stops at the server's room limit; a failed write is
+logged and retried. None of these can stop the server starting. **Privacy.** Rooms now touch the disk of the computer running the
+server, which D-044 said they did not, so the consent paragraph and the rules screen say it before anyone joins ("saved on the
+computer that runs CineWhy, so a restart does not end it ... deleted when you leave, the host closes the room, or it has been idle
+three hours"). The secrets are in that file in clear, as they were in memory: it is as private as the computer. **A bug found
+on the way.** A title someone named as their top pick could vanish from the group's picks: `select_items` drops a title it has
+"nothing real to say" about once a list is personalised (no aspect evidence for the group's tastes), and a nominated title with
+little evidence fell under that. On the real catalogue this is rare (nearly every title with receipts has aspects) but on the
+six-film test fixture it hid a top pick entirely. `_with_top_picks` now adds back any top pick the group's rules still allow
+(a title a pair has watched stays out) and re-orders by score. **Also.** `CINEWHY_RATE_LIMIT` (default 120) raises the per-address
+POST limit; behind a tunnel every friend shares one address, and the browser tests share one server. **Checks.** 41 persistence
+tests (round trip with every secret and answer, expiry across downtime, 16 kinds of damaged room, atomic write, only-when-changed,
+background writer, failed write), 7 route-level restart tests with two real app instances on one file, the engine guarantee
+for top picks; planted bugs caught: downtime ignored, polls rewriting the file, writing when unchanged, the format ignored, expired
+rooms restored, a non-atomic write, a bad swipe accepted, and the top-pick guarantee removed. Live on the real v13 catalogue: a room
+with a quiz, a top pick and a want was killed with a hard process kill, a new server started on the same file, and both people's secrets
+still worked with their answers and top pick intact (a second top pick still asked first). **Limits.** A hard crash can lose the
+last two seconds of swipes. With several server processes each would write the same file and overwrite the other's rooms (the app
+runs one). The file is rewritten about every two seconds only while something changes, which includes every swipe. Nothing here
+encrypts the file.
+
+## D-046: Watch together becomes a mood quiz, swipe cards and a results screen that refreshes only on request (2026-11-04, Sonnet 5.5)
+
+**Owner's brief.** Instead of five identical titles, each person gets a long deck of cards from the pool the group shares, with
+all the title's facts, and answers by swiping: right = want to watch, left = not for me, up = already watched, down = my ONE top
+pick (naming a different one asks for confirmation; the replaced pick keeps a bonus above a plain right swipe but far below the
+new one). The more people swipe, the narrower the offer. A results screen, open to anyone at any time, shows the top titles then
+the next-closest, who wanted or passed on each, and changes only when Refresh is pressed. Before swiping, each person answers a
+mood quiz (films or series, language, genre; not prefilled from the profile, because the profile already carries age, region and
+the like), and a choice made by few people lowers a title without removing it. Everything answered stays in the room and never
+touches a personal library; people are told all of this, and the four swipes, before they begin. **Engine** (`group.py`):
+`Quiz` per member; `quiz_penalties` takes, per category, the share of the people who answered it who chose what the title is
+(for genres its best-liked genre) and subtracts `quiz_penalty` (0.20) x (1 - share): comedy picked by one of three costs two
+thirds of 0.20, a title nobody chose costs all of it, a category nobody answered costs nothing. Right swipes enter the member's
+similarity seeds and want list but NOT "seen" (a real like would be, and the majority rule would then drop the title); left swipes
+count as dislikes; up swipes as watched. The top pick adds `top_bonus` 0.60 (four times `want_bonus` 0.15) and a replaced one
+`former_top_bonus` 0.25, each divided by the group size like the other bonuses. **Store and API** (`rooms.py`, `main.py`): per
+member quiz, swipes, top pick and former top picks, bounded at 5,000 answers; `POST /rooms/{code}/quiz`, `/swipe`, `/deck`,
+`/results`. A second top pick is refused with 409 `top_exists` unless `replace` is true. `/deck` returns the group's best titles
+the member has not answered and is not holding, each card carrying overview, runtime, ratings, cast and where to watch; `/results`
+returns 5 top and 15 close with each member's stand. A member alone in a room is paired with a copy of themself (the engine needs
+two), so their deck is their own taste until a friend joins. `RoomView` shows each member's progress (quiz done, answers, whether
+a top pick is set) and an `activity` counter, never the swipes themselves; those appear on the results screen. **Rate limit.**
+Behind the tunnel every friend arrives from one address, so a shared per-address POST limit would stop a few people swiping;
+swipes skip it and have their own limit per member (240 a minute). **Page.** `swipecore.js` (pure, Node-tested: directions,
+thresholds, the card queue, the rules text, result wording), `cards.js` (one card: mouse and touch drags, flings, a guard that keeps
+a card in place while a top-pick replacement is confirmed), `together.js` (rules once per room, quiz, cards, results). The deck
+refills 20 at a time when six remain; arrow keys and four buttons do the same as the drags. The old `/rooms/{code}/recommend` route,
+its tests and the `canAsk`, `isStale` and `standing` helpers are removed, and joining no longer sends the visitor's own language and
+kind filters; these removals are deliberate. The card shows where to watch as one line for the visitor's own country (the full
+panel was too tall and pushed the overview off the card). **Found and fixed on the way.** Replacing a top pick left the
+"answered" count unchanged (the replaced title was in neither the swipes nor the top slot), now counted by one property; and the
+front-end guard against flying a card before confirming was not pinned until a planted bug showed the server's refusal hid it.
+**Checks.** 12 engine tests, 17 store tests, 12 new or rewritten route tests, 13 swipe Node tests, 14 two-browser tests (rules
+before cards, quiz, buttons, keys, mouse drags, confirmation, results that stay until Refresh, and the personal profile unchanged
+after every answer); planted bugs caught: quiz not applied, a top pick counted as a plain want, a replaced top pick ignored,
+right swipes unused, left swipes not dislikes, kind weighting ignored, replace without asking, former pick forgotten, top slot
+not freed, passes ignored, swipes sharing the address limit, no swipe limit, held cards dealt again, a ghost name for a lone
+member, rules skipped, results refreshing by themselves, a tiny drag counting, and the card guard removed. On the real v13
+catalogue a deck or results call took about 0.25 s and a swipe 5 ms; the screens fit a 390 px phone. **Limits.** The bonus and
+penalty sizes are design choices, not measured; nothing shows that swipes predict what a group enjoys, and the group evaluation
+(D-043) still does not exercise these rules. The cap stays at five and D-043's caution about larger groups stands. Rooms are still
+in memory: a server restart ends them (the next to-do).
+
 ## D-045: rows stay put until the visitor asks; "Show more" adds titles to one row; the film page says what the rating is (2026-11-04, Sonnet 5.5)
 
 **Owner's brief.** Liking or marking a title redrew the whole page 1.2 seconds later, so a visitor browsing a row lost the

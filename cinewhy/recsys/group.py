@@ -22,7 +22,7 @@ and is gone.
 from __future__ import annotations
 
 from collections.abc import Collection, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Final, Literal
 
 import numpy as np
@@ -36,6 +36,7 @@ from cinewhy.recsys.discover import (
     Scored,
     expand_languages,
     film_years,
+    genre_masks,
     language_codes,
     languages_of,
     score_films,
@@ -65,8 +66,23 @@ def majority(n: int) -> int:
 
 
 @dataclass(frozen=True)
+class Quiz:
+    """What a member feels like watching tonight. An empty choice means no preference."""
+
+    kinds: tuple[str, ...] = ()
+    languages: tuple[str, ...] = ()
+    genres: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
 class Member:
-    """One person's library as a group request sees it."""
+    """One person's library as a group request sees it, plus what they did in the room.
+
+    The room fields are layered on by `rooms.RoomStore.members_of` and live only in the room:
+    `signals_liked` are titles swiped right (they steer similarity like a like, but are NOT "seen",
+    which a real like would be); `passed` are titles swiped left; `top` is the one title they
+    nominated above all others and `former_tops` the ones it replaced.
+    """
 
     name: str
     taste: TasteProfile
@@ -74,6 +90,11 @@ class Member:
     want: frozenset[str] = frozenset()
     languages: tuple[str, ...] = ()
     kinds: tuple[str, ...] = ()
+    quiz: Quiz = Quiz()
+    signals_liked: tuple[str, ...] = ()
+    passed: frozenset[str] = frozenset()
+    top: str | None = None
+    former_tops: frozenset[str] = frozenset()
 
 
 @dataclass(frozen=True)
@@ -93,6 +114,13 @@ class GroupConfig:
     seen_penalty: float = 0.10
     dislike_penalty: float = 0.20
     want_bonus: float = 0.15
+    # A member's one top pick counts four times a plain "want"; a top pick they later replaced keeps
+    # a smaller bonus, still above a plain want (owner's rule, 2026-11-04). Design choices.
+    top_bonus: float = 0.60
+    former_top_bonus: float = 0.25
+    # Per quiz category (kind, language, genre): a title loses up to this much, in proportion to how
+    # few of the people who answered that category chose what the title is. Never excludes.
+    quiz_penalty: float = 0.20
     # How deep each member's list goes for the "intersection" baseline.
     intersection_depth: int = 50
 
@@ -105,6 +133,8 @@ class MemberVectors:
     seen: npt.NDArray[np.bool_]  # watched, or liked (which means they know it)
     disliked: npt.NDArray[np.bool_]
     wants: npt.NDArray[np.bool_]
+    tops: npt.NDArray[np.bool_] | None = None  # the member's one top pick
+    former: npt.NDArray[np.bool_] | None = None  # top picks they replaced
 
 
 class _Frozen(BaseModel):
@@ -120,6 +150,7 @@ class MemberFit(_Frozen):
     disliked: bool
     wants: bool
     because: str | None = None  # the title they liked that this is closest to
+    top: bool = False  # this is the member's one top pick
 
 
 class GroupItem(_Frozen):
@@ -201,8 +232,16 @@ def group_scores(
     disliked = np.vstack([v.disliked for v in vectors]).sum(axis=0)
     seen_only = np.vstack([v.seen & ~v.disliked for v in vectors]).sum(axis=0)
     wanted = np.vstack([v.wants for v in vectors]).sum(axis=0)
+    zero = np.zeros_like(wanted)
+    tops = np.vstack([v.tops if v.tops is not None else zero > 0 for v in vectors]).sum(axis=0)
+    former = np.vstack([v.former if v.former is not None else zero > 0 for v in vectors]).sum(
+        axis=0
+    )
     penalty = config.seen_penalty * (seen_only / n) + config.dislike_penalty * (disliked / n)
-    final = base - penalty + config.want_bonus * (wanted / n)
+    bonus = (
+        config.want_bonus * wanted + config.top_bonus * tops + config.former_top_bonus * former
+    ) / n
+    final = base - penalty + bonus
     final[knows >= majority(n)] = -np.inf
     return np.asarray(final, dtype=np.float64)
 
@@ -254,7 +293,16 @@ def member_vectors(
     catalogue: Catalogue, member: Member, candidates: npt.NDArray[np.intp], *, recency: float
 ) -> tuple[MemberVectors, Scored]:
     """One member's percentiles and answers over the candidate titles (`candidates` positions)."""
-    scored = score_films(catalogue, member.taste, recency=recency)
+    taste = member.taste
+    if member.signals_liked or member.passed:
+        # Right swipes steer similarity like likes and left swipes like dislikes, for this request
+        # only (the member's own library is never changed).
+        taste = TasteProfile(
+            aspect_weights=taste.aspect_weights,
+            liked_movie_ids=(*taste.liked_movie_ids, *member.signals_liked),
+            disliked_movie_ids=(*taste.disliked_movie_ids, *sorted(member.passed)),
+        )
+    scored = score_films(catalogue, taste, recency=recency)
     slot = np.full(len(catalogue.all_movies), -1, dtype=np.intp)
     slot[candidates] = np.arange(candidates.size)
 
@@ -269,10 +317,56 @@ def member_vectors(
     vectors = MemberVectors(
         pct=percentiles(scored.score[candidates]),
         seen=mask(member.watched) | mask(member.taste.liked_movie_ids),
-        disliked=mask(member.taste.disliked_movie_ids),
+        disliked=mask(member.taste.disliked_movie_ids) | mask(member.passed),
         wants=mask(member.want),
+        tops=mask([member.top] if member.top else []),
+        former=mask(member.former_tops),
     )
     return vectors, scored
+
+
+def quiz_penalties(
+    catalogue: Catalogue,
+    members: Sequence[Member],
+    candidates: npt.NDArray[np.intp],
+    config: GroupConfig,
+) -> npt.NDArray[np.float64]:
+    """How much each candidate title loses for not matching the group's quiz answers.
+
+    For each category (kind, language, genre) only the members who chose something count. A title's
+    share is the fraction of them who chose what it is (for genres, its best-liked genre), and it
+    loses `quiz_penalty` x (1 - share): comedy picked by one person of three costs about two thirds
+    of the penalty, and a title nobody's choice matches costs all of it. Nothing is ruled out, and
+    a category nobody answered costs nothing.
+    """
+    out = np.zeros(candidates.size, dtype=np.float64)
+
+    def share_by_choice(choices: list[set[str]]) -> dict[str, float]:
+        stated = [c for c in choices if c]
+        if not stated:
+            return {}
+        every = set().union(*stated)
+        return {name: sum(1 for c in stated if name in c) / len(stated) for name in every}
+
+    kind_share = share_by_choice([set(m.quiz.kinds) for m in members])
+    if kind_share:
+        is_series = catalogue.is_series[candidates]
+        share = np.where(is_series, kind_share.get("series", 0.0), kind_share.get("film", 0.0))
+        out += config.quiz_penalty * (1.0 - share)
+    language_share = share_by_choice([set(expand_languages(m.quiz.languages)) for m in members])
+    if language_share:
+        codes = language_codes(catalogue)[candidates]
+        share = np.array([language_share.get(str(code), 0.0) for code in codes], dtype=np.float64)
+        out += config.quiz_penalty * (1.0 - share)
+    genre_share = share_by_choice([set(m.quiz.genres) for m in members])
+    if genre_share:
+        masks = genre_masks(catalogue)
+        best = np.zeros(candidates.size, dtype=np.float64)
+        for genre, value in genre_share.items():
+            if genre in masks:
+                best = np.maximum(best, np.where(masks[genre][candidates], value, 0.0))
+        out += config.quiz_penalty * (1.0 - best)
+    return out
 
 
 def _group_weights(weights: Sequence[dict[Aspect, float]]) -> dict[Aspect, float]:
@@ -282,6 +376,43 @@ def _group_weights(weights: Sequence[dict[Aspect, float]]) -> dict[Aspect, float
         for aspect, weight in member_weights.items():
             total[aspect] = total.get(aspect, 0.0) + weight / len(weights)
     return total
+
+
+def _with_top_picks(
+    catalogue: Catalogue,
+    scored_group: Scored,
+    items: tuple[DiscoverItem, ...],
+    members: Sequence[Member],
+    full: npt.NDArray[np.float64],
+    order: list[int],
+    limit: int,
+    config: GroupConfig,
+) -> tuple[DiscoverItem, ...]:
+    """Make sure every member's top pick is in the list, whatever the usual filters think of it.
+
+    `select_items` leaves out a title it has "nothing real to say" about (no aspect evidence for the
+    group's tastes) once a list is personalised. A title someone named as the one they most want to
+    watch must not vanish for that reason, so any top pick still allowed by the group's rules
+    (not ruled out by the majority rule or a filter) is added and the list re-ordered by score.
+    """
+    shown = {item.movie.movie_id for item in items}
+    positions: list[int] = []
+    for member in members:
+        position = catalogue.all_index.get(member.top) if member.top else None
+        if position is not None and np.isfinite(full[position]) and member.top not in shown:
+            positions.append(position)
+    if not positions:
+        return items
+    extra = select_items(
+        catalogue,
+        replace(scored_group, cold=True),  # no "nothing to say" filter for a nominated title
+        limit=len(positions),
+        include_ratings_only=not config.receipts_only,
+        order=order,
+        only=list(dict.fromkeys(positions)),
+    )
+    merged = sorted([*items, *extra], key=lambda item: -item.score)
+    return tuple(merged[:limit])
 
 
 def recommend_group(
@@ -316,6 +447,7 @@ def recommend_group(
         )
     prepared = [member_vectors(catalogue, m, candidates, recency=config.recency) for m in members]
     final = group_scores([v for v, _ in prepared], config)
+    final = final - quiz_penalties(catalogue, members, candidates, config)
     full = np.full(len(catalogue.all_movies), -np.inf)
     full[candidates] = final
     finite = np.flatnonzero(np.isfinite(full))
@@ -337,6 +469,7 @@ def recommend_group(
         include_ratings_only=not config.receipts_only,
         order=order,
     )
+    items = _with_top_picks(catalogue, scored_group, items, members, full, order, limit, config)
     slot = {int(p): k for k, p in enumerate(candidates)}
     out: list[GroupItem] = []
     for item in items:
@@ -350,6 +483,7 @@ def recommend_group(
                 disliked=bool(v.disliked[k]),
                 wants=bool(v.wants[k]),
                 because=closest_liked(catalogue, s.liked, position),
+                top=bool(v.tops[k]) if v.tops is not None else False,
             )
             for m, (v, s) in zip(members, prepared, strict=True)
         )

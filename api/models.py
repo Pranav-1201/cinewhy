@@ -11,6 +11,7 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
+from cinewhy.recsys.group import MemberFit
 from cinewhy.schemas import Aspect, EvidenceSentence, Movie, Polarity, TasteProfile
 
 # What the UI shows next to each slider and bar. One definition, served at /aspects, so the
@@ -189,13 +190,84 @@ class RoomJoinRequest(BaseModel):
     kinds: tuple[Literal["film", "series"], ...] = Field(default=(), max_length=2)
 
 
-class RoomRecommendRequest(BaseModel):
-    """Ask the room for its best titles; `exclude_movie_ids` are the ones already shown."""
+class QuizRequest(BaseModel):
+    """A member's mood for tonight. Empty lists mean no preference; unknown genres match nothing."""
 
     model_config = ConfigDict(extra="forbid")
 
-    limit: int = Field(default=10, ge=1, le=50)
-    exclude_movie_ids: tuple[str, ...] = Field(default=(), max_length=500)
+    kinds: tuple[Literal["film", "series"], ...] = Field(default=(), max_length=2)
+    languages: tuple[Literal["en", "hi", "ja", "fr"], ...] = Field(default=(), max_length=4)
+    genres: tuple[Annotated[str, StringConstraints(max_length=40)], ...] = Field(
+        default=(), max_length=10
+    )
+
+
+class SwipeRequest(BaseModel):
+    """One swipe. `replace` confirms swapping the member's existing top pick for this title."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    movie_id: Annotated[str, StringConstraints(min_length=1, max_length=40)]
+    action: Literal["want", "pass", "seen", "top"]
+    replace: bool = False
+
+
+class SwipeAck(_Out):
+    """What the server now holds for the member: how many answers, and their top pick."""
+
+    swipe_count: int
+    top: str | None
+
+
+class DeckRequest(BaseModel):
+    """The next cards for this member; `held_movie_ids` are the ones their page already has."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    count: int = Field(default=20, ge=1, le=40)
+    held_movie_ids: tuple[str, ...] = Field(default=(), max_length=600)
+
+
+class DeckCard(_Out):
+    """Everything a swipe card shows, in one piece so a card never waits on a second request."""
+
+    movie: Movie
+    language: str | None = None
+    overview: str | None = None
+    runtime_minutes: int | None = None
+    imdb_rating: float | None = None
+    imdb_votes: int | None = None
+    rating_count: int = 0
+    mean_rating: float = 0.0
+    ratings_only: bool = False
+    cast: tuple[PersonRef, ...] = ()
+    where_to_watch: WhereToWatch | None = None
+    because: str | None = None
+
+
+class Deck(_Out):
+    """A batch of cards, and whether the pool has run dry for this member."""
+
+    cards: tuple[DeckCard, ...]
+    exhausted: bool
+
+
+class ResultCard(_Out):
+    """A title on the results screen with where each member stands on it."""
+
+    card: DeckCard
+    members: tuple[MemberFit, ...]
+    score: float
+
+
+class RoomResults(_Out):
+    """The group's best titles now, then the next-closest. `activity` dates the list."""
+
+    activity: int
+    members: int
+    top: tuple[ResultCard, ...]
+    close: tuple[ResultCard, ...]
+    notes: tuple[str, ...] = ()
 
 
 class RoomMemberView(_Out):
@@ -208,6 +280,10 @@ class RoomMemberView(_Out):
     liked_movie_ids: tuple[str, ...]
     watched_count: int
     want_count: int
+    # Progress only, never the swipes themselves (those are shown on the results screen).
+    quiz_done: bool = False
+    swipe_count: int = 0
+    has_top: bool = False
 
 
 class RoomView(_Out):
@@ -217,6 +293,7 @@ class RoomView(_Out):
     version: int
     max_members: int
     members: tuple[RoomMemberView, ...]
+    activity: int = 0
 
 
 class RoomCreated(_Out):

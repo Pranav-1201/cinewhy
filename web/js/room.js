@@ -31,7 +31,8 @@ export const inviteLink = (pageUrl, code) => `${String(pageUrl).split("#")[0]}#r
 /**
  * What joining sends: the whole library the visitor has built (watched, want to watch, liked, not
  * for me, taste weights) and the words "I agree". Star ratings are already in it as likes (4 and
- * 5 stars) and dislikes (1 and 2), which is how the ranking has always read them.
+ * 5 stars) and dislikes (1 and 2), which is how the ranking has always read them. The visitor's own
+ * language and kind filters are NOT sent: tonight's mood is the room quiz's job, asked fresh.
  */
 export function joinBody(p, name) {
   return {
@@ -40,8 +41,6 @@ export function joinBody(p, name) {
     profile: profileForApi(p),
     watched_movie_ids: p.watched,
     want_movie_ids: p.want,
-    languages: p.languages,
-    kinds: p.kinds,
   };
 }
 
@@ -76,20 +75,3 @@ export function parseSession(text) {
 /** "2 of 5 people are here", the line under the member list. */
 export const headcount = (room) => `${room.members.length} of ${room.max_members} ${room.members.length === 1 ? "person is" : "people are"} here`;
 
-/** A group list needs at least two people. */
-export const canAsk = (room) => room.members.length >= 2;
-
-/** A list made for a room whose members have since changed is out of date. */
-export const isStale = (listVersion, room) => listVersion !== null && listVersion !== room.version;
-
-/**
- * How one member stands on a title, in words. What they have said comes before how well it fits:
- * a title someone disliked is worth knowing about more than a percentage.
- */
-export function standing(fit) {
-  if (fit.disliked) return { tone: "warn", text: "did not like it" };
-  if (fit.saw_it) return { tone: "warn", text: "has seen it" };
-  if (fit.wants) return { tone: "good", text: "wants to watch it" };
-  const percent = `${Math.round(fit.percentile * 100)}% fit`;
-  return { tone: "plain", text: fit.because ? `${percent}, like ${fit.because}` : percent };
-}

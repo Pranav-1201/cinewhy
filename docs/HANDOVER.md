@@ -140,6 +140,18 @@ permanently by `unique_review_indices` and `test_no_review_text_appears_in_both_
 ## Five-line handoff ritual (fill in each session)
 
 ```
+Session date:      2026-11-04 (session "nlp 3", swipe rework), branch feature/swipe-together (PR #11)
+Model:             Claude Sonnet 5.5
+What we did:       Watch together reworked into a mood quiz, four swipes (right want, left pass, up seen, down one
+                   top pick), on-request results with Refresh (D-046); open rooms saved to Data/rooms.json so a
+                   restart does not end them (D-047); rows stay put with per-row Show more; Profile theme button
+                   removed; the five Word documents regenerated (generators live in the session scratchpad, not
+                   in the repo). 1,012 tests pass, CI green.
+What's left:       Mac steps untested on a Mac; quiz/swipe/top-pick weights unmeasured; stray zero-byte files in
+                   D:\NLPPROJECT need `git clean -f` run by hand; accounts/DB and websockets still parked.
+Watch out for:     Rooms file holds member secrets in clear (private to the host computer); tunnel users share one
+                   address, so raise CINEWHY_RATE_LIMIT for big groups.
+
 Session date:      2026-11-04 (session "nlp 3", tunnel and setup docs), branch docs/tunnel-and-setup
 Model:             Claude Sonnet 5.5
 What we did:       PRs #5 to #8 are merged into main (another-pick, group engine, Watch together); D:\NLPPROJECT
